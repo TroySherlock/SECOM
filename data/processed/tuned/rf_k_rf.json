@@ -1,0 +1,86 @@
+{
+  "model_id": "rf_k_rf",
+  "classifier_threshold": "default_0.5",
+  "grid_search_best_params": {
+    "preprocess__sensor_mspc__select__max_features": 15,
+    "classifier__max_depth": 4
+  },
+  "cv_summary": {
+    "best_top_k": 15,
+    "best_max_depth": 4
+  },
+  "cv_fold_results": [],
+  "aggregated_top_configs": [],
+  "frozen_config": {
+    "random_seed": 42,
+    "test_size": 0.2,
+    "n_splits": 5,
+    "n_repeats": 5,
+    "c_grid": [
+      0.1,
+      1.0
+    ],
+    "l1_ratio_grid": [
+      0.5,
+      0.95
+    ],
+    "model_name": "mspc_elastic_net_logistic",
+    "champion_imputation_method": "knn",
+    "knn_impute_neighbors": 5,
+    "tuning_protocol": "grid_search",
+    "elastic_net_max_iter": 500000,
+    "pls_n_components": 20,
+    "pls_n_components_grid": [
+      5,
+      10,
+      15,
+      20
+    ],
+    "knn_classifier_neighbors": 10,
+    "knn_neighbors_grid": [
+      5,
+      10,
+      15
+    ],
+    "rf_n_estimators": 1000,
+    "rf_max_depth": 4,
+    "rf_max_depth_grid": [
+      3,
+      4,
+      6
+    ],
+    "xgb_n_estimators": 500,
+    "xgb_max_depth": 6,
+    "xgb_max_depth_grid": [
+      4,
+      6,
+      8
+    ],
+    "xgb_learning_rate_grid": [
+      0.03,
+      0.05,
+      0.1
+    ],
+    "xgb_scale_pos_weight": 13.0,
+    "rf_select_top_k": 15,
+    "rf_select_top_k_grid": [
+      10,
+      15,
+      20,
+      30
+    ],
+    "benchmark_model_ids": [
+      "mspc_lr",
+      "mspc_rf",
+      "xgb_mspc",
+      "rf_k_lr",
+      "rf_k_rf",
+      "rf_k_knn"
+    ],
+    "correlated_selection_threshold": 0.9,
+    "correlated_selection_method": "spearman",
+    "correlated_selection_criterion": "corr_with_target"
+  },
+  "tuned_at": "2026-05-26T12:14:45.115849+00:00",
+  "best_top_k": 15
+}

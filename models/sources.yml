@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: secom_source # The nickname for your source group
+    database: secom_db
+    schema: public       # Where your python script put it
+    tables:
+      - name: raw_secom  # The exact table name from df.to_sql()

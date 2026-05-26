@@ -1,0 +1,21 @@
+name: 'secom_project'
+version: '1.0.0'
+config-version: 2
+
+profile: 'secom_profile' # This must match the name in profiles.yml
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+analysis-paths: ["analyses"]
+macro-paths: ["macros"]
+
+clean-targets:
+  - "target"
+  - "dbt_modules"
+
+models:
+  secom_project:
+    +materialized: view
+    marts:
+      +materialized: table

@@ -1,0 +1,26 @@
+version: 2
+
+models:
+  - name: int_secom_column_metadata
+    columns:
+      - name: column_name
+        tests:
+          - not_null
+          - unique
+      - name: keep_in_mart
+        tests:
+          - not_null
+      - name: drop_reason
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['ok', 'high_missing', 'zero_variance']
+      - name: has_missing
+        description: True when the sensor has any nulls in int_secom_features (sparse missingness).
+
+  - name: mart_secom_features
+    description: >
+      ML mart with kept c_* sensors, c_*__missing flags for one representative
+      sensor per identical null-pattern equivalence class (deduped in dbt),
+      calendar features, and n_missing_sensors.
