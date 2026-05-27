@@ -10,6 +10,11 @@ from sklearn.metrics import (
 )
 
 
+def predict_with_threshold(y_score: np.ndarray, threshold: float) -> np.ndarray:
+    """Binary labels from positive-class scores and a probability threshold."""
+    return (np.asarray(y_score) >= threshold).astype(int)
+
+
 def compute_holdout_metrics(
     y_true: pd.Series | np.ndarray,
     y_pred: np.ndarray,

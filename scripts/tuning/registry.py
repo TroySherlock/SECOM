@@ -10,16 +10,19 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 from sklearn.base import clone
-from sklearn.model_selection import GridSearchCV, ParameterGrid
+from sklearn.model_selection import FixedThresholdClassifier, GridSearchCV, ParameterGrid
 from sklearn.pipeline import Pipeline
 
 from scripts.progress import tqdm_joblib_context
+from scripts.secom_metrics import compute_holdout_metrics, predict_with_threshold
 from scripts.secom_pipelines import (
     CHAMPION_IMPUTATION_METHOD,
     CV_SCORING,
     GRID_SEARCH_VERBOSE,
     KNN_IMPUTE_NEIGHBORS,
+    PRIMARY_TUNING_METRIC,
     TARGET_COL,
+    THRESHOLD_GRID,
     TUNED_PARAMS_DIR,
     feature_columns,
     frozen_config,
@@ -300,11 +303,26 @@ MODEL_SPECS: dict[str, ModelSpec] = {
 }
 
 
+def _resolved_classifier_threshold(tuned_payload: dict) -> float:
+    raw = tuned_payload.get("classifier_threshold", 0.5)
+    if isinstance(raw, str):
+        if raw == "default_0.5":
+            return 0.5
+        return float(raw)
+    return float(raw)
+
+
 def build_tuned_pipeline(model_id: str, tuned_payload: dict) -> Pipeline:
-    """Clone model pipeline and apply frozen grid-search params."""
+    """Clone model pipeline, apply frozen params, and wrap classifier with tuned threshold."""
     spec = MODEL_SPECS[model_id]
     pipeline = clone(spec.build_pipeline())
     pipeline.set_params(**tuned_payload["grid_search_best_params"])
+    threshold = _resolved_classifier_threshold(tuned_payload)
+    classifier = pipeline.named_steps["classifier"]
+    pipeline.steps[-1] = (
+        "classifier",
+        FixedThresholdClassifier(classifier, threshold=threshold),
+    )
     return pipeline
 
 
@@ -402,7 +420,7 @@ def summarize_cv_search(
             std_pr_auc=("std_pr_auc", "mean"),
         )
         .sort_values(
-            ["mean_roc_auc", "std_roc_auc"] + groupby_cols,
+            ["mean_pr_auc", "std_pr_auc"] + groupby_cols,
             ascending=[False, False] + [True] * len(groupby_cols),
             kind="mergesort",
         )
@@ -422,6 +440,7 @@ def summarize_cv_search(
 
     summary: dict = {
         "model_id": spec.model_id,
+        "primary_selection_metric": PRIMARY_TUNING_METRIC,
         "imputation_method": CHAMPION_IMPUTATION_METHOD,
         "knn_impute_neighbors": int(KNN_IMPUTE_NEIGHBORS),
         "mean_ber_percent": float(best_row["mean_ber_percent"]),
@@ -458,25 +477,149 @@ def summarize_cv_search(
     return summary, fold_results, aggregated
 
 
+def tune_classifier_threshold(
+    spec: ModelSpec,
+    X: pd.DataFrame,
+    y: pd.Series,
+    cv_summary: dict,
+    cv=None,
+) -> dict:
+    """Stage 2: sweep thresholds on CV validation probs; minimize mean BER."""
+    cv = cv or make_repeated_stratified_cv()
+    best_params = spec.build_grid_search_best_params(cv_summary)
+    base_pipeline = clone(spec.build_pipeline())
+    base_pipeline.set_params(**best_params)
+
+    threshold_grid = [float(t) for t in THRESHOLD_GRID]
+    splits = list(cv.split(X, y))
+    fold_probas: list[np.ndarray] = []
+    fold_y_val: list[pd.Series] = []
+
+    try:
+        from tqdm.auto import tqdm
+
+        split_iter = tqdm(splits, desc="Threshold CV folds")
+    except ImportError:
+        split_iter = splits
+
+    for train_idx, val_idx in split_iter:
+        fold_pipe = clone(base_pipeline)
+        X_tr = X.iloc[train_idx]
+        y_tr = y.iloc[train_idx]
+        X_val = X.iloc[val_idx]
+        y_val = y.iloc[val_idx]
+        fold_pipe.fit(X_tr, y_tr)
+        fold_probas.append(fold_pipe.predict_proba(X_val)[:, 1])
+        fold_y_val.append(y_val)
+
+    mean_ber_by_threshold: dict[float, float] = {}
+    for threshold in threshold_grid:
+        fold_bers = []
+        for proba, y_val in zip(fold_probas, fold_y_val, strict=True):
+            pred = predict_with_threshold(proba, threshold)
+            metrics = compute_holdout_metrics(y_val, pred)
+            fold_bers.append(metrics["ber_percent"])
+        mean_ber_by_threshold[threshold] = float(np.mean(fold_bers))
+
+    best_threshold = min(mean_ber_by_threshold, key=mean_ber_by_threshold.get)
+    best_fold_bers = []
+    fold_results_at_best: list[dict] = []
+    for fold_idx, (proba, y_val) in enumerate(zip(fold_probas, fold_y_val, strict=True)):
+        pred = predict_with_threshold(proba, best_threshold)
+        metrics = compute_holdout_metrics(y_val, pred)
+        best_fold_bers.append(metrics["ber_percent"])
+        fold_results_at_best.append(
+            {
+                "fold": fold_idx + 1,
+                "threshold": best_threshold,
+                "ber_percent": metrics["ber_percent"],
+                "true_positive_percent": metrics["true_positive_percent"],
+                "true_negative_percent": metrics["true_negative_percent"],
+            }
+        )
+
+    per_threshold_mean_ber = (
+        pd.DataFrame(
+            [
+                {"threshold": t, "mean_ber_percent": mean_ber_by_threshold[t]}
+                for t in threshold_grid
+            ]
+        )
+        .sort_values("mean_ber_percent", ascending=True, kind="mergesort")
+        .reset_index(drop=True)
+    )
+
+    return {
+        "best_threshold": float(best_threshold),
+        "mean_ber_percent": float(np.mean(best_fold_bers)),
+        "std_ber_percent": float(np.std(best_fold_bers, ddof=0)),
+        "threshold_grid": threshold_grid,
+        "per_threshold_mean_ber": per_threshold_mean_ber,
+        "fold_results_at_best_threshold": fold_results_at_best,
+    }
+
+
 def save_tuned_params(
     spec: ModelSpec,
     cv_summary: dict,
     fold_results: pd.DataFrame,
     aggregated: pd.DataFrame,
+    *,
+    threshold_result: dict | None = None,
     path: Path | None = None,
 ) -> dict:
     path = path or tuned_params_path(spec.model_id)
     best_params = spec.build_grid_search_best_params(cv_summary)
+    summary_out = dict(cv_summary)
+    if threshold_result is not None:
+        summary_out["mean_ber_percent_at_threshold"] = threshold_result["mean_ber_percent"]
+        summary_out["std_ber_percent_at_threshold"] = threshold_result["std_ber_percent"]
+        summary_out["classifier_threshold"] = threshold_result["best_threshold"]
+        tpr_vals = [
+            r["true_positive_percent"]
+            for r in threshold_result["fold_results_at_best_threshold"]
+        ]
+        tnr_vals = [
+            r["true_negative_percent"]
+            for r in threshold_result["fold_results_at_best_threshold"]
+        ]
+        summary_out["mean_true_positive_percent_at_threshold"] = float(np.mean(tpr_vals))
+        summary_out["mean_true_negative_percent_at_threshold"] = float(np.mean(tnr_vals))
+    else:
+        summary_out["classifier_threshold"] = 0.5
+
+    best_threshold = float(
+        threshold_result["best_threshold"] if threshold_result else 0.5
+    )
     payload = {
         "model_id": spec.model_id,
-        "classifier_threshold": "default_0.5",
+        "classifier_threshold": best_threshold,
         "grid_search_best_params": best_params,
-        "cv_summary": json_safe(cv_summary),
+        "cv_summary": json_safe(summary_out),
         "cv_fold_results": fold_results.to_dict(orient="records"),
         "aggregated_top_configs": aggregated.head(10).to_dict(orient="records"),
         "frozen_config": frozen_config(),
         "tuned_at": datetime.now(timezone.utc).isoformat(),
     }
+    if threshold_result is not None:
+        payload["threshold_tuning"] = json_safe(
+            {
+                "metric": "ber",
+                "best_threshold": best_threshold,
+                "mean_ber_percent": threshold_result["mean_ber_percent"],
+                "std_ber_percent": threshold_result["std_ber_percent"],
+                "threshold_grid": threshold_result["threshold_grid"],
+                "per_threshold_mean_ber": threshold_result["per_threshold_mean_ber"]
+                .head(10)
+                .to_dict(orient="records"),
+                "fold_results_at_best_threshold": threshold_result[
+                    "fold_results_at_best_threshold"
+                ],
+            }
+        )
+        payload["cv_fold_results_at_threshold"] = threshold_result[
+            "fold_results_at_best_threshold"
+        ]
     if "best_n_components" in cv_summary:
         payload["best_n_components"] = int(cv_summary["best_n_components"])
     if "best_top_k" in cv_summary:

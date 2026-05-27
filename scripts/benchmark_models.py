@@ -3,7 +3,7 @@
 
 Models: mspc_lr, mspc_rf, xgb_mspc, rf_k_lr, rf_k_rf, rf_k_knn.
 Each uses frozen hyperparameters from data/processed/tuned/<model_id>.json.
-Primary objective: maximize ROC AUC on CV.
+Primary objective: maximize PR AUC on CV; tuned threshold for BER/TPR/TNR.
 """
 from __future__ import annotations
 
@@ -51,9 +51,9 @@ from scripts.secom_utils import (  # noqa: E402
 )
 from scripts.tuning.registry import build_tuned_pipeline  # noqa: E402
 
-PRIMARY_METRIC = "roc_auc"
-CV_SORT_COL = "mean_roc_auc"
-HOLDOUT_SORT_COL = "roc_auc"
+PRIMARY_METRIC = "pr_auc"
+CV_SORT_COL = "mean_pr_auc"
+HOLDOUT_SORT_COL = "pr_auc"
 RANKING = "descending_higher_is_better"
 
 
@@ -188,8 +188,8 @@ def run_pipeline_benchmark(
         rows.append(row)
         if show_progress:
             print(
-                f"  {name}: mean ROC AUC {row['mean_roc_auc']:.3f} "
-                f"(±{row['std_roc_auc']:.3f})"
+                f"  {name}: mean PR AUC {row['mean_pr_auc']:.3f} "
+                f"(±{row['std_pr_auc']:.3f}), ROC AUC {row['mean_roc_auc']:.3f}"
             )
 
     leaderboard = pd.DataFrame(rows).sort_values(
@@ -220,7 +220,10 @@ def run_holdout_benchmark(
         row = {"pipeline": name, **compute_holdout_metrics(y_test, y_pred, y_score)}
         rows.append(row)
         if show_progress:
-            print(f"  {name}: holdout ROC AUC {row['roc_auc']:.3f}")
+            print(
+                f"  {name}: holdout PR AUC {row['pr_auc']:.3f}, "
+                f"BER {row['ber_percent']:.1f}%"
+            )
 
     holdout = pd.DataFrame(rows).sort_values(
         HOLDOUT_SORT_COL, ascending=False, kind="mergesort"

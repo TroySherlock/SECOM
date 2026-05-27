@@ -64,6 +64,14 @@ def load_champion_params(path: Path | None = None) -> dict:
     return load_tuned_params("mspc_lr")
 
 
+def fitted_base_classifier(pipeline) -> object:
+    """Underlying sklearn classifier after fit (unwraps FixedThresholdClassifier)."""
+    classifier = pipeline.named_steps["classifier"]
+    if hasattr(classifier, "estimator_"):
+        return classifier.estimator_
+    return classifier
+
+
 def score_row_from_cv_result(result: dict) -> dict:
     """Aggregate one cross_validate result dict to mean/std metric columns."""
     row = {}

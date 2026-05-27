@@ -49,8 +49,8 @@ N_SPLITS = 5
 N_REPEATS = 5
 GRID_SEARCH_VERBOSE = 1
 
-C_GRID = [0.1, 1]
-L1_RATIO_GRID = [0.5, 0.95]
+C_GRID = [0.001, 0.01]
+L1_RATIO_GRID = [0.05, 0.5, 0.95]
 
 MODEL_NAME = "mspc_elastic_net_logistic"
 
@@ -59,8 +59,8 @@ CHAMPION_IMPUTATION_METHOD = "knn"
 KNN_IMPUTE_NEIGHBORS = 5
 ELASTIC_NET_MAX_ITER = 500_000
 
-PLS_N_COMPONENTS = 20
-PLS_N_COMPONENTS_GRID = [15, 20, 25, 30]
+PLS_N_COMPONENTS = 15
+PLS_N_COMPONENTS_GRID = [5, 10, 15]
 
 KNN_CLASSIFIER_NEIGHBORS = 10
 KNN_CLASSIFIER_WEIGHTS = "uniform"
@@ -73,7 +73,7 @@ RF_MIN_SAMPLES_LEAF = 10
 RF_SELECT_TOP_K = 15
 RF_SELECT_TOP_K_GRID = [20, 30, 40, 50]
 
-CORRELATED_SELECTION_THRESHOLD = 0.90
+CORRELATED_SELECTION_THRESHOLD = 0.80
 CORRELATED_SELECTION_METHOD = "spearman"
 CORRELATED_SELECTION_CRITERION = "corr_with_target"
 
@@ -86,6 +86,9 @@ XGB_SCALE_POS_WEIGHT = 13.0
 
 CV_N_JOBS = -1
 ESTIMATOR_N_JOBS = 1
+
+PRIMARY_TUNING_METRIC = "pr_auc"
+THRESHOLD_GRID = np.arange(0.05, 0.96, 0.05)
 
 CV_SCORING = {
     "balanced_accuracy": "balanced_accuracy",
@@ -165,7 +168,10 @@ def frozen_config() -> dict:
         "model_name": MODEL_NAME,
         "champion_imputation_method": CHAMPION_IMPUTATION_METHOD,
         "knn_impute_neighbors": int(KNN_IMPUTE_NEIGHBORS),
-        "tuning_protocol": "grid_search",
+        "tuning_protocol": "sequential_pr_auc_hyperparams_ber_threshold",
+        "primary_tuning_metric": PRIMARY_TUNING_METRIC,
+        "threshold_tuning_metric": "ber",
+        "threshold_grid": [float(t) for t in THRESHOLD_GRID],
         "elastic_net_max_iter": int(ELASTIC_NET_MAX_ITER),
         "pls_n_components": int(PLS_N_COMPONENTS),
         "pls_n_components_grid": [int(k) for k in PLS_N_COMPONENTS_GRID],
