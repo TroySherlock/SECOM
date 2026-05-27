@@ -10,19 +10,40 @@ from theme.gruvbox_material import GRUVBOX
 PIPELINE_MERMAID = """
 flowchart LR
   raw["Raw SECOM files"]
-  dbt["dbt models"]
   duck["DuckDB"]
+  dbt["dbt models"]
   mart["mart_secom_features"]
-  tune["Tuning"]
-  bench["benchmark_models"]
+  tune["Tuning (CV)"]
+  bench["Benchmark (CV)"]
   dash["Streamlit dashboard"]
 
-  raw --> dbt --> duck --> mart --> dash
+  raw --> duck --> dbt --> mart
   mart --> tune --> bench --> dash
+  mart --> dash
+"""
+
+PREPROCESSING_MERMAID = """
+flowchart LR
+  stg["stg_secom"]
+  int_f["int_secom_features"]
+  meta["int_secom_column_metadata"]
+  mart["mart_secom_features"]
+  imp["Median impute"]
+  cluster["Spearman cluster"]
+  pls["PLS + Q"]
+  rfk["RF top-k (CV)"]
+  t2["Hotelling T²"]
+  scale["RobustScaler"]
+  clf["Classifier"]
+
+  stg --> int_f --> meta --> mart --> imp --> cluster
+  cluster --> pls --> t2
+  cluster --> rfk --> t2
+  t2 --> scale --> clf
 """
 
 
-def _mermaid_html(diagram: str) -> str:
+def _mermaid_html(diagram: str, height: int = 300) -> str:
     g = GRUVBOX
     theme_vars = {
         "primaryColor": g["bg_soft"],
@@ -81,7 +102,7 @@ def _mermaid_html(diagram: str) -> str:
 def _html_flex_flowchart() -> str:
     """No-JS fallback: Gruvbox boxes and arrows."""
     g = GRUVBOX
-    nodes = ["Raw SECOM", "dbt", "DuckDB", "mart", "Dashboard"]
+    nodes = ["Raw SECOM", "DuckDB", "dbt", "mart", "Dashboard"]
     parts = []
     for i, n in enumerate(nodes):
         parts.append(
@@ -93,7 +114,7 @@ def _html_flex_flowchart() -> str:
     row = "".join(parts)
     branch = (
         f'<div style="margin-top:0.75rem;font-size:11px;color:{g["fg_muted"]};text-align:center;">'
-        f'mart → tuning → benchmark → dashboard</div>'
+        f'mart → Tuning (CV) → Benchmark (CV) → dashboard</div>'
     )
     return f"""
 <div style="background:{g["bg"]};padding:0.75rem;font-family:sans-serif;">
@@ -103,8 +124,19 @@ def _html_flex_flowchart() -> str:
 """
 
 
-def render_pipeline_flowchart() -> None:
+def _render_mermaid(diagram: str, *, height: int = 300) -> None:
     try:
-        st.iframe(_mermaid_html(PIPELINE_MERMAID), height=300)
+        st.iframe(_mermaid_html(diagram, height=height), height=height)
     except Exception:
-        st.markdown(_html_flex_flowchart(), unsafe_allow_html=True)
+        if diagram.strip() == PIPELINE_MERMAID.strip():
+            st.markdown(_html_flex_flowchart(), unsafe_allow_html=True)
+        else:
+            st.code(diagram.strip(), language="text")
+
+
+def render_pipeline_flowchart() -> None:
+    _render_mermaid(PIPELINE_MERMAID, height=300)
+
+
+def render_preprocessing_flowchart() -> None:
+    _render_mermaid(PREPROCESSING_MERMAID, height=340)

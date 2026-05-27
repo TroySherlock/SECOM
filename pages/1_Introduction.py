@@ -113,6 +113,14 @@ def main() -> None:
     k4.metric("Yield pass rate", f"{pass_rate:.1f}%")
 
     st.divider()
+    st.subheader("Project pipeline")
+    flow_col, mart_col = st.columns([1.2, 1], gap="large")
+    with flow_col:
+        render_pipeline_flowchart()
+    with mart_col:
+        render_callout("pipeline", _mart_pipeline_md(), key_suffix="mart")
+
+    st.divider()
 
     tab_drift, tab_sensor, tab_data = st.tabs(
         [
@@ -220,14 +228,6 @@ def main() -> None:
                 f"Showing {len(display_df):,} of {total_filtered:,} filtered rows "
                 f"× {len(display_df.columns)} columns."
             )
-
-    st.divider()
-    st.subheader("Project pipeline")
-    flow_col, mart_col = st.columns([1.2, 1], gap="large")
-    with flow_col:
-        render_pipeline_flowchart()
-    with mart_col:
-        render_callout("pipeline", _mart_pipeline_md(), key_suffix="mart")
 
 
 main()

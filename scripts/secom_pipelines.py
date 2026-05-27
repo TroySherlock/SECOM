@@ -26,9 +26,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = REPO_ROOT / "secom.duckdb"
 SOURCE_RELATION = "public.mart_secom_features"
 OUTPUT_DIR = REPO_ROOT / "data" / "processed"
-CHAMPION_PARAMS_PATH = OUTPUT_DIR / "secom_champion_params.json"
+# Dashboard data contract (regenerate: python -m scripts.benchmark_models after tuning):
+#   tuned/<model_id>.json           — frozen hyperparameters from tuning notebooks
+#   secom_pipeline_benchmark.json   — CV leaderboard + holdout metrics
+#   secom_pipeline_artifacts.json   — holdout-fit pipeline reporting (feature counts, PLS, RF, clusters)
 TUNED_PARAMS_DIR = OUTPUT_DIR / "tuned"
 BENCHMARK_RESULTS_PATH = OUTPUT_DIR / "secom_pipeline_benchmark.json"
+PIPELINE_ARTIFACTS_PATH = OUTPUT_DIR / "secom_pipeline_artifacts.json"
 
 BENCHMARK_MODEL_IDS = (
     "mspc_lr",

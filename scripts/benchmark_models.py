@@ -22,9 +22,14 @@ if str(REPO_ROOT) not in sys.path:
 
 from scripts.progress import tqdm_joblib_context  # noqa: E402
 from scripts.secom_metrics import compute_holdout_metrics  # noqa: E402
+from scripts.pipeline_artifacts import (  # noqa: E402
+    collect_holdout_artifacts,
+    save_pipeline_artifacts,
+)
 from scripts.secom_pipelines import (  # noqa: E402
     BENCHMARK_MODEL_IDS,
     BENCHMARK_RESULTS_PATH,
+    PIPELINE_ARTIFACTS_PATH,
     CV_N_JOBS,
     CV_SCORING,
     RANDOM_SEED,
@@ -301,8 +306,17 @@ def main() -> None:
         train_rows=len(train_df),
         test_rows=len(test_df),
     )
+    artifacts = collect_holdout_artifacts(
+        pipelines,
+        X_train,
+        y_train,
+        train_rows=len(train_df),
+        test_rows=len(test_df),
+    )
+    save_pipeline_artifacts(artifacts)
 
-    print(f"\nWrote {BENCHMARK_RESULTS_PATH}\n")
+    print(f"\nWrote {BENCHMARK_RESULTS_PATH}")
+    print(f"Wrote {PIPELINE_ARTIFACTS_PATH}\n")
     print("CV leaderboard:")
     print(leaderboard.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
     print("\nHoldout (reporting only):")

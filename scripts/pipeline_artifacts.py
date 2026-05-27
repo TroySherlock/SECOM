@@ -1,0 +1,268 @@
+"""Extract holdout-fit pipeline reporting artifacts for the dashboard."""
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+from feature_engine.selection import SmartCorrelatedSelection
+from sklearn.compose import ColumnTransformer
+from sklearn.feature_selection import SelectFromModel
+from sklearn.pipeline import Pipeline
+
+from scripts.dashboard_stg import N_SENSORS
+from scripts.mspc_features import PLSWithQFeatures, sensor_value_columns
+from scripts.secom_pipelines import (
+    BENCHMARK_MODEL_IDS,
+    CORRELATED_SELECTION_CRITERION,
+    CORRELATED_SELECTION_METHOD,
+    CORRELATED_SELECTION_THRESHOLD,
+    PIPELINE_ARTIFACTS_PATH,
+    RANDOM_SEED,
+    TEST_SIZE,
+)
+from scripts.secom_utils import json_safe
+
+REFERENCE_MODELS = {"mspc": "mspc_lr", "rf_k": "rf_k_rf"}
+
+
+def _sensor_mspc_pipeline(preprocess: ColumnTransformer) -> Pipeline:
+    fitted = getattr(preprocess, "transformers_", None) or preprocess.transformers
+    for name, trans, _ in fitted:
+        if name == "sensor_mspc":
+            return trans
+    raise KeyError("preprocess has no sensor_mspc transformer")
+
+
+def _model_family(model_id: str) -> str:
+    if model_id.startswith("rf_k"):
+        return "rf_k"
+    return "mspc"
+
+
+def _cluster_drop_counts(cluster: Pipeline, X_imp: pd.DataFrame) -> dict[str, int]:
+    """Drop counts from each fitted cluster sub-step."""
+    key_map = {
+        "drop_constant": "drop_constant",
+        "drop_duplicates": "drop_duplicate",
+        "smart_corr": "drop_correlated",
+    }
+    counts: dict[str, int] = {}
+    X_cur = X_imp
+    for step_name, step in cluster.named_steps.items():
+        n_before = X_cur.shape[1]
+        X_cur = step.transform(X_cur)
+        key = key_map.get(step_name)
+        if key:
+            counts[key] = n_before - X_cur.shape[1]
+    return counts
+
+
+def _extract_pls_info(pls: PLSWithQFeatures) -> dict[str, Any]:
+    return {
+        "n_components": int(pls.n_components_),
+        "n_components_requested": int(pls.n_components),
+        "explained_variance_ratio": pls.explained_variance_ratio(),
+        "output_features": int(pls.n_components_) + 1,  # pls_* + q_statistic
+    }
+
+
+def _extract_rf_selection(select: SelectFromModel, cluster_cols: list[str]) -> dict[str, Any]:
+    support = select.get_support()
+    selected = [c for c, keep in zip(cluster_cols, support) if keep]
+    estimator = select.estimator_
+    importances = getattr(estimator, "feature_importances_", None)
+    if importances is None:
+        ranked: list[dict[str, float]] = []
+    else:
+        pairs = sorted(
+            zip(cluster_cols, importances),
+            key=lambda x: x[1],
+            reverse=True,
+        )
+        ranked = [
+            {"feature": str(f), "importance": float(imp)}
+            for f, imp in pairs[:30]
+        ]
+    max_features = select.max_features
+    top_k = int(max_features) if isinstance(max_features, int) else len(selected)
+    return {
+        "top_k": top_k,
+        "selected_count": len(selected),
+        "selected_features": [str(f) for f in selected],
+        "importances": ranked,
+    }
+
+
+def _spearman_cluster_example(
+    smart_corr: SmartCorrelatedSelection,
+    X_pre_correlation: pd.DataFrame,
+) -> dict[str, Any] | None:
+    """Pick a correlated group (≥3 members) and compute Spearman ρ on training data."""
+    sets = getattr(smart_corr, "correlated_feature_sets_", None)
+    if not sets:
+        return None
+
+    chosen = None
+    for group in sets:
+        members = sorted(str(f) for f in group)
+        available = [m for m in members if m in X_pre_correlation.columns]
+        if len(available) >= 3:
+            chosen = available[:6]
+            break
+    if chosen is None:
+        return None
+
+    sub = X_pre_correlation[chosen]
+    corr = sub.corr(method="spearman").to_numpy()
+    return {
+        "representative": chosen[0],
+        "members": chosen,
+        "correlations": corr.tolist(),
+    }
+
+
+def _dataframe_before_smart_corr(cluster: Pipeline, X_imp: pd.DataFrame) -> pd.DataFrame:
+    """Sensor matrix after constant/duplicate drops, before correlated selection."""
+    X_cur = X_imp
+    for step_name, step in cluster.named_steps.items():
+        if step_name == "smart_corr":
+            break
+        X_cur = step.transform(X_cur)
+    return X_cur
+
+
+def extract_model_artifacts(
+    pipeline: Pipeline,
+    model_id: str,
+    X_train: pd.DataFrame,
+) -> dict[str, Any]:
+    """Summarize stages and family-specific details from a fitted pipeline."""
+    preprocess: ColumnTransformer = pipeline.named_steps["preprocess"]
+    scale = pipeline.named_steps["scale"]
+    sensor_pipe = _sensor_mspc_pipeline(preprocess)
+
+    sensor_cols = sensor_value_columns(X_train.columns)
+    mart_sensors = len(sensor_cols)
+    auxiliary_features = len(X_train.columns) - mart_sensors
+    stg_sensors = int(N_SENSORS)
+    stages: dict[str, int] = {
+        "stg_sensors": stg_sensors,
+        "mart_sensors": mart_sensors,
+        "dbt_dropped_sensors": max(0, stg_sensors - mart_sensors),
+        "auxiliary_features": auxiliary_features,
+    }
+
+    X_sensors = X_train[sensor_cols]
+    impute = sensor_pipe.named_steps["impute"]
+    X_imp = pd.DataFrame(
+        impute.transform(X_sensors),
+        columns=sensor_cols,
+        index=X_sensors.index,
+    )
+    stages["after_impute"] = len(X_imp.columns)
+
+    cluster = sensor_pipe.named_steps["cluster"]
+    X_clust = cluster.transform(X_imp)
+    stages["after_cluster"] = len(X_clust.columns)
+    stages.update(_cluster_drop_counts(cluster, X_imp))
+
+    family = _model_family(model_id)
+    pls_info = None
+    rf_selection = None
+
+    if "pls" in sensor_pipe.named_steps:
+        pls: PLSWithQFeatures = sensor_pipe.named_steps["pls"]
+        stages["after_selection"] = int(pls.n_components_) + 1
+        pls_info = _extract_pls_info(pls)
+    elif "select" in sensor_pipe.named_steps:
+        select: SelectFromModel = sensor_pipe.named_steps["select"]
+        cluster_cols = list(X_clust.columns)
+        rf_selection = _extract_rf_selection(select, cluster_cols)
+        stages["after_selection"] = rf_selection["selected_count"]
+
+    stages["after_preprocess"] = len(preprocess.get_feature_names_out())
+    stages["classifier_input"] = len(scale.get_feature_names_out())
+
+    return {
+        "family": family,
+        "stages": stages,
+        "pls": pls_info,
+        "rf_selection": rf_selection,
+    }
+
+
+def extract_shared_artifacts(
+    pipeline: Pipeline,
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+) -> dict[str, Any]:
+    """Cluster config and Spearman example from reference MSPC pipeline."""
+    preprocess: ColumnTransformer = pipeline.named_steps["preprocess"]
+    sensor_pipe = _sensor_mspc_pipeline(preprocess)
+    sensor_cols = sensor_value_columns(X_train.columns)
+    X_sensors = X_train[sensor_cols]
+
+    impute = sensor_pipe.named_steps["impute"]
+    X_imp = pd.DataFrame(
+        impute.transform(X_sensors),
+        columns=sensor_cols,
+        index=X_sensors.index,
+    )
+    cluster = sensor_pipe.named_steps["cluster"]
+    smart_corr = cluster.named_steps["smart_corr"]
+    X_pre_corr = _dataframe_before_smart_corr(cluster, X_imp)
+    spearman_example = _spearman_cluster_example(smart_corr, X_pre_corr)
+
+    return {
+        "cluster_config": {
+            "method": CORRELATED_SELECTION_METHOD,
+            "threshold": float(CORRELATED_SELECTION_THRESHOLD),
+            "selection_method": CORRELATED_SELECTION_CRITERION,
+        },
+        "spearman_cluster_example": spearman_example,
+    }
+
+
+def collect_holdout_artifacts(
+    pipelines: dict[str, Pipeline],
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    *,
+    train_rows: int | None = None,
+    test_rows: int | None = None,
+) -> dict[str, Any]:
+    """Build full artifacts payload from holdout-fit pipelines."""
+    models: dict[str, dict[str, Any]] = {}
+    for model_id, pipeline in pipelines.items():
+        if model_id not in BENCHMARK_MODEL_IDS:
+            continue
+        models[model_id] = extract_model_artifacts(pipeline, model_id, X_train)
+
+    ref_mspc = pipelines[REFERENCE_MODELS["mspc"]]
+    shared = extract_shared_artifacts(ref_mspc, X_train, y_train)
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "holdout_split": {
+            "test_size": float(TEST_SIZE),
+            "random_seed": int(RANDOM_SEED),
+            "train_rows": train_rows,
+            "test_rows": test_rows,
+        },
+        "reference_models": dict(REFERENCE_MODELS),
+        "shared": shared,
+        "models": models,
+    }
+
+
+def save_pipeline_artifacts(
+    payload: dict[str, Any],
+    path: Path = PIPELINE_ARTIFACTS_PATH,
+) -> dict[str, Any]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(json_safe(payload), indent=2), encoding="utf-8")
+    return payload

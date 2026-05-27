@@ -18,6 +18,6 @@ st.markdown(
 
     - `observation_id` or timestamp selector
     - Sensor profile vs cohort
-  - Champion / benchmark model score and predicted class
+    - Champion / benchmark model score and predicted class
     """
 )

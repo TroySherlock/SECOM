@@ -646,6 +646,99 @@ def fig_spearman_cluster_example() -> go.Figure:
             [0.89, 0.91, 1.0],
         ]
     )
+    return fig_spearman_cluster({"members": sensors, "correlations": corr.tolist()})
+
+
+def fig_pls_explained_variance(pls: dict, *, n_components_grid: list[int] | None = None) -> go.Figure:
+    """Per-component explained variance (latent compression, not sensor grouping)."""
+    ratios = pls.get("explained_variance_ratio") or []
+    n_comp = int(pls.get("n_components", len(ratios)))
+    if not ratios:
+        return apply_plotly_theme(go.Figure(), height=330)
+
+    labels = [f"pls_{i}" for i in range(len(ratios))]
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=labels,
+                y=ratios,
+                marker_color=GRUVBOX["pass"],
+                text=[f"{r:.1%}" for r in ratios],
+                textposition="outside",
+                hovertemplate="%{x}: %{y:.1%} of score variance<extra></extra>",
+            )
+        ]
+    )
+    grid_note = ""
+    if n_components_grid:
+        grid_note = (
+            f" CV grid: {', '.join(str(k) for k in n_components_grid)}."
+        )
+    fig.update_layout(
+        title=dict(
+            text=(
+                f"PLS latent structure (n_components={n_comp}, holdout fit;"
+                f"{grid_note})"
+            )
+        ),
+        xaxis_title="Latent component",
+        yaxis_title="Share of PLS score variance",
+        showlegend=False,
+    )
+    fig.update_yaxes(tickformat=".0%")
+    return apply_plotly_theme(fig, height=340, margin=dict(l=60, r=20, t=78, b=50))
+
+
+def fig_rf_topk_selection(model_artifact: dict) -> go.Figure:
+    """RF importance ranking from holdout-fit SelectFromModel."""
+    rf = model_artifact.get("rf_selection") or {}
+    ranked = rf.get("importances") or []
+    top_k = rf.get("top_k", len(rf.get("selected_features", [])))
+    selected = set(rf.get("selected_features") or [])
+
+    if not ranked:
+        return fig_rf_topk_selection_example(top_k=top_k or 15)
+
+    names = [r["feature"] for r in ranked]
+    importances = [r["importance"] for r in ranked]
+    colors = [
+        GRUVBOX["fail"] if n in selected else GRUVBOX["fg_muted"] for n in names
+    ]
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=importances,
+                y=names,
+                orientation="h",
+                marker_color=colors,
+                hovertemplate="%{y}: importance=%{x:.3f}<extra></extra>",
+            )
+        ]
+    )
+    fig.update_layout(
+        title=dict(text=f"RF importance ranking (top-{top_k} selected, holdout fit)"),
+        xaxis_title="Relative importance",
+        yaxis_title="Sensor",
+        showlegend=False,
+    )
+    fig.update_yaxes(autorange="reversed")
+    return apply_plotly_theme(fig, height=360, margin=dict(l=80, r=20, t=70, b=45))
+
+
+def fig_spearman_cluster(cluster_example: dict | None) -> go.Figure:
+    """Spearman ρ heatmap from pipeline cluster example."""
+    if not cluster_example:
+        return fig_spearman_cluster_example()
+    sensors = cluster_example.get("members") or []
+    corr_raw = cluster_example.get("correlations")
+    if not sensors or corr_raw is None:
+        return fig_spearman_cluster_example()
+
+    corr = np.asarray(corr_raw, dtype=float)
+    title_members = ", ".join(sensors[:4])
+    if len(sensors) > 4:
+        title_members += ", …"
+
     fig = go.Figure(
         data=go.Heatmap(
             z=corr,
@@ -667,12 +760,170 @@ def fig_spearman_cluster_example() -> go.Figure:
         )
     )
     fig.update_layout(
-        title=dict(text="Spearman cluster example: c_340, c_204, c_67"),
+        title=dict(text=f"Spearman cluster: {title_members}"),
         xaxis_title="Sensor",
         yaxis_title="Sensor",
         showlegend=False,
     )
     return apply_plotly_theme(fig, height=340, margin=dict(l=70, r=40, t=78, b=60))
+
+
+def fig_reduction_impact_from_stages(profile: dict[str, int]) -> go.Figure:
+    """Sensor-count reduction from stg → dbt mart → sklearn clustering."""
+    stg = profile.get("stg_sensors", 591)
+    mart = profile.get("mart_sensors", profile.get("raw_sensors", 0))
+    after_cluster = profile.get("after_cluster", profile.get("retained_for_selection", 0))
+    classifier_input = profile.get("classifier_input", 0)
+
+    stage_counts = [
+        ("Raw SECOM sensors", stg),
+        ("After dbt profiling", mart),
+        ("After clustering drop", after_cluster),
+    ]
+    if classifier_input:
+        stage_counts.append(
+            ("Classifier input (MSPC ref + aux)", classifier_input),
+        )
+    return fig_reduction_impact(stage_counts)
+
+
+def fig_benchmark_leaderboard(
+    df: pd.DataFrame,
+    *,
+    metric_col: str,
+    label_col: str = "pipeline",
+    error_col: str | None = None,
+    title: str = "Benchmark leaderboard",
+    ascending: bool = False,
+) -> go.Figure:
+    """Horizontal ranked bar chart for a benchmark metric column."""
+    if df.empty:
+        return apply_plotly_theme(go.Figure(), height=360)
+
+    plot_df = df.sort_values(metric_col, ascending=ascending).copy()
+    error_x = None
+    if error_col and error_col in plot_df.columns:
+        err_vals = plot_df[error_col].astype(float).tolist()
+        error_x = dict(type="data", array=err_vals, visible=True)
+
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=plot_df[metric_col],
+                y=plot_df[label_col],
+                orientation="h",
+                marker_color=GRUVBOX["yellow"],
+                error_x=error_x,
+                text=[f"{v:.3f}" for v in plot_df[metric_col]],
+                textposition="outside",
+                hovertemplate="%{y}<br>%{x:.3f}<extra></extra>",
+            )
+        ]
+    )
+    fig.update_layout(
+        title=dict(text=title),
+        xaxis_title=metric_col.replace("_", " "),
+        yaxis_title="Pipeline",
+        showlegend=False,
+    )
+    fig.update_yaxes(autorange="reversed")
+    return apply_plotly_theme(fig, height=380, margin=dict(l=100, r=48, t=72, b=48))
+
+
+def fig_cv_vs_holdout_scatter(merged_df: pd.DataFrame) -> go.Figure:
+    """CV mean PR AUC vs holdout PR AUC per pipeline."""
+    if merged_df.empty:
+        return apply_plotly_theme(go.Figure(), height=360)
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=merged_df["pr_auc_cv"],
+            y=merged_df["pr_auc_holdout"],
+            mode="markers+text",
+            text=merged_df["pipeline"],
+            textposition="top center",
+            marker=dict(color=GRUVBOX["accent"], size=12),
+            hovertemplate="%{text}<br>CV PR AUC=%{x:.3f}<br>Holdout PR AUC=%{y:.3f}<extra></extra>",
+        )
+    )
+    lo = min(merged_df["pr_auc_cv"].min(), merged_df["pr_auc_holdout"].min()) - 0.02
+    hi = max(merged_df["pr_auc_cv"].max(), merged_df["pr_auc_holdout"].max()) + 0.02
+    fig.add_trace(
+        go.Scatter(
+            x=[lo, hi],
+            y=[lo, hi],
+            mode="lines",
+            name="y = x",
+            line=dict(color=GRUVBOX["fg_muted"], dash="dash"),
+            hoverinfo="skip",
+        )
+    )
+    fig.update_layout(
+        title=dict(text="CV vs holdout PR AUC"),
+        xaxis_title="Mean PR AUC (5×5 CV)",
+        yaxis_title="PR AUC (holdout)",
+        showlegend=False,
+    )
+    return apply_plotly_theme(fig, height=380)
+
+
+def fig_holdout_confusion(confusion_matrix: list[list[int]], pipeline_name: str) -> go.Figure:
+    """Confusion matrix heatmap for holdout evaluation."""
+    cm = np.asarray(confusion_matrix)
+    labels = [["TN", "FP"], ["FN", "TP"]]
+    text = [[f"{labels[i][j]}<br>{cm[i, j]}" for j in range(2)] for i in range(2)]
+
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=cm,
+            x=["Pred pass (0)", "Pred fail (1)"],
+            y=["Actual pass (0)", "Actual fail (1)"],
+            colorscale=[
+                [0.0, GRUVBOX["bg_soft"]],
+                [0.5, GRUVBOX["yellow"]],
+                [1.0, GRUVBOX["fail"]],
+            ],
+            text=text,
+            texttemplate="%{text}",
+            hovertemplate="%{y}, %{x}<br>count=%{z}<extra></extra>",
+            showscale=False,
+        )
+    )
+    fig.update_layout(
+        title=dict(text=f"Holdout confusion matrix — {pipeline_name}"),
+        xaxis_title="Predicted",
+        yaxis_title="Actual",
+    )
+    fig.update_yaxes(autorange="reversed")
+    return apply_plotly_theme(fig, height=320)
+
+
+def fig_ber_cv_vs_holdout(merged_df: pd.DataFrame, pipeline: str) -> go.Figure:
+    """Grouped bar comparing CV mean BER vs holdout BER for one pipeline."""
+    row = merged_df.loc[merged_df["pipeline"] == pipeline]
+    if row.empty:
+        return apply_plotly_theme(go.Figure(), height=280)
+    row = row.iloc[0]
+    labels = ["CV mean BER", "Holdout BER"]
+    values = [float(row["ber_cv"]), float(row["ber_holdout"])]
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=labels,
+                y=values,
+                marker_color=[GRUVBOX["accent"], GRUVBOX["fail"]],
+                text=[f"{v:.1f}%" for v in values],
+                textposition="outside",
+            )
+        ]
+    )
+    fig.update_layout(
+        title=dict(text=f"BER comparison — {pipeline}"),
+        yaxis_title="BER (%)",
+        showlegend=False,
+    )
+    return apply_plotly_theme(fig, height=300)
 
 
 def fig_sensor_histogram(

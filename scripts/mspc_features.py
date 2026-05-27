@@ -93,6 +93,17 @@ class PLSWithQFeatures(BaseEstimator, TransformerMixin):
         names.append(self.q_col)
         return np.asarray(names, dtype=object)
 
+    def explained_variance_ratio(self) -> list[float]:
+        """Per-component fraction of X variance explained (for reporting)."""
+        check_is_fitted(self, "n_components_")
+        if self.n_components_ == 0 or self.pls_ is None:
+            return []
+        scores = self.pls_.x_scores_
+        total = float(np.sum(scores**2))
+        if total <= 0:
+            return [0.0] * self.n_components_
+        return [float(np.sum(scores[:, i] ** 2) / total) for i in range(self.n_components_)]
+
     def _sensor_array(self, X) -> np.ndarray:
         X_df = self._as_dataframe(X)
         cols = sensor_value_columns(X_df.columns)
