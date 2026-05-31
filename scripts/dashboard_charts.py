@@ -501,9 +501,8 @@ def fig_pipeline_flow_order() -> go.Figure:
         "Raw sensors",
         "Median imputation",
         "Redundancy clustering",
-        "Hotelling T2 features",
-        "PLS + Q branch",
-        "RF top-k branch",
+        "Hub features (top-k + T² + pairs)",
+        "Scaled classifier input",
     ]
     fig = go.Figure(
         data=[
@@ -518,20 +517,18 @@ def fig_pipeline_flow_order() -> go.Figure:
                         GRUVBOX["accent"],
                         GRUVBOX["orange"],
                         GRUVBOX["pass"],
-                        GRUVBOX["fail"],
                     ],
                     line=dict(color=GRUVBOX["border"], width=1),
                 ),
                 link=dict(
-                    source=[0, 1, 2, 3, 3],
-                    target=[1, 2, 3, 4, 5],
-                    value=[591, 591, 250, 40, 15],
+                    source=[0, 1, 2, 3],
+                    target=[1, 2, 3, 4],
+                    value=[591, 591, 250, 52],
                     color=[
                         "rgba(216,166,87,0.35)",
                         "rgba(78,154,204,0.35)",
                         "rgba(231,138,78,0.35)",
                         "rgba(80,161,79,0.35)",
-                        "rgba(234,105,98,0.35)",
                     ],
                 ),
             )
@@ -586,30 +583,6 @@ def fig_hotelling_t2_intuition() -> go.Figure:
     return apply_plotly_theme(fig, height=340)
 
 
-def fig_pls_compression_example() -> go.Figure:
-    """Illustrative bar chart for compression from sensors to latent outputs."""
-    labels = ["Input sensors", "After shared clustering", "PLS components", "Q statistic", "Total PLS path features"]
-    values = [591, 250, 15, 1, 16]
-    fig = go.Figure(
-        data=[
-            go.Bar(
-                x=labels,
-                y=values,
-                marker_color=[GRUVBOX["yellow"], GRUVBOX["accent"], GRUVBOX["pass"], GRUVBOX["orange"], GRUVBOX["pass"]],
-                text=[f"{v:,}" for v in values],
-                textposition="outside",
-            )
-        ]
-    )
-    fig.update_layout(
-        title=dict(text="PLS + Q compression (illustrative feature counts)"),
-        xaxis_title="Stage",
-        yaxis_title="Feature count",
-        showlegend=False,
-    )
-    return apply_plotly_theme(fig, height=330)
-
-
 def fig_rf_topk_selection_example(top_k: int) -> go.Figure:
     """Illustrative feature-importance ranking with top-k cutoff."""
     names = [f"c_{i}" for i in range(20)]
@@ -647,46 +620,6 @@ def fig_spearman_cluster_example() -> go.Figure:
         ]
     )
     return fig_spearman_cluster({"members": sensors, "correlations": corr.tolist()})
-
-
-def fig_pls_explained_variance(pls: dict, *, n_components_grid: list[int] | None = None) -> go.Figure:
-    """Per-component explained variance (latent compression, not sensor grouping)."""
-    ratios = pls.get("explained_variance_ratio") or []
-    n_comp = int(pls.get("n_components", len(ratios)))
-    if not ratios:
-        return apply_plotly_theme(go.Figure(), height=330)
-
-    labels = [f"pls_{i}" for i in range(len(ratios))]
-    fig = go.Figure(
-        data=[
-            go.Bar(
-                x=labels,
-                y=ratios,
-                marker_color=GRUVBOX["pass"],
-                text=[f"{r:.1%}" for r in ratios],
-                textposition="outside",
-                hovertemplate="%{x}: %{y:.1%} of score variance<extra></extra>",
-            )
-        ]
-    )
-    grid_note = ""
-    if n_components_grid:
-        grid_note = (
-            f" CV grid: {', '.join(str(k) for k in n_components_grid)}."
-        )
-    fig.update_layout(
-        title=dict(
-            text=(
-                f"PLS latent structure (n_components={n_comp}, holdout fit;"
-                f"{grid_note})"
-            )
-        ),
-        xaxis_title="Latent component",
-        yaxis_title="Share of PLS score variance",
-        showlegend=False,
-    )
-    fig.update_yaxes(tickformat=".0%")
-    return apply_plotly_theme(fig, height=340, margin=dict(l=60, r=20, t=78, b=50))
 
 
 def fig_rf_topk_selection(model_artifact: dict) -> go.Figure:

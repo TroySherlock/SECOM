@@ -8,7 +8,7 @@ from typing import Any
 from scripts.dashboard_stg import N_SENSORS
 from scripts.secom_pipelines import PIPELINE_ARTIFACTS_PATH
 
-REFERENCE_MODELS = {"mspc": "mspc_lr", "rf_k": "rf_k_rf"}
+REFERENCE_MODELS = {"linear": "linear_lr", "topk": "topk_rf"}
 
 
 def artifacts_available(path: Path | None = None) -> bool:
@@ -30,7 +30,7 @@ def get_reference_artifacts(
     artifacts: dict[str, Any],
     family: str,
 ) -> dict[str, Any] | None:
-    """Return model artifact block for mspc or rf_k reference model."""
+    """Return model artifact block for linear or topk reference model."""
     ref_ids = artifacts.get("reference_models", REFERENCE_MODELS)
     model_id = ref_ids.get(family) or REFERENCE_MODELS.get(family)
     if not model_id:
@@ -49,9 +49,9 @@ def _stage_int(stages: dict[str, Any], key: str, fallback: int = 0) -> int:
 
 
 def build_reduction_profile(artifacts: dict[str, Any]) -> dict[str, int]:
-    """Build reduction metrics from reference MSPC model stages."""
-    mspc_model = get_reference_artifacts(artifacts, "mspc") or {}
-    stages = mspc_model.get("stages", {})
+    """Build reduction metrics from reference linear model stages."""
+    linear_model = get_reference_artifacts(artifacts, "linear") or {}
+    stages = linear_model.get("stages", {})
 
     stg = _stage_int(stages, "stg_sensors", int(N_SENSORS))
     mart = _stage_int(stages, "mart_sensors")

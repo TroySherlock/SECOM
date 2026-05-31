@@ -7,21 +7,26 @@ from pathlib import Path
 import duckdb
 import numpy as np
 import pandas as pd
+from feature_engine.selection import (
+    DropConstantFeatures,
+    DropDuplicateFeatures,
+    SmartCorrelatedSelection,
+)
 from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.feature_selection import SelectFromModel
 from sklearn.impute import KNNImputer, SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import make_scorer, recall_score
+from sklearn.feature_selection import VarianceThreshold
 from sklearn.model_selection import RepeatedStratifiedKFold, train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import RobustScaler
-from feature_engine.selection import DropConstantFeatures, DropDuplicateFeatures, SmartCorrelatedSelection
 from xgboost import XGBClassifier
 
-from scripts.mspc_features import MahalanobisT2Features, PLSWithQFeatures
-
+from scripts.anomaly_features import IsolationForestScoreFeatures
+from scripts.hub_interactions import LinearSelectT2HubBlock
+from scripts.neighbor_meta_features import NeighborFailRateFeatures, SensorBranchPipeline
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = REPO_ROOT / "secom.duckdb"
 SOURCE_RELATION = "public.mart_secom_features"
@@ -29,18 +34,16 @@ OUTPUT_DIR = REPO_ROOT / "data" / "processed"
 # Dashboard data contract (regenerate: python -m scripts.benchmark_models after tuning):
 #   tuned/<model_id>.json           — frozen hyperparameters from tuning notebooks
 #   secom_pipeline_benchmark.json   — CV leaderboard + holdout metrics
-#   secom_pipeline_artifacts.json   — holdout-fit pipeline reporting (feature counts, PLS, RF, clusters)
+#   secom_pipeline_artifacts.json   — holdout-fit pipeline reporting (feature counts, RF, clusters)
 TUNED_PARAMS_DIR = OUTPUT_DIR / "tuned"
 BENCHMARK_RESULTS_PATH = OUTPUT_DIR / "secom_pipeline_benchmark.json"
 PIPELINE_ARTIFACTS_PATH = OUTPUT_DIR / "secom_pipeline_artifacts.json"
 
 BENCHMARK_MODEL_IDS = (
-    "mspc_lr",
-    "mspc_rf",
-    "xgb_mspc",
-    "rf_k_lr",
-    "rf_k_rf",
-    "rf_k_knn",
+    "linear_lr",
+    "topk_rf",
+    "topk_knn",
+    "topk_xgb",
 )
 
 TARGET_COL = "target"
@@ -53,46 +56,63 @@ N_SPLITS = 5
 N_REPEATS = 5
 GRID_SEARCH_VERBOSE = 1
 
-C_GRID = [0.001, 0.01]
-L1_RATIO_GRID = [0.05, 0.5, 0.95]
+C_GRID = [0.005, 0.0075, 0.01]
+L1_RATIO_GRID = [0.2, 0.25, 0.3, 0.4, 0.5]
 
-MODEL_NAME = "mspc_elastic_net_logistic"
+MODEL_NAME = "secom_linear_elastic_net"
 
 N_MISSING_SENSORS_COL = "n_missing_sensors"
-CHAMPION_IMPUTATION_METHOD = "knn"
+CHAMPION_IMPUTATION_METHOD = "median"
 KNN_IMPUTE_NEIGHBORS = 5
-ELASTIC_NET_MAX_ITER = 500_000
-
-PLS_N_COMPONENTS = 15
-PLS_N_COMPONENTS_GRID = [5, 10, 15]
+ELASTIC_NET_MAX_ITER = 12000
 
 KNN_CLASSIFIER_NEIGHBORS = 10
 KNN_CLASSIFIER_WEIGHTS = "uniform"
-KNN_NEIGHBORS_GRID = [5, 10, 15]
+KNN_NEIGHBORS_GRID = [35]
 
-RF_N_ESTIMATORS = 1000
-RF_MAX_DEPTH = 4
-RF_MAX_DEPTH_GRID = [3, 4, 6, 8]
+RF_N_ESTIMATORS = 1500
+RF_MAX_DEPTH = 8
+RF_MAX_DEPTH_GRID = [8, 10, 12, 16, 20]
 RF_MIN_SAMPLES_LEAF = 10
 RF_SELECT_TOP_K = 15
-RF_SELECT_TOP_K_GRID = [20, 30, 40, 50]
+RF_SELECT_TOP_K_GRID = [35]
+
+N_HUBS_DEFAULT = 5
+N_HUBS_GRID = [5]
+
+NEIGHBOR_FAIL_RATE_STEP = "neighbor_fail_rate"
+ISOLATION_FOREST_STEP = "isolation_forest"
+
+ENABLE_NEIGHBOR_FAIL_RATE = False
+ENABLE_ISOLATION_FOREST = False
+
+META_KNN_NEIGHBORS_DEFAULT = 30
+META_KNN_NEIGHBORS_GRID = [40]
+
+ISOLATION_FOREST_N_ESTIMATORS = 200
+ISOLATION_FOREST_N_ESTIMATORS_GRID = [1000]
+ISOLATION_FOREST_CONTAMINATION = "auto"
 
 CORRELATED_SELECTION_THRESHOLD = 0.80
+CORRELATED_SELECTION_THRESHOLD_GRID = [0.70]
 CORRELATED_SELECTION_METHOD = "spearman"
 CORRELATED_SELECTION_CRITERION = "corr_with_target"
 
-XGB_N_ESTIMATORS = 500
-XGB_MAX_DEPTH = 6
-XGB_MAX_DEPTH_GRID = [4, 6, 8]
+XGB_N_ESTIMATORS = 1500
+XGB_MAX_DEPTH = 10
+XGB_MAX_DEPTH_GRID = [8, 12, 16, 18]
 XGB_LEARNING_RATE = 0.05
-XGB_LEARNING_RATE_GRID = [0.03, 0.05, 0.1]
-XGB_SCALE_POS_WEIGHT = 13.0
+XGB_LEARNING_RATE_GRID = [0.005, 0.01, 0.03, 0.1]
+XGB_SCALE_POS_WEIGHT = 14.151515
 
 CV_N_JOBS = -1
 ESTIMATOR_N_JOBS = 1
 
 PRIMARY_TUNING_METRIC = "pr_auc"
-THRESHOLD_GRID = np.arange(0.05, 0.96, 0.05)
+THRESHOLD_GRID = np.linspace(0.45, 0.55, num=1000) #np.linspace(0.001, 0.999, num=500)  # np.linspace(0.45, 0.55, num=500)
+
+HOLDOUT_BOOTSTRAP_N = 1000
+HOLDOUT_BOOTSTRAP_CI = 0.95
 
 CV_SCORING = {
     "balanced_accuracy": "balanced_accuracy",
@@ -120,7 +140,7 @@ median_imputer = partial(
     strategy="median",
 )
 
-elastic_net = partial(
+elastic_net_lr = partial(
     LogisticRegression,
     solver="saga",
     class_weight="balanced",
@@ -153,6 +173,8 @@ xgboost_classifier = partial(
     learning_rate=XGB_LEARNING_RATE,
     subsample=0.8,
     colsample_bytree=0.8,
+    reg_lambda=2.0,                  # NEW: Increases L2 regularization on weights to smooth probabilities
+    reg_alpha=0.5,
     scale_pos_weight=XGB_SCALE_POS_WEIGHT,
     random_state=RANDOM_SEED,
     n_jobs=ESTIMATOR_N_JOBS,
@@ -177,24 +199,38 @@ def frozen_config() -> dict:
         "threshold_tuning_metric": "ber",
         "threshold_grid": [float(t) for t in THRESHOLD_GRID],
         "elastic_net_max_iter": int(ELASTIC_NET_MAX_ITER),
-        "pls_n_components": int(PLS_N_COMPONENTS),
-        "pls_n_components_grid": [int(k) for k in PLS_N_COMPONENTS_GRID],
         "knn_classifier_neighbors": int(KNN_CLASSIFIER_NEIGHBORS),
         "knn_neighbors_grid": [int(k) for k in KNN_NEIGHBORS_GRID],
         "rf_n_estimators": int(RF_N_ESTIMATORS),
         "rf_max_depth": int(RF_MAX_DEPTH),
-        "rf_max_depth_grid": [int(k) for k in RF_MAX_DEPTH_GRID],
+        "rf_max_depth_grid": [int(d) for d in RF_MAX_DEPTH_GRID],
         "xgb_n_estimators": int(XGB_N_ESTIMATORS),
         "xgb_max_depth": int(XGB_MAX_DEPTH),
-        "xgb_max_depth_grid": [int(k) for k in XGB_MAX_DEPTH_GRID],
+        "xgb_max_depth_grid": [int(d) for d in XGB_MAX_DEPTH_GRID],
         "xgb_learning_rate_grid": [float(x) for x in XGB_LEARNING_RATE_GRID],
         "xgb_scale_pos_weight": float(XGB_SCALE_POS_WEIGHT),
         "rf_select_top_k": int(RF_SELECT_TOP_K),
         "rf_select_top_k_grid": [int(k) for k in RF_SELECT_TOP_K_GRID],
+        "n_hubs_default": int(N_HUBS_DEFAULT),
+        "n_hubs_grid": [int(k) for k in N_HUBS_GRID],
+        "meta_knn_neighbors_default": int(META_KNN_NEIGHBORS_DEFAULT),
+        "meta_knn_neighbors_grid": [int(k) for k in META_KNN_NEIGHBORS_GRID],
+        "isolation_forest_n_estimators": int(ISOLATION_FOREST_N_ESTIMATORS),
+        "isolation_forest_n_estimators_grid": [
+            int(k) for k in ISOLATION_FOREST_N_ESTIMATORS_GRID
+        ],
+        "isolation_forest_contamination": ISOLATION_FOREST_CONTAMINATION,
         "benchmark_model_ids": list(BENCHMARK_MODEL_IDS),
         "correlated_selection_threshold": float(CORRELATED_SELECTION_THRESHOLD),
+        "correlated_selection_threshold_grid": [
+            float(t) for t in CORRELATED_SELECTION_THRESHOLD_GRID
+        ],
         "correlated_selection_method": CORRELATED_SELECTION_METHOD,
         "correlated_selection_criterion": CORRELATED_SELECTION_CRITERION,
+        "enable_neighbor_fail_rate": bool(ENABLE_NEIGHBOR_FAIL_RATE),
+        "enable_isolation_forest": bool(ENABLE_ISOLATION_FOREST),
+        "holdout_bootstrap_n": int(HOLDOUT_BOOTSTRAP_N),
+        "holdout_bootstrap_ci": float(HOLDOUT_BOOTSTRAP_CI),
     }
 
 
@@ -236,7 +272,7 @@ def make_repeated_stratified_cv() -> RepeatedStratifiedKFold:
     )
 
 
-def _mspc_auxiliary_transformers() -> list[tuple[str, str, object]]:
+def _auxiliary_transformers() -> list[tuple[str, str, object]]:
     return [
         (
             "n_missing",
@@ -256,81 +292,119 @@ def _mspc_auxiliary_transformers() -> list[tuple[str, str, object]]:
     ]
 
 
+def preprocess_step_enabled(step_name: str) -> bool:
+    """Whether a named sensor-branch step is included (see ENABLE_* flags)."""
+    if step_name == NEIGHBOR_FAIL_RATE_STEP:
+        return ENABLE_NEIGHBOR_FAIL_RATE
+    if step_name == ISOLATION_FOREST_STEP:
+        return ENABLE_ISOLATION_FOREST
+    return True
+
+
+def _optional_meta_steps(
+    *,
+    meta_knn_neighbors: int = META_KNN_NEIGHBORS_DEFAULT,
+    isolation_forest_n_estimators: int = ISOLATION_FOREST_N_ESTIMATORS,
+    isolation_forest_contamination: str | float = ISOLATION_FOREST_CONTAMINATION,
+) -> list[tuple[str, object]]:
+    """Append neighbor_fail_rate and/or isolation_forest when ENABLE_* is True."""
+    steps: list[tuple[str, object]] = []
+    if ENABLE_NEIGHBOR_FAIL_RATE:
+        steps.append(
+            (
+                NEIGHBOR_FAIL_RATE_STEP,
+                NeighborFailRateFeatures(
+                    n_neighbors=int(meta_knn_neighbors),
+                    n_jobs=ESTIMATOR_N_JOBS,
+                ),
+            )
+        )
+    if ENABLE_ISOLATION_FOREST:
+        steps.append(
+            (
+                ISOLATION_FOREST_STEP,
+                IsolationForestScoreFeatures(
+                    n_estimators=int(isolation_forest_n_estimators),
+                    contamination=isolation_forest_contamination,
+                    random_state=RANDOM_SEED,
+                    n_jobs=ESTIMATOR_N_JOBS,
+                ),
+            )
+        )
+    return steps
+
+
 def _cluster_step() -> Pipeline:
     return Pipeline(
         steps=[
             ("drop_constant", DropConstantFeatures(tol=1)),
             ("drop_duplicates", DropDuplicateFeatures()),
+            ("drop_low_variance", VarianceThreshold(threshold=0)),
             (
                 "smart_corr",
                 SmartCorrelatedSelection(
                     method=CORRELATED_SELECTION_METHOD,
                     threshold=CORRELATED_SELECTION_THRESHOLD,
-                    selection_method=CORRELATED_SELECTION_CRITERION,
                     missing_values="ignore",
+                    selection_method=CORRELATED_SELECTION_CRITERION,
                 ),
             ),
         ],
     ).set_output(transform="pandas")
 
 
-def mspc_preprocess(n_components: int = PLS_N_COMPONENTS) -> ColumnTransformer:
-    """Impute c_* → cluster → PLS+Q → Mahalanobis T² on pls scores; passthrough aux."""
+def _sensor_branch_pipeline(sensor_steps: list[tuple[str, object]]) -> Pipeline:
+    """SensorBranchPipeline when KNN meta is on; plain Pipeline otherwise."""
+    if ENABLE_NEIGHBOR_FAIL_RATE:
+        return SensorBranchPipeline(steps=sensor_steps)
+    return Pipeline(steps=sensor_steps)
+
+
+def _sensor_preprocess_column(
+    sensor_steps: list[tuple[str, object]],
+) -> ColumnTransformer:
     return ColumnTransformer(
         transformers=[
             (
-                "sensor_mspc",
-                Pipeline(
-                    steps=[
-                        ("impute", median_imputer()),
-                        ("cluster", _cluster_step()),
-                        ("pls", PLSWithQFeatures(n_components=n_components)),
-                        (
-                            "t2",
-                            MahalanobisT2Features(score_columns=r"^pls_\d+$"),
-                        ),
-                    ]
-                ).set_output(transform="pandas"),
+                "sensor_branch",
+                _sensor_branch_pipeline(sensor_steps).set_output(transform="pandas"),
                 make_column_selector(pattern=_SENSOR_VALUE_PATTERN),
             ),
-            *_mspc_auxiliary_transformers(),
+            *_auxiliary_transformers(),
         ],
         remainder="drop",
         verbose_feature_names_out=False,
     )
 
 
-def rf_top_k_preprocess(top_k: int = RF_SELECT_TOP_K) -> ColumnTransformer:
-    """Impute c_* → cluster → RF SelectFromModel top_k → Mahalanobis T²; passthrough aux."""
-    return ColumnTransformer(
-        transformers=[
-            (
-                "sensor_mspc",
-                Pipeline(
-                    steps=[
-                        ("impute", median_imputer()),
-                        ("cluster", _cluster_step()),
-                        (
-                            "select",
-                            SelectFromModel(
-                                random_forest_classifier(),
-                                max_features=top_k,
-                                threshold=-np.inf,
-                            ),
-                        ),
-                        ("t2", MahalanobisT2Features()),
-                    ]
-                ).set_output(transform="pandas"),
-                make_column_selector(pattern=_SENSOR_VALUE_PATTERN),
-            ),
-            *_mspc_auxiliary_transformers(),
-        ],
-        remainder="drop",
-        verbose_feature_names_out=False,
+def linear_preprocess(
+    top_k: int = RF_SELECT_TOP_K,
+    n_hubs: int = N_HUBS_DEFAULT,
+    *,
+    meta_knn_neighbors: int = META_KNN_NEIGHBORS_DEFAULT,
+    isolation_forest_n_estimators: int = ISOLATION_FOREST_N_ESTIMATORS,
+    isolation_forest_contamination: str | float = ISOLATION_FOREST_CONTAMINATION,
+) -> ColumnTransformer:
+    """Impute → cluster → hubs → optional meta steps; passthrough aux."""
+    sensor_steps: list[tuple[str, object]] = [
+        ("impute", median_imputer()),
+        ("cluster", _cluster_step()),
+        ("select_t2_hubs", LinearSelectT2HubBlock(top_k=top_k, n_hubs=n_hubs)),
+    ]
+    sensor_steps.extend(
+        _optional_meta_steps(
+            meta_knn_neighbors=meta_knn_neighbors,
+            isolation_forest_n_estimators=isolation_forest_n_estimators,
+            isolation_forest_contamination=isolation_forest_contamination,
+        )
     )
+    return _sensor_preprocess_column(sensor_steps)
 
 
-def feature_pipeline(classifier, preprocess: ColumnTransformer) -> Pipeline:
+def feature_pipeline(
+    classifier,
+    preprocess: ColumnTransformer,
+) -> Pipeline:
     """Preprocess → RobustScaler → classifier."""
     return Pipeline(
         [
@@ -339,15 +413,4 @@ def feature_pipeline(classifier, preprocess: ColumnTransformer) -> Pipeline:
             ("classifier", classifier),
         ]
     ).set_output(transform="pandas")
-
-
-def secom_pipeline(
-    classifier,
-    *,
-    n_components: int = PLS_N_COMPONENTS,
-    preprocess: ColumnTransformer | None = None,
-) -> Pipeline:
-    """Default: MSPC preprocess → scale → classifier."""
-    preprocess = preprocess or mspc_preprocess(n_components)
-    return feature_pipeline(classifier, preprocess)
 

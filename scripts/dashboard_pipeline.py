@@ -5,6 +5,7 @@ import json
 
 import streamlit as st
 
+from scripts.secom_pipelines import ENABLE_ISOLATION_FOREST, ENABLE_NEIGHBOR_FAIL_RATE
 from theme.gruvbox_material import GRUVBOX
 
 PIPELINE_MERMAID = """
@@ -30,16 +31,13 @@ flowchart LR
   mart["mart_secom_features"]
   imp["Median impute"]
   cluster["Spearman cluster"]
-  pls["PLS + Q"]
-  rfk["RF top-k (CV)"]
-  t2["Hotelling T²"]
+  hubs["RF top-k + T² + hub pairs"]
+  knnMeta["Neighbor fail rate"]
+  iforest["Isolation forest score"]
   scale["RobustScaler"]
   clf["Classifier"]
 
-  stg --> int_f --> meta --> mart --> imp --> cluster
-  cluster --> pls --> t2
-  cluster --> rfk --> t2
-  t2 --> scale --> clf
+  stg --> int_f --> meta --> mart --> imp --> cluster --> hubs --> knnMeta --> iforest --> scale --> clf
 """
 
 
@@ -140,3 +138,8 @@ def render_pipeline_flowchart() -> None:
 
 def render_preprocessing_flowchart() -> None:
     _render_mermaid(PREPROCESSING_MERMAID, height=340)
+    st.caption(
+        "Neighbor fail-rate and isolation-forest steps follow "
+        "`ENABLE_NEIGHBOR_FAIL_RATE` and `ENABLE_ISOLATION_FOREST` in "
+        "`scripts/secom_pipelines.py` (omitted from the pipeline when False)."
+    )

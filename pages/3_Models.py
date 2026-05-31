@@ -26,6 +26,22 @@ from scripts.secom_pipelines import N_REPEATS, N_SPLITS, PRIMARY_TUNING_METRIC
 ensure_repo_on_path()
 
 
+def _metric_with_ci(
+    point: float,
+    ci_low: float | None,
+    ci_high: float | None,
+    *,
+    fmt: str = ".3f",
+    suffix: str = "",
+) -> tuple[str, str | None]:
+    """Format point estimate with optional bootstrap CI for st.metric."""
+    label = f"{point:{fmt}}{suffix}"
+    if ci_low is None or ci_high is None:
+        return label, None
+    help_text = f"95% bootstrap CI: [{ci_low:{fmt}}, {ci_high:{fmt}}]{suffix}"
+    return label, help_text
+
+
 @st.cache_data(show_spinner=False)
 def _load_payload() -> dict:
     return load_benchmark_results()
@@ -116,6 +132,11 @@ def main() -> None:
             for col in ho_display.select_dtypes(include="float").columns:
                 ho_display[col] = ho_display[col].round(3)
             st.dataframe(ho_display, width="stretch", hide_index=True)
+            if "pr_auc_ci_low" in ho_df.columns:
+                st.caption(
+                    "Holdout PR AUC / BER include stratified bootstrap 95% CIs "
+                    "(median + ci_low/ci_high columns; no refit per draw)."
+                )
 
             if "confusion_matrix" in ho_df.columns:
                 st.markdown("---")
@@ -159,9 +180,21 @@ def main() -> None:
             row = merged.loc[merged["pipeline"] == selected_id].iloc[0]
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("PR AUC (CV)", f"{row['pr_auc_cv']:.3f}")
-            m2.metric("PR AUC (holdout)", f"{row['pr_auc_holdout']:.3f}")
+            pr_label, pr_help = _metric_with_ci(
+                float(row["pr_auc_holdout"]),
+                row.get("pr_auc_holdout_ci_low"),
+                row.get("pr_auc_holdout_ci_high"),
+            )
+            m2.metric("PR AUC (holdout)", pr_label, help=pr_help)
             m3.metric("BER (CV)", f"{row['ber_cv']:.1f}%")
-            m4.metric("BER (holdout)", f"{row['ber_holdout']:.1f}%")
+            ber_label, ber_help = _metric_with_ci(
+                float(row["ber_holdout"]),
+                row.get("ber_holdout_ci_low"),
+                row.get("ber_holdout_ci_high"),
+                fmt=".1f",
+                suffix="%",
+            )
+            m4.metric("BER (holdout)", ber_label, help=ber_help)
             plotly_chart(
                 fig_ber_cv_vs_holdout(merged, selected_id),
                 key="p3_model_ber_compare",
@@ -173,17 +206,24 @@ def main() -> None:
             st.warning("Need both CV and holdout sections in benchmark JSON.")
         else:
             plotly_chart(fig_cv_vs_holdout_scatter(merged), key="p3_cv_holdout_scatter")
-            compare_display = merged[
-                [
-                    "pipeline",
-                    "pr_auc_cv",
-                    "pr_auc_holdout",
-                    "cv_rank",
-                    "holdout_rank",
-                    "ber_cv",
-                    "ber_holdout",
-                ]
-            ].copy()
+            compare_cols = [
+                "pipeline",
+                "pr_auc_cv",
+                "pr_auc_holdout",
+                "cv_rank",
+                "holdout_rank",
+                "ber_cv",
+                "ber_holdout",
+            ]
+            for extra in (
+                "pr_auc_holdout_ci_low",
+                "pr_auc_holdout_ci_high",
+                "ber_holdout_ci_low",
+                "ber_holdout_ci_high",
+            ):
+                if extra in merged.columns:
+                    compare_cols.append(extra)
+            compare_display = merged[[c for c in compare_cols if c in merged.columns]].copy()
             for col in compare_display.select_dtypes(include="float").columns:
                 compare_display[col] = compare_display[col].round(3)
             st.dataframe(compare_display, width="stretch", hide_index=True)

@@ -34,11 +34,19 @@ from scripts.secom_utils import json_safe
 
 from scripts.secom_pipelines import (
     C_GRID,
+    CORRELATED_SELECTION_THRESHOLD,
+    CORRELATED_SELECTION_THRESHOLD_GRID,
+    ENABLE_ISOLATION_FOREST,
+    ENABLE_NEIGHBOR_FAIL_RATE,
+    ISOLATION_FOREST_N_ESTIMATORS,
+    ISOLATION_FOREST_N_ESTIMATORS_GRID,
+    META_KNN_NEIGHBORS_DEFAULT,
+    META_KNN_NEIGHBORS_GRID,
     KNN_CLASSIFIER_NEIGHBORS,
     KNN_NEIGHBORS_GRID,
     L1_RATIO_GRID,
-    PLS_N_COMPONENTS,
-    PLS_N_COMPONENTS_GRID,
+    N_HUBS_DEFAULT,
+    N_HUBS_GRID,
     RF_MAX_DEPTH,
     RF_MAX_DEPTH_GRID,
     RF_SELECT_TOP_K,
@@ -47,17 +55,98 @@ from scripts.secom_pipelines import (
     XGB_LEARNING_RATE_GRID,
     XGB_MAX_DEPTH,
     XGB_MAX_DEPTH_GRID,
-    elastic_net,
+    elastic_net_lr,
+    feature_pipeline,
     knn_classifier,
-    mspc_preprocess,
+    linear_preprocess,
     random_forest_classifier,
-    rf_top_k_preprocess,
-    secom_pipeline,
     xgboost_classifier,
 )
 
-PLS_N_PARAM = "preprocess__sensor_mspc__pls__n_components"
-TOP_K_PARAM = "preprocess__sensor_mspc__select__max_features"
+LINEAR_TOP_K_PARAM = "preprocess__sensor_branch__select_t2_hubs__top_k"
+LINEAR_N_HUBS_PARAM = "preprocess__sensor_branch__select_t2_hubs__n_hubs"
+META_KNN_N_NEIGHBORS_PARAM = (
+    "preprocess__sensor_branch__neighbor_fail_rate__n_neighbors"
+)
+LEGACY_TOP_K_PARAM = "preprocess__sensor_branch__select__max_features"
+IF_N_ESTIMATORS_PARAM = "preprocess__sensor_branch__isolation_forest__n_estimators"
+SMART_CORR_THRESHOLD_PARAM = (
+    "preprocess__sensor_branch__cluster__smart_corr__threshold"
+)
+
+
+def _hub_preprocess_grid() -> dict:
+    grid = {
+        LINEAR_TOP_K_PARAM: [int(k) for k in RF_SELECT_TOP_K_GRID],
+        LINEAR_N_HUBS_PARAM: [int(k) for k in N_HUBS_GRID],
+        SMART_CORR_THRESHOLD_PARAM: [float(t) for t in CORRELATED_SELECTION_THRESHOLD_GRID],
+    }
+    if ENABLE_NEIGHBOR_FAIL_RATE:
+        grid[META_KNN_N_NEIGHBORS_PARAM] = [int(k) for k in META_KNN_NEIGHBORS_GRID]
+    if ENABLE_ISOLATION_FOREST:
+        grid[IF_N_ESTIMATORS_PARAM] = [int(k) for k in ISOLATION_FOREST_N_ESTIMATORS_GRID]
+    return grid
+
+
+def _hub_best_params(cv_summary: dict) -> dict:
+    params = {
+        LINEAR_TOP_K_PARAM: int(cv_summary["best_top_k"]),
+        LINEAR_N_HUBS_PARAM: int(cv_summary["best_n_hubs"]),
+        SMART_CORR_THRESHOLD_PARAM: float(
+            cv_summary.get("best_corr_threshold", CORRELATED_SELECTION_THRESHOLD)
+        ),
+    }
+    if ENABLE_NEIGHBOR_FAIL_RATE:
+        params[META_KNN_N_NEIGHBORS_PARAM] = int(
+            cv_summary.get("best_meta_knn_neighbors", META_KNN_NEIGHBORS_DEFAULT)
+        )
+    if ENABLE_ISOLATION_FOREST:
+        params[IF_N_ESTIMATORS_PARAM] = int(
+            cv_summary.get("best_if_n_estimators", ISOLATION_FOREST_N_ESTIMATORS)
+        )
+    return params
+
+
+def _hub_preprocess_param_renames() -> dict[str, str]:
+    renames = {
+        f"param_{LINEAR_TOP_K_PARAM}": "top_k",
+        f"param_{LINEAR_N_HUBS_PARAM}": "n_hubs",
+        f"param_{SMART_CORR_THRESHOLD_PARAM}": "corr_threshold",
+    }
+    if ENABLE_NEIGHBOR_FAIL_RATE:
+        renames[f"param_{META_KNN_N_NEIGHBORS_PARAM}"] = "meta_knn_neighbors"
+    if ENABLE_ISOLATION_FOREST:
+        renames[f"param_{IF_N_ESTIMATORS_PARAM}"] = "if_n_estimators"
+    return renames
+
+
+def _hub_preprocess_groupby_cols() -> list[str]:
+    cols = ["top_k", "n_hubs", "corr_threshold"]
+    if ENABLE_NEIGHBOR_FAIL_RATE:
+        cols.append("meta_knn_neighbors")
+    if ENABLE_ISOLATION_FOREST:
+        cols.append("if_n_estimators")
+    return cols
+
+
+def _hub_preprocess_best_defaults() -> dict[str, object]:
+    defaults: dict[str, object] = {
+        "top_k": int(RF_SELECT_TOP_K),
+        "n_hubs": int(N_HUBS_DEFAULT),
+        "corr_threshold": float(CORRELATED_SELECTION_THRESHOLD),
+    }
+    if ENABLE_NEIGHBOR_FAIL_RATE:
+        defaults["meta_knn_neighbors"] = int(META_KNN_NEIGHBORS_DEFAULT)
+    if ENABLE_ISOLATION_FOREST:
+        defaults["if_n_estimators"] = int(ISOLATION_FOREST_N_ESTIMATORS)
+    return defaults
+
+
+def _hub_feature_pipeline(classifier, *, top_k: int = RF_SELECT_TOP_K, n_hubs: int = N_HUBS_DEFAULT):
+    return feature_pipeline(
+        classifier,
+        linear_preprocess(top_k=top_k, n_hubs=n_hubs),
+    )
 
 
 @dataclass(frozen=True)
@@ -71,234 +160,148 @@ class ModelSpec:
     build_grid_search_best_params: Callable[[dict], dict]
 
 
-def _mspc_lr_pipeline() -> Pipeline:
-    return secom_pipeline(
-        elastic_net(C=float(C_GRID[0]), l1_ratio=float(L1_RATIO_GRID[0])),
-        n_components=int(PLS_N_COMPONENTS),
+def _linear_lr_pipeline() -> Pipeline:
+    return _hub_feature_pipeline(
+        elastic_net_lr(C=float(C_GRID[0]), l1_ratio=float(L1_RATIO_GRID[0])),
     )
 
 
-def _mspc_lr_grid() -> dict:
+def _linear_lr_grid() -> dict:
     return {
-        PLS_N_PARAM: [int(k) for k in PLS_N_COMPONENTS_GRID],
+        **_hub_preprocess_grid(),
         "classifier__C": [float(c) for c in C_GRID],
         "classifier__l1_ratio": [float(r) for r in L1_RATIO_GRID],
     }
 
 
-def _mspc_lr_best_params(cv_summary: dict) -> dict:
+def _linear_lr_best_params(cv_summary: dict) -> dict:
     return {
-        PLS_N_PARAM: int(cv_summary["best_n_components"]),
+        **_hub_best_params(cv_summary),
         "classifier__C": float(cv_summary["best_c"]),
         "classifier__l1_ratio": float(cv_summary["best_l1_ratio"]),
     }
 
 
-def _mspc_rf_pipeline() -> Pipeline:
-    return secom_pipeline(
-        random_forest_classifier(),
-        n_components=int(PLS_N_COMPONENTS),
-    )
+def _topk_rf_pipeline() -> Pipeline:
+    return _hub_feature_pipeline(random_forest_classifier())
 
 
-def _mspc_rf_grid() -> dict:
+def _topk_rf_grid() -> dict:
     return {
-        PLS_N_PARAM: [int(k) for k in PLS_N_COMPONENTS_GRID],
+        **_hub_preprocess_grid(),
         "classifier__max_depth": [int(d) for d in RF_MAX_DEPTH_GRID],
     }
 
 
-def _mspc_rf_best_params(cv_summary: dict) -> dict:
+def _topk_rf_best_params(cv_summary: dict) -> dict:
     return {
-        PLS_N_PARAM: int(cv_summary["best_n_components"]),
+        **_hub_best_params(cv_summary),
         "classifier__max_depth": int(cv_summary["best_max_depth"]),
     }
 
 
-def _xgb_mspc_pipeline() -> Pipeline:
-    return secom_pipeline(
-        xgboost_classifier(),
-        n_components=int(PLS_N_COMPONENTS),
-    )
+def _topk_knn_pipeline() -> Pipeline:
+    return _hub_feature_pipeline(knn_classifier())
 
 
-def _xgb_mspc_grid() -> dict:
+def _topk_knn_grid() -> dict:
     return {
-        PLS_N_PARAM: [int(k) for k in PLS_N_COMPONENTS_GRID],
+        **_hub_preprocess_grid(),
+        "classifier__n_neighbors": [int(k) for k in KNN_NEIGHBORS_GRID],
+    }
+
+
+def _topk_knn_best_params(cv_summary: dict) -> dict:
+    return {
+        **_hub_best_params(cv_summary),
+        "classifier__n_neighbors": int(cv_summary["best_n_neighbors"]),
+    }
+
+
+def _topk_xgb_pipeline() -> Pipeline:
+    return _hub_feature_pipeline(xgboost_classifier())
+
+
+def _topk_xgb_grid() -> dict:
+    return {
+        **_hub_preprocess_grid(),
         "classifier__max_depth": [int(d) for d in XGB_MAX_DEPTH_GRID],
         "classifier__learning_rate": [float(x) for x in XGB_LEARNING_RATE_GRID],
     }
 
 
-def _xgb_mspc_best_params(cv_summary: dict) -> dict:
+def _topk_xgb_best_params(cv_summary: dict) -> dict:
     return {
-        PLS_N_PARAM: int(cv_summary["best_n_components"]),
+        **_hub_best_params(cv_summary),
         "classifier__max_depth": int(cv_summary["best_max_depth"]),
         "classifier__learning_rate": float(cv_summary["best_learning_rate"]),
     }
 
 
-def _rf_k_lr_pipeline() -> Pipeline:
-    return secom_pipeline(
-        elastic_net(C=float(C_GRID[0]), l1_ratio=float(L1_RATIO_GRID[0])),
-        preprocess=rf_top_k_preprocess(top_k=int(RF_SELECT_TOP_K)),
-    )
-
-
-def _rf_k_lr_grid() -> dict:
-    return {
-        TOP_K_PARAM: [int(k) for k in RF_SELECT_TOP_K_GRID],
-        "classifier__C": [float(c) for c in C_GRID],
-        "classifier__l1_ratio": [float(r) for r in L1_RATIO_GRID],
-    }
-
-
-def _rf_k_lr_best_params(cv_summary: dict) -> dict:
-    return {
-        TOP_K_PARAM: int(cv_summary["best_top_k"]),
-        "classifier__C": float(cv_summary["best_c"]),
-        "classifier__l1_ratio": float(cv_summary["best_l1_ratio"]),
-    }
-
-
-def _rf_k_rf_pipeline() -> Pipeline:
-    return secom_pipeline(
-        random_forest_classifier(),
-        preprocess=rf_top_k_preprocess(top_k=int(RF_SELECT_TOP_K)),
-    )
-
-
-def _rf_k_rf_grid() -> dict:
-    return {
-        TOP_K_PARAM: [int(k) for k in RF_SELECT_TOP_K_GRID],
-        "classifier__max_depth": [int(d) for d in RF_MAX_DEPTH_GRID],
-    }
-
-
-def _rf_k_rf_best_params(cv_summary: dict) -> dict:
-    return {
-        TOP_K_PARAM: int(cv_summary["best_top_k"]),
-        "classifier__max_depth": int(cv_summary["best_max_depth"]),
-    }
-
-
-def _rf_k_knn_pipeline() -> Pipeline:
-    return secom_pipeline(
-        knn_classifier(),
-        preprocess=rf_top_k_preprocess(top_k=int(RF_SELECT_TOP_K)),
-    )
-
-
-def _rf_k_knn_grid() -> dict:
-    return {
-        TOP_K_PARAM: [int(k) for k in RF_SELECT_TOP_K_GRID],
-        "classifier__n_neighbors": [int(k) for k in KNN_NEIGHBORS_GRID],
-    }
-
-
-def _rf_k_knn_best_params(cv_summary: dict) -> dict:
-    return {
-        TOP_K_PARAM: int(cv_summary["best_top_k"]),
-        "classifier__n_neighbors": int(cv_summary["best_n_neighbors"]),
-    }
-
-
 MODEL_SPECS: dict[str, ModelSpec] = {
-    "mspc_lr": ModelSpec(
-        model_id="mspc_lr",
-        build_pipeline=_mspc_lr_pipeline,
-        make_param_grid=_mspc_lr_grid,
+    "linear_lr": ModelSpec(
+        model_id="linear_lr",
+        build_pipeline=_linear_lr_pipeline,
+        make_param_grid=_linear_lr_grid,
         param_renames={
-            f"param_{PLS_N_PARAM}": "n_components",
+            **_hub_preprocess_param_renames(),
             "param_classifier__C": "c",
             "param_classifier__l1_ratio": "l1_ratio",
         },
-        groupby_cols=["n_components", "c", "l1_ratio"],
+        groupby_cols=[*_hub_preprocess_groupby_cols(), "c", "l1_ratio"],
         best_defaults={
-            "n_components": int(PLS_N_COMPONENTS),
+            **_hub_preprocess_best_defaults(),
             "c": float(C_GRID[0]),
             "l1_ratio": float(L1_RATIO_GRID[0]),
         },
-        build_grid_search_best_params=_mspc_lr_best_params,
+        build_grid_search_best_params=_linear_lr_best_params,
     ),
-    "mspc_rf": ModelSpec(
-        model_id="mspc_rf",
-        build_pipeline=_mspc_rf_pipeline,
-        make_param_grid=_mspc_rf_grid,
+    "topk_rf": ModelSpec(
+        model_id="topk_rf",
+        build_pipeline=_topk_rf_pipeline,
+        make_param_grid=_topk_rf_grid,
         param_renames={
-            f"param_{PLS_N_PARAM}": "n_components",
+            **_hub_preprocess_param_renames(),
             "param_classifier__max_depth": "max_depth",
         },
-        groupby_cols=["n_components", "max_depth"],
+        groupby_cols=[*_hub_preprocess_groupby_cols(), "max_depth"],
         best_defaults={
-            "n_components": int(PLS_N_COMPONENTS),
+            **_hub_preprocess_best_defaults(),
             "max_depth": int(RF_MAX_DEPTH),
         },
-        build_grid_search_best_params=_mspc_rf_best_params,
+        build_grid_search_best_params=_topk_rf_best_params,
     ),
-    "xgb_mspc": ModelSpec(
-        model_id="xgb_mspc",
-        build_pipeline=_xgb_mspc_pipeline,
-        make_param_grid=_xgb_mspc_grid,
+    "topk_knn": ModelSpec(
+        model_id="topk_knn",
+        build_pipeline=_topk_knn_pipeline,
+        make_param_grid=_topk_knn_grid,
         param_renames={
-            f"param_{PLS_N_PARAM}": "n_components",
+            **_hub_preprocess_param_renames(),
+            "param_classifier__n_neighbors": "n_neighbors",
+        },
+        groupby_cols=[*_hub_preprocess_groupby_cols(), "n_neighbors"],
+        best_defaults={
+            **_hub_preprocess_best_defaults(),
+            "n_neighbors": int(KNN_CLASSIFIER_NEIGHBORS),
+        },
+        build_grid_search_best_params=_topk_knn_best_params,
+    ),
+    "topk_xgb": ModelSpec(
+        model_id="topk_xgb",
+        build_pipeline=_topk_xgb_pipeline,
+        make_param_grid=_topk_xgb_grid,
+        param_renames={
+            **_hub_preprocess_param_renames(),
             "param_classifier__max_depth": "max_depth",
             "param_classifier__learning_rate": "learning_rate",
         },
-        groupby_cols=["n_components", "max_depth", "learning_rate"],
+        groupby_cols=[*_hub_preprocess_groupby_cols(), "max_depth", "learning_rate"],
         best_defaults={
-            "n_components": int(PLS_N_COMPONENTS),
+            **_hub_preprocess_best_defaults(),
             "max_depth": int(XGB_MAX_DEPTH),
             "learning_rate": float(XGB_LEARNING_RATE),
         },
-        build_grid_search_best_params=_xgb_mspc_best_params,
-    ),
-    "rf_k_lr": ModelSpec(
-        model_id="rf_k_lr",
-        build_pipeline=_rf_k_lr_pipeline,
-        make_param_grid=_rf_k_lr_grid,
-        param_renames={
-            f"param_{TOP_K_PARAM}": "top_k",
-            "param_classifier__C": "c",
-            "param_classifier__l1_ratio": "l1_ratio",
-        },
-        groupby_cols=["top_k", "c", "l1_ratio"],
-        best_defaults={
-            "top_k": int(RF_SELECT_TOP_K),
-            "c": float(C_GRID[0]),
-            "l1_ratio": float(L1_RATIO_GRID[0]),
-        },
-        build_grid_search_best_params=_rf_k_lr_best_params,
-    ),
-    "rf_k_rf": ModelSpec(
-        model_id="rf_k_rf",
-        build_pipeline=_rf_k_rf_pipeline,
-        make_param_grid=_rf_k_rf_grid,
-        param_renames={
-            f"param_{TOP_K_PARAM}": "top_k",
-            "param_classifier__max_depth": "max_depth",
-        },
-        groupby_cols=["top_k", "max_depth"],
-        best_defaults={
-            "top_k": int(RF_SELECT_TOP_K),
-            "max_depth": int(RF_MAX_DEPTH),
-        },
-        build_grid_search_best_params=_rf_k_rf_best_params,
-    ),
-    "rf_k_knn": ModelSpec(
-        model_id="rf_k_knn",
-        build_pipeline=_rf_k_knn_pipeline,
-        make_param_grid=_rf_k_knn_grid,
-        param_renames={
-            f"param_{TOP_K_PARAM}": "top_k",
-            "param_classifier__n_neighbors": "n_neighbors",
-        },
-        groupby_cols=["top_k", "n_neighbors"],
-        best_defaults={
-            "top_k": int(RF_SELECT_TOP_K),
-            "n_neighbors": int(KNN_CLASSIFIER_NEIGHBORS),
-        },
-        build_grid_search_best_params=_rf_k_knn_best_params,
+        build_grid_search_best_params=_topk_xgb_best_params,
     ),
 }
 
@@ -312,11 +315,51 @@ def _resolved_classifier_threshold(tuned_payload: dict) -> float:
     return float(raw)
 
 
+def resolve_grid_search_best_params(model_id: str, tuned_payload: dict) -> dict:
+    """Map legacy tuned JSON keys to the current hub preprocess param names."""
+    raw = dict(tuned_payload.get("grid_search_best_params") or {})
+    cv_summary = tuned_payload.get("cv_summary") or {}
+
+    if LEGACY_TOP_K_PARAM in raw:
+        raw[LINEAR_TOP_K_PARAM] = int(raw.pop(LEGACY_TOP_K_PARAM))
+
+    if LINEAR_TOP_K_PARAM not in raw and cv_summary.get("best_top_k") is not None:
+        raw[LINEAR_TOP_K_PARAM] = int(cv_summary["best_top_k"])
+
+    if LINEAR_N_HUBS_PARAM not in raw:
+        if cv_summary.get("best_n_hubs") is not None:
+            raw[LINEAR_N_HUBS_PARAM] = int(cv_summary["best_n_hubs"])
+        else:
+            raw[LINEAR_N_HUBS_PARAM] = int(N_HUBS_DEFAULT)
+
+    if ENABLE_NEIGHBOR_FAIL_RATE and META_KNN_N_NEIGHBORS_PARAM not in raw:
+        if cv_summary.get("best_meta_knn_neighbors") is not None:
+            raw[META_KNN_N_NEIGHBORS_PARAM] = int(cv_summary["best_meta_knn_neighbors"])
+        else:
+            raw[META_KNN_N_NEIGHBORS_PARAM] = int(META_KNN_NEIGHBORS_DEFAULT)
+
+    if ENABLE_ISOLATION_FOREST and IF_N_ESTIMATORS_PARAM not in raw:
+        if cv_summary.get("best_if_n_estimators") is not None:
+            raw[IF_N_ESTIMATORS_PARAM] = int(cv_summary["best_if_n_estimators"])
+        else:
+            raw[IF_N_ESTIMATORS_PARAM] = int(ISOLATION_FOREST_N_ESTIMATORS)
+
+    if SMART_CORR_THRESHOLD_PARAM not in raw:
+        if cv_summary.get("best_corr_threshold") is not None:
+            raw[SMART_CORR_THRESHOLD_PARAM] = float(cv_summary["best_corr_threshold"])
+        else:
+            raw[SMART_CORR_THRESHOLD_PARAM] = float(CORRELATED_SELECTION_THRESHOLD)
+
+    spec = MODEL_SPECS[model_id]
+    valid = spec.build_pipeline().get_params(deep=True)
+    return {k: v for k, v in raw.items() if k in valid}
+
+
 def build_tuned_pipeline(model_id: str, tuned_payload: dict) -> Pipeline:
     """Clone model pipeline, apply frozen params, and wrap classifier with tuned threshold."""
     spec = MODEL_SPECS[model_id]
     pipeline = clone(spec.build_pipeline())
-    pipeline.set_params(**tuned_payload["grid_search_best_params"])
+    pipeline.set_params(**resolve_grid_search_best_params(model_id, tuned_payload))
     threshold = _resolved_classifier_threshold(tuned_payload)
     classifier = pipeline.named_steps["classifier"]
     pipeline.steps[-1] = (
@@ -620,10 +663,10 @@ def save_tuned_params(
         payload["cv_fold_results_at_threshold"] = threshold_result[
             "fold_results_at_best_threshold"
         ]
-    if "best_n_components" in cv_summary:
-        payload["best_n_components"] = int(cv_summary["best_n_components"])
     if "best_top_k" in cv_summary:
         payload["best_top_k"] = int(cv_summary["best_top_k"])
+    if "best_n_hubs" in cv_summary:
+        payload["best_n_hubs"] = int(cv_summary["best_n_hubs"])
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(json_safe(payload), indent=2), encoding="utf-8")
     return payload

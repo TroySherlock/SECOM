@@ -6,15 +6,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 from feature_engine.selection import SmartCorrelatedSelection
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_selection import SelectFromModel
 from sklearn.pipeline import Pipeline
-
 from scripts.dashboard_stg import N_SENSORS
-from scripts.mspc_features import PLSWithQFeatures, sensor_value_columns
+from scripts.anomaly_features import IsolationForestScoreFeatures
+from scripts.neighbor_meta_features import NeighborFailRateFeatures
+from scripts.hub_interactions import LinearSelectT2HubBlock, extract_hub_interaction_info
+from scripts.mspc_features import sensor_value_columns
 from scripts.secom_pipelines import (
     BENCHMARK_MODEL_IDS,
     CORRELATED_SELECTION_CRITERION,
@@ -26,21 +27,23 @@ from scripts.secom_pipelines import (
 )
 from scripts.secom_utils import json_safe
 
-REFERENCE_MODELS = {"mspc": "mspc_lr", "rf_k": "rf_k_rf"}
+REFERENCE_MODELS = {"linear": "linear_lr", "topk": "topk_rf"}
 
 
-def _sensor_mspc_pipeline(preprocess: ColumnTransformer) -> Pipeline:
+def _sensor_branch_pipeline(preprocess: ColumnTransformer) -> Pipeline:
     fitted = getattr(preprocess, "transformers_", None) or preprocess.transformers
     for name, trans, _ in fitted:
-        if name == "sensor_mspc":
+        if name == "sensor_branch":
             return trans
-    raise KeyError("preprocess has no sensor_mspc transformer")
+    raise KeyError("preprocess has no sensor_branch transformer")
 
 
 def _model_family(model_id: str) -> str:
-    if model_id.startswith("rf_k"):
-        return "rf_k"
-    return "mspc"
+    if model_id.startswith("linear_"):
+        return "linear"
+    if model_id.startswith("topk_"):
+        return "topk"
+    return "unknown"
 
 
 def _cluster_drop_counts(cluster: Pipeline, X_imp: pd.DataFrame) -> dict[str, int]:
@@ -59,15 +62,6 @@ def _cluster_drop_counts(cluster: Pipeline, X_imp: pd.DataFrame) -> dict[str, in
         if key:
             counts[key] = n_before - X_cur.shape[1]
     return counts
-
-
-def _extract_pls_info(pls: PLSWithQFeatures) -> dict[str, Any]:
-    return {
-        "n_components": int(pls.n_components_),
-        "n_components_requested": int(pls.n_components),
-        "explained_variance_ratio": pls.explained_variance_ratio(),
-        "output_features": int(pls.n_components_) + 1,  # pls_* + q_statistic
-    }
 
 
 def _extract_rf_selection(select: SelectFromModel, cluster_cols: list[str]) -> dict[str, Any]:
@@ -143,7 +137,7 @@ def extract_model_artifacts(
     """Summarize stages and family-specific details from a fitted pipeline."""
     preprocess: ColumnTransformer = pipeline.named_steps["preprocess"]
     scale = pipeline.named_steps["scale"]
-    sensor_pipe = _sensor_mspc_pipeline(preprocess)
+    sensor_pipe = _sensor_branch_pipeline(preprocess)
 
     sensor_cols = sensor_value_columns(X_train.columns)
     mart_sensors = len(sensor_cols)
@@ -171,18 +165,42 @@ def extract_model_artifacts(
     stages.update(_cluster_drop_counts(cluster, X_imp))
 
     family = _model_family(model_id)
-    pls_info = None
     rf_selection = None
+    hub_interactions = None
+    isolation_forest_info = None
+    neighbor_fail_rate_info = None
 
-    if "pls" in sensor_pipe.named_steps:
-        pls: PLSWithQFeatures = sensor_pipe.named_steps["pls"]
-        stages["after_selection"] = int(pls.n_components_) + 1
-        pls_info = _extract_pls_info(pls)
-    elif "select" in sensor_pipe.named_steps:
-        select: SelectFromModel = sensor_pipe.named_steps["select"]
+    if "select_t2_hubs" in sensor_pipe.named_steps:
+        block: LinearSelectT2HubBlock = sensor_pipe.named_steps["select_t2_hubs"]
         cluster_cols = list(X_clust.columns)
-        rf_selection = _extract_rf_selection(select, cluster_cols)
+        rf_selection = _extract_rf_selection(block.select_, cluster_cols)
         stages["after_selection"] = rf_selection["selected_count"]
+        hub_interactions = extract_hub_interaction_info(block)
+        stages["after_hub_interactions"] = (
+            int(rf_selection["selected_count"])
+            + 1
+            + int(hub_interactions.get("n_interaction_features", 0))
+        )
+
+    if "neighbor_fail_rate" in sensor_pipe.named_steps:
+        knn_meta: NeighborFailRateFeatures = sensor_pipe.named_steps["neighbor_fail_rate"]
+        neighbor_fail_rate_info = {
+            "n_neighbors": int(knn_meta.n_neighbors),
+            "n_neighbors_fitted": int(getattr(knn_meta, "n_neighbors_fit_", 0)),
+            "score_column": str(knn_meta.score_col),
+        }
+        stages["after_neighbor_fail_rate"] = (
+            int(stages.get("after_hub_interactions", 0)) + 1
+        )
+
+    if "isolation_forest" in sensor_pipe.named_steps:
+        iforest: IsolationForestScoreFeatures = sensor_pipe.named_steps["isolation_forest"]
+        isolation_forest_info = {
+            "n_estimators": int(iforest.n_estimators),
+            "contamination": iforest.contamination,
+            "score_column": str(iforest.score_col),
+        }
+        stages["after_isolation_forest"] = len(sensor_pipe.get_feature_names_out())
 
     stages["after_preprocess"] = len(preprocess.get_feature_names_out())
     stages["classifier_input"] = len(scale.get_feature_names_out())
@@ -190,8 +208,10 @@ def extract_model_artifacts(
     return {
         "family": family,
         "stages": stages,
-        "pls": pls_info,
         "rf_selection": rf_selection,
+        "hub_interactions": hub_interactions,
+        "neighbor_fail_rate": neighbor_fail_rate_info,
+        "isolation_forest": isolation_forest_info,
     }
 
 
@@ -200,9 +220,9 @@ def extract_shared_artifacts(
     X_train: pd.DataFrame,
     y_train: pd.Series,
 ) -> dict[str, Any]:
-    """Cluster config and Spearman example from reference MSPC pipeline."""
+    """Cluster config and Spearman example from reference linear pipeline."""
     preprocess: ColumnTransformer = pipeline.named_steps["preprocess"]
-    sensor_pipe = _sensor_mspc_pipeline(preprocess)
+    sensor_pipe = _sensor_branch_pipeline(preprocess)
     sensor_cols = sensor_value_columns(X_train.columns)
     X_sensors = X_train[sensor_cols]
 
@@ -219,6 +239,7 @@ def extract_shared_artifacts(
 
     return {
         "cluster_config": {
+            "library": "feature_engine",
             "method": CORRELATED_SELECTION_METHOD,
             "threshold": float(CORRELATED_SELECTION_THRESHOLD),
             "selection_method": CORRELATED_SELECTION_CRITERION,
@@ -242,8 +263,8 @@ def collect_holdout_artifacts(
             continue
         models[model_id] = extract_model_artifacts(pipeline, model_id, X_train)
 
-    ref_mspc = pipelines[REFERENCE_MODELS["mspc"]]
-    shared = extract_shared_artifacts(ref_mspc, X_train, y_train)
+    ref_linear = pipelines[REFERENCE_MODELS["linear"]]
+    shared = extract_shared_artifacts(ref_linear, X_train, y_train)
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run sequential PR-AUC hyperparameter + BER threshold tuning for all six models."""
+"""Run sequential PR-AUC hyperparameter + BER threshold tuning for all four models."""
 from __future__ import annotations
 
 import sys

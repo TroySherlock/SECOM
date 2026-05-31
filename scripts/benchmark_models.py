@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Compare six tuned pipelines via repeated stratified CV.
+"""Compare four tuned pipelines via repeated stratified CV.
 
-Models: mspc_lr, mspc_rf, xgb_mspc, rf_k_lr, rf_k_rf, rf_k_knn.
+Models: linear_lr, topk_rf, topk_knn, topk_xgb.
 Each uses frozen hyperparameters from data/processed/tuned/<model_id>.json.
 Primary objective: maximize PR AUC on CV; tuned threshold for BER/TPR/TNR.
 """
@@ -11,8 +11,8 @@ import json
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
-from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import cross_validate
 from sklearn.pipeline import Pipeline
 
@@ -21,7 +21,10 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.progress import tqdm_joblib_context  # noqa: E402
-from scripts.secom_metrics import compute_holdout_metrics  # noqa: E402
+from scripts.secom_metrics import (  # noqa: E402
+    compute_holdout_metrics,
+    stratified_bootstrap_holdout_metrics,
+)
 from scripts.pipeline_artifacts import (  # noqa: E402
     collect_holdout_artifacts,
     save_pipeline_artifacts,
@@ -38,6 +41,8 @@ from scripts.secom_pipelines import (  # noqa: E402
     CORRELATED_SELECTION_CRITERION,
     CORRELATED_SELECTION_METHOD,
     CORRELATED_SELECTION_THRESHOLD,
+    HOLDOUT_BOOTSTRAP_CI,
+    HOLDOUT_BOOTSTRAP_N,
     TARGET_COL,
     TEST_SIZE,
     TUNED_PARAMS_DIR,
@@ -62,82 +67,6 @@ HOLDOUT_SORT_COL = "pr_auc"
 RANKING = "descending_higher_is_better"
 
 
-def _sensor_mspc_pipeline(preprocess: ColumnTransformer) -> Pipeline:
-    for name, trans, _ in preprocess.transformers:
-        if name == "sensor_mspc":
-            return trans
-    raise KeyError("preprocess has no sensor_mspc transformer")
-
-
-def validate_benchmark_pipelines(
-    pipelines: dict,
-    X_sample: pd.DataFrame | None = None,
-    y_sample: pd.Series | None = None,
-) -> None:
-    expected = set(BENCHMARK_MODEL_IDS)
-    if set(pipelines.keys()) != expected:
-        raise RuntimeError(
-            f"benchmark must include exactly {sorted(expected)}, got {sorted(pipelines)}"
-        )
-
-    for name, pipeline in pipelines.items():
-        if "preprocess" not in pipeline.named_steps:
-            raise RuntimeError(f"{name} pipeline has no 'preprocess' step")
-        if "classifier" not in pipeline.named_steps:
-            raise RuntimeError(f"{name} pipeline has no 'classifier' step")
-        if "smote" in pipeline.named_steps:
-            raise RuntimeError(f"{name} must not include SMOTE")
-        if not isinstance(pipeline, Pipeline):
-            raise TypeError(f"{name} must be sklearn.pipeline.Pipeline")
-
-        preprocess = pipeline.named_steps["preprocess"]
-        if not isinstance(preprocess, ColumnTransformer):
-            raise TypeError(f"{name} preprocess must be ColumnTransformer")
-
-        sensor_pipe = _sensor_mspc_pipeline(preprocess)
-        if "cluster" not in sensor_pipe.named_steps:
-            raise RuntimeError(f"{name} preprocess missing 'cluster' step")
-        is_rf_k = name.startswith("rf_k")
-        if is_rf_k:
-            if "select" not in sensor_pipe.named_steps:
-                raise RuntimeError(f"{name} RF-K preprocess missing 'select' step")
-            if "t2" not in sensor_pipe.named_steps:
-                raise RuntimeError(f"{name} RF-K preprocess missing 't2' step")
-            if "pls" in sensor_pipe.named_steps:
-                raise RuntimeError(f"{name} RF-K preprocess must not include PLS step")
-        else:
-            if "pls" not in sensor_pipe.named_steps:
-                raise RuntimeError(f"{name} MSPC preprocess missing 'pls' step")
-            if "t2" not in sensor_pipe.named_steps:
-                raise RuntimeError(f"{name} MSPC preprocess missing 't2' step")
-
-    if X_sample is None or y_sample is None:
-        return
-    missing_in = [c for c in X_sample.columns if c.endswith("__missing")]
-    if not missing_in:
-        return
-    mspc_ref = pipelines["mspc_lr"]
-    preprocess = mspc_ref.named_steps["preprocess"]
-    preprocess.fit(X_sample, y_sample)
-    out = {str(n) for n in preprocess.get_feature_names_out()}
-    if not any(n.endswith("__missing") for n in out):
-        raise RuntimeError(
-            "Mart has c_*__missing columns but preprocess did not passthrough missing_flags."
-        )
-    if not {"hotelling_t2", "q_statistic"}.issubset(out):
-        raise RuntimeError(
-            "MSPC preprocess did not emit hotelling_t2 and q_statistic."
-        )
-
-    rf_preprocess = pipelines["rf_k_lr"].named_steps["preprocess"]
-    rf_preprocess.fit(X_sample, y_sample)
-    rf_out = {str(n) for n in rf_preprocess.get_feature_names_out()}
-    if "hotelling_t2" not in rf_out:
-        raise RuntimeError("RF-K preprocess did not emit hotelling_t2.")
-    if "q_statistic" in rf_out:
-        raise RuntimeError("RF-K preprocess must not emit q_statistic.")
-
-
 def build_benchmark_pipelines(tuned: dict[str, dict] | None = None) -> dict[str, Pipeline]:
     tuned = tuned or load_all_tuned_params()
     pipelines: dict[str, Pipeline] = {}
@@ -156,7 +85,6 @@ def run_pipeline_benchmark(
     *,
     show_progress: bool = True,
 ) -> pd.DataFrame:
-    validate_benchmark_pipelines(pipelines, X, y)
     cv = cv or make_repeated_stratified_cv()
     n_folds = cv.get_n_splits(X, y)
     rows = []
@@ -212,7 +140,6 @@ def run_holdout_benchmark(
     *,
     show_progress: bool = True,
 ) -> pd.DataFrame:
-    validate_benchmark_pipelines(pipelines)
     rows = []
 
     if show_progress:
@@ -223,11 +150,33 @@ def run_holdout_benchmark(
         y_pred = pipeline.predict(X_test)
         y_score = pipeline.predict_proba(X_test)[:, 1]
         row = {"pipeline": name, **compute_holdout_metrics(y_test, y_pred, y_score)}
+        row.update(
+            stratified_bootstrap_holdout_metrics(
+                y_test,
+                y_score,
+                y_pred,
+                n_bootstrap=HOLDOUT_BOOTSTRAP_N,
+                ci_level=HOLDOUT_BOOTSTRAP_CI,
+                rng=np.random.default_rng(RANDOM_SEED),
+            )
+        )
         rows.append(row)
         if show_progress:
+            pr_lo, pr_hi = row.get("pr_auc_ci_low"), row.get("pr_auc_ci_high")
+            ber_lo, ber_hi = row.get("ber_percent_ci_low"), row.get("ber_percent_ci_high")
+            pr_ci = (
+                f" [{pr_lo:.3f}, {pr_hi:.3f}]"
+                if pr_lo is not None and pr_hi is not None
+                else ""
+            )
+            ber_ci = (
+                f" [{ber_lo:.1f}%, {ber_hi:.1f}%]"
+                if ber_lo is not None and ber_hi is not None
+                else ""
+            )
             print(
-                f"  {name}: holdout PR AUC {row['pr_auc']:.3f}, "
-                f"BER {row['ber_percent']:.1f}%"
+                f"  {name}: holdout PR AUC {row['pr_auc']:.3f}{pr_ci}, "
+                f"BER {row['ber_percent']:.1f}%{ber_ci}"
             )
 
     holdout = pd.DataFrame(rows).sort_values(
@@ -256,7 +205,12 @@ def save_benchmark_results(
         },
         "correlated_selection": {
             "library": "feature_engine",
-            "steps": ["DropConstantFeatures", "DropDuplicateFeatures", "SmartCorrelatedSelection"],
+            "steps": [
+                "DropConstantFeatures",
+                "DropDuplicateFeatures",
+                "VarianceThreshold",
+                "SmartCorrelatedSelection",
+            ],
             "drop_constant_tol": 1,
             "method": CORRELATED_SELECTION_METHOD,
             "threshold": float(CORRELATED_SELECTION_THRESHOLD),
@@ -269,6 +223,11 @@ def save_benchmark_results(
         "benchmark_xgb_max_depth": int(XGB_MAX_DEPTH),
         "benchmark_xgb_scale_pos_weight": float(XGB_SCALE_POS_WEIGHT),
         "holdout_is_reporting_only": True,
+        "holdout_bootstrap": {
+            "n": int(HOLDOUT_BOOTSTRAP_N),
+            "ci_level": float(HOLDOUT_BOOTSTRAP_CI),
+            "method": "stratified",
+        },
         "holdout_split": {
             "test_size": float(TEST_SIZE),
             "random_seed": int(RANDOM_SEED),

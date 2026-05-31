@@ -23,72 +23,60 @@ class ModelInfo:
 
 
 MODEL_CATALOG: dict[str, ModelInfo] = {
-    "mspc_lr": ModelInfo(
-        model_id="mspc_lr",
-        display_name="MSPC + Elastic Net",
-        family="MSPC (PLS + Q + T²)",
-        classifier="Logistic regression (elastic net)",
-        feature_path="Median impute → cluster → PLS+Q → Hotelling T²",
-        description=(
-            "Latent MSPC features with a sparse linear classifier. Strong baseline when "
-            "defect signal is spread across many correlated sensors."
+    "linear_lr": ModelInfo(
+        model_id="linear_lr",
+        display_name="Linear (hub interactions)",
+        family="Linear",
+        classifier="Logistic regression (elastic net, saga)",
+        feature_path=(
+            "Median impute → cluster → RF top-k → Hotelling T² → "
+            "hub×hub interactions → neighbor fail rate → isolation forest score → scale → elastic-net LR"
         ),
-        tuning_notebook="tuning/mspc_lr.ipynb",
+        description=(
+            "Sparse linear path: RF-selected sensors, T², hub×hub products, "
+            "KNN neighbor fail-rate meta feature, isolation-forest score, with elastic-net LR."
+        ),
+        tuning_notebook="tuning/linear_lr.ipynb",
     ),
-    "mspc_rf": ModelInfo(
-        model_id="mspc_rf",
-        display_name="MSPC + Random Forest",
-        family="MSPC (PLS + Q + T²)",
+    "topk_rf": ModelInfo(
+        model_id="topk_rf",
+        display_name="Hub features + Random Forest",
+        family="Top-k + hubs",
         classifier="Random forest",
-        feature_path="Median impute → cluster → PLS+Q → Hotelling T²",
-        description=(
-            "Same MSPC feature stack with a shallow random forest for nonlinear decision boundaries."
+        feature_path=(
+            "Median impute → cluster → RF top-k → Hotelling T² → "
+            "hub×hub interactions → neighbor fail rate → isolation forest score → scale → RF"
         ),
-        tuning_notebook="tuning/mspc_rf.ipynb",
-    ),
-    "xgb_mspc": ModelInfo(
-        model_id="xgb_mspc",
-        display_name="MSPC + XGBoost",
-        family="MSPC (PLS + Q + T²)",
-        classifier="XGBoost",
-        feature_path="Median impute → cluster → PLS+Q → Hotelling T²",
         description=(
-            "MSPC features with gradient boosting; handles class imbalance via scale_pos_weight."
+            "Same hub preprocess as linear_lr with a random forest classifier."
         ),
-        tuning_notebook="tuning/xgb_mspc.ipynb",
+        tuning_notebook="tuning/topk_rf.ipynb",
     ),
-    "rf_k_lr": ModelInfo(
-        model_id="rf_k_lr",
-        display_name="RF top-k + Elastic Net",
-        family="RF-K (top-k + T²)",
-        classifier="Logistic regression (elastic net)",
-        feature_path="Median impute → cluster → RF SelectFromModel → Hotelling T²",
-        description=(
-            "Sparse sensor subset from RF importance, then linear classification with T² monitoring."
-        ),
-        tuning_notebook="tuning/rf_k_lr.ipynb",
-    ),
-    "rf_k_rf": ModelInfo(
-        model_id="rf_k_rf",
-        display_name="RF top-k + Random Forest",
-        family="RF-K (top-k + T²)",
-        classifier="Random forest",
-        feature_path="Median impute → cluster → RF SelectFromModel → Hotelling T²",
-        description=(
-            "Top-k sensor selection plus forest classifier; often strong holdout PR AUC in this benchmark."
-        ),
-        tuning_notebook="tuning/rf_k_rf.ipynb",
-    ),
-    "rf_k_knn": ModelInfo(
-        model_id="rf_k_knn",
-        display_name="RF top-k + k-NN",
-        family="RF-K (top-k + T²)",
+    "topk_knn": ModelInfo(
+        model_id="topk_knn",
+        display_name="Hub features + k-NN",
+        family="Top-k + hubs",
         classifier="k-nearest neighbors",
-        feature_path="Median impute → cluster → RF SelectFromModel → Hotelling T²",
-        description=(
-            "Instance-based classifier on a compact RF-selected feature set."
+        feature_path=(
+            "Median impute → cluster → RF top-k → Hotelling T² → "
+            "hub×hub interactions → neighbor fail rate → isolation forest score → scale → k-NN"
         ),
-        tuning_notebook="tuning/rf_k_knn.ipynb",
+        description="Shared hub preprocess with instance-based classification.",
+        tuning_notebook="tuning/topk_knn.ipynb",
+    ),
+    "topk_xgb": ModelInfo(
+        model_id="topk_xgb",
+        display_name="Hub features + XGBoost",
+        family="Top-k + hubs",
+        classifier="XGBoost",
+        feature_path=(
+            "Median impute → cluster → RF top-k → Hotelling T² → "
+            "hub×hub interactions → neighbor fail rate → isolation forest score → scale → XGBoost"
+        ),
+        description=(
+            "Shared hub preprocess with gradient boosting (scale_pos_weight for imbalance)."
+        ),
+        tuning_notebook="tuning/topk_xgb.ipynb",
     ),
 }
 
@@ -137,8 +125,14 @@ def merged_comparison_df(payload: dict[str, Any]) -> pd.DataFrame:
     ho_cols = {
         "pipeline": "pipeline",
         "pr_auc": "pr_auc_holdout",
+        "pr_auc_median": "pr_auc_holdout_median",
+        "pr_auc_ci_low": "pr_auc_holdout_ci_low",
+        "pr_auc_ci_high": "pr_auc_holdout_ci_high",
         "roc_auc": "roc_auc_holdout",
         "ber_percent": "ber_holdout",
+        "ber_percent_median": "ber_holdout_median",
+        "ber_percent_ci_low": "ber_holdout_ci_low",
+        "ber_percent_ci_high": "ber_holdout_ci_high",
         "true_positive_percent": "tpr_holdout",
         "true_negative_percent": "tnr_holdout",
     }

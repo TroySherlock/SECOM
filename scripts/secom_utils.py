@@ -37,7 +37,7 @@ def load_tuned_params(model_id: str, base_dir: Path = TUNED_PARAMS_DIR) -> dict:
     path = tuned_params_path(model_id, base_dir)
     if not path.exists():
         raise FileNotFoundError(
-            f"Missing {path}. Run tuning/{model_id}.ipynb to produce tuned params."
+            f"Missing {path}. Run tuning/{model_id}.ipynb or tuning/tune_all.ipynb."
         )
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -58,10 +58,10 @@ def load_all_tuned_params(base_dir: Path = TUNED_PARAMS_DIR) -> dict[str, dict]:
 
 
 def load_champion_params(path: Path | None = None) -> dict:
-    """Backward-compatible alias for mspc_lr tuned params."""
+    """Backward-compatible alias for linear_lr tuned params."""
     if path is not None:
         return json.loads(path.read_text(encoding="utf-8"))
-    return load_tuned_params("mspc_lr")
+    return load_tuned_params("linear_lr")
 
 
 def fitted_base_classifier(pipeline) -> object:
