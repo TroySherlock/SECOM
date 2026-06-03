@@ -8,6 +8,7 @@ from scripts.tuning.registry import (
     save_tuned_params,
     summarize_cv_search,
     tune_classifier_threshold,
+    tune_classifier_threshold_profiles,
     tuned_params_path,
 )
 
@@ -19,5 +20,6 @@ __all__ = [
     "save_tuned_params",
     "summarize_cv_search",
     "tune_classifier_threshold",
+    "tune_classifier_threshold_profiles",
     "tuned_params_path",
 ]

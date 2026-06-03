@@ -5,7 +5,7 @@ import json
 
 import streamlit as st
 
-from scripts.dashboard_app import ensure_repo_on_path
+from scripts.dashboard_app import ensure_repo_on_path, render_blue_note
 from scripts.dashboard_benchmark import (
     benchmark_has_multi_profile_thresholds,
     cv_leaderboard_df,
@@ -22,6 +22,7 @@ from scripts.dashboard_benchmark import (
     resolved_threshold_profile_config,
 )
 from scripts.dashboard_charts import (
+    C_PURPLE,
     fig_benchmark_leaderboard,
     fig_ber_cv_vs_holdout,
     fig_cv_vs_holdout_scatter,
@@ -109,7 +110,7 @@ def main() -> None:
         border=True,
     )
 
-    st.info(
+    render_blue_note(
         "**5×5 CV benchmark** ranks models using mean metrics from repeated stratified folds "
         "(used for tuning and comparison). **Holdout** is a single 20% test split, "
         f"reporting only (`holdout_is_reporting_only={payload.get('holdout_is_reporting_only', True)}`) — "
@@ -137,6 +138,7 @@ def main() -> None:
                     metric_col="mean_pr_auc",
                     error_col="std_pr_auc",
                     title="Mean PR AUC (5×5 repeated stratified CV)",
+                    marker_color=C_PURPLE,
                 ),
                 width="stretch",
                 theme="streamlit",
@@ -225,7 +227,7 @@ def main() -> None:
         )
         curves_df = load_threshold_curves(curve_model)
         if curves_df.empty:
-            st.info("No `objective_curves` in tuned JSON for this model yet.")
+            render_blue_note("No `objective_curves` in tuned JSON for this model yet.")
         else:
             try:
                 tuned_full = load_tuned_payload(curve_model)
@@ -297,7 +299,7 @@ def main() -> None:
             if metric_col == "fbeta" and (
                 "fbeta" not in ho_long.columns or ho_long["fbeta"].isna().all()
             ):
-                st.info(
+                render_blue_note(
                     "F-beta columns appear after re-running the benchmark with f1/f2/f3 profiles."
                 )
             else:
@@ -320,7 +322,7 @@ def main() -> None:
                 display_summary[col] = display_summary[col].round(4)
             st.dataframe(display_summary, width="stretch", hide_index=True)
 
-        st.info(
+        render_blue_note(
             "**F1 (conservative) thresholds** often hurt **Linear LR** and **k-NN**: "
             "their scores are less well-calibrated than tree models, so a stricter fail-class "
             "threshold misses more true fails (higher BER) while **Random Forest** and **XGBoost** "

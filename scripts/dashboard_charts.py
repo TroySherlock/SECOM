@@ -9,8 +9,51 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from scripts.dashboard_stg import ROW_INDEX_COL, cohens_d
-from scripts.dashboard_theme import apply_plotly_theme
-from theme.gruvbox_material import GRUVBOX
+from scripts.secom_costs import PROFILE_IDS, THRESHOLD_PROFILES, ProfileId
+
+# SECOM chart palette — keep in sync with .streamlit/config.toml chartCategoricalColors
+C_RED = "#ea6962"
+C_ORANGE = "#e78a4e"
+C_YELLOW = "#d8a657"
+C_GREEN = "#a9b665"
+C_AQUA = "#89b482"
+C_BLUE = "#7daea3"
+C_PURPLE = "#d3869b"
+
+C = [C_RED, C_ORANGE, C_YELLOW, C_GREEN, C_AQUA, C_BLUE, C_PURPLE]
+
+CHART_BG = "#3c3836"
+
+PROFILE_TRACE_COLORS: dict[ProfileId, str] = {
+    "f1": C_YELLOW,
+    "f2": C_ORANGE,
+    "f3": C_RED,
+}
+
+# Heatmaps: low → green, high → red (yellow mid-tone)
+COLORSCALE_LOW_GREEN_HIGH_RED = [
+    [0.0, C_GREEN],
+    [0.5, C_YELLOW],
+    [1.0, C_RED],
+]
+# Correlation r ∈ [-1, 1]: blue at -1, green at 0, red at +1
+COLORSCALE_CORRELATION = [
+    [0.0, C_BLUE],
+    [0.5, C_GREEN],
+    [1.0, C_RED],
+]
+
+
+def _sized(fig: go.Figure, *, height: int, **layout: Any) -> go.Figure:
+    fig.update_layout(
+        height=height,
+        paper_bgcolor=CHART_BG,
+        plot_bgcolor=CHART_BG,
+        **layout,
+    )
+    return fig
+
+
 
 _SENSOR_PATTERN = re.compile(r"^c_\d+$")
 
@@ -42,17 +85,14 @@ def fig_class_donut(
     counts = df[target_col].astype(int).value_counts()
     labels = ["Pass", "Fail"]
     values = [int(counts.get(pass_value, 0)), int(counts.get(fail_value, 0))]
-    colors = [GRUVBOX["pass"], GRUVBOX["fail"]]
-
     fig = go.Figure(
         data=[
             go.Pie(
                 labels=labels,
                 values=values,
                 hole=0.45,
-                marker=dict(colors=colors, line=dict(color=GRUVBOX["bg"], width=2)),
+                marker=dict(colors=[C_GREEN, C_RED]),
                 textinfo="label+percent",
-                textfont=dict(color=GRUVBOX["fg"]),
                 hovertemplate="%{label}<br>%{value} rows<br>%{percent}<extra></extra>",
             )
         ]
@@ -65,14 +105,14 @@ def fig_class_donut(
                 text=f"{total:,}<br>rows",
                 x=0.5,
                 y=0.5,
-                font=dict(size=16, color=GRUVBOX["fg"]),
+                font=dict(size=16),
                 showarrow=False,
             )
         ],
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=-0.12, x=0.5, xanchor="center"),
     )
-    return apply_plotly_theme(fig, height=360, legend=dict(orientation="h", yanchor="bottom", y=-0.12, x=0.5, xanchor="center"))
+    return _sized(fig, height=360, legend=dict(orientation="h", yanchor="bottom", y=-0.12, x=0.5, xanchor="center"))
 
 
 def fig_fails_over_time(
@@ -92,7 +132,7 @@ def fig_fails_over_time(
 
     fig = go.Figure()
 
-    for label, color, symbol in [("Pass", GRUVBOX["pass"], "circle"), ("Fail", GRUVBOX["fail"], "diamond")]:
+    for label, symbol, color in [("Pass", "circle", C_GREEN), ("Fail", "diamond", C_RED)]:
         subset = plot_df.loc[plot_df["label"] == label]
         fig.add_trace(
             go.Scatter(
@@ -129,8 +169,8 @@ def fig_fails_over_time(
                 mode="lines+markers",
                 name="Weekly fail rate",
                 yaxis="y2",
-                line=dict(color=GRUVBOX["accent"], width=2),
-                marker=dict(size=5),
+                line=dict(color=C_BLUE, width=2),
+                marker=dict(size=5, color=C_BLUE),
                 hovertemplate="Week of %{x|%Y-%m-%d}<br>Fail rate %{y:.1%}<extra></extra>",
             )
         )
@@ -139,9 +179,7 @@ def fig_fails_over_time(
             side="right",
             range=[0, 1],
             tickformat=".0%",
-            gridcolor=GRUVBOX["border"],
-            tickfont=dict(color=GRUVBOX["fg_muted"]),
-            title=dict(text="Weekly fail rate", font=dict(color=GRUVBOX["fg"])),
+            title=dict(text="Weekly fail rate"),
         )
     else:
         layout_y2 = None
@@ -158,7 +196,7 @@ def fig_fails_over_time(
         yaxis2=layout_y2,
         showlegend=True,
     )
-    return apply_plotly_theme(fig, height=400)
+    return _sized(fig, height=400)
 
 
 def fig_missingness_structure(
@@ -170,7 +208,7 @@ def fig_missingness_structure(
 ) -> go.Figure:
     sensor_cols = sensor_cols or _sensor_columns(df)
     if not sensor_cols:
-        return apply_plotly_theme(go.Figure(), height=360)
+        return _sized(go.Figure(), height=360)
 
     plot_df = df[[timestamp_col] + sensor_cols].copy()
     plot_df["_sort_ts"] = pd.to_datetime(plot_df[timestamp_col], errors="coerce")
@@ -188,7 +226,7 @@ def fig_missingness_structure(
             z=missing.T,
             x=list(range(len(plot_df))),
             y=sensor_labels,
-            colorscale=[[0, GRUVBOX["pass"]], [1, GRUVBOX["fail"]]],
+            colorscale=[[0, C_GREEN], [1, C_RED]],
             showscale=False,
             hovertemplate="Row %{x}<br>Sensor c_%{y}<br>%{text}<extra></extra>",
             text=np.where(missing.T == 1, "Missing", "Present"),
@@ -199,7 +237,7 @@ def fig_missingness_structure(
             x=[None],
             y=[None],
             mode="markers",
-            marker=dict(size=9, color=GRUVBOX["pass"]),
+            marker=dict(size=9, color=C_GREEN),
             name="Present",
             showlegend=True,
             hoverinfo="skip",
@@ -210,7 +248,7 @@ def fig_missingness_structure(
             x=[None],
             y=[None],
             mode="markers",
-            marker=dict(size=9, color=GRUVBOX["fail"]),
+            marker=dict(size=9, color=C_RED),
             name="Missing",
             showlegend=True,
             hoverinfo="skip",
@@ -228,13 +266,13 @@ def fig_missingness_structure(
                 x=0,
                 y=1.12,
                 showarrow=False,
-                font=dict(size=11, color=GRUVBOX["fg_muted"]),
+                font=dict(size=11),
                 align="left",
             )
         ],
         showlegend=True,
     )
-    return apply_plotly_theme(fig, height=400, margin=dict(t=80))
+    return _sized(fig, height=400, margin=dict(t=80))
 
 
 def fig_missing_rate_distribution(
@@ -243,7 +281,7 @@ def fig_missing_rate_distribution(
 ) -> go.Figure:
     """Histogram of per-sensor missing rates (fraction of rows with NaN)."""
     if not sensor_cols:
-        return apply_plotly_theme(go.Figure(), height=220)
+        return _sized(go.Figure(), height=220)
 
     n_sensors = len(sensor_cols)
     miss_pct = df[sensor_cols].isna().mean().mul(100)
@@ -262,12 +300,12 @@ def fig_missing_rate_distribution(
                     xref="paper",
                     yref="paper",
                     showarrow=False,
-                    font=dict(color=GRUVBOX["fg_muted"]),
+                    font=dict(),
                 )
             ],
             showlegend=False,
         )
-        return apply_plotly_theme(fig, height=220)
+        return _sized(fig, height=220)
 
     rounded = miss_pct.round(1)
     bin_counts = rounded.value_counts()
@@ -299,19 +337,19 @@ def fig_missing_rate_distribution(
                     xref="paper",
                     yref="paper",
                     showarrow=False,
-                    font=dict(color=GRUVBOX["fg_muted"]),
+                    font=dict(),
                 )
             ],
             showlegend=False,
         )
-        return apply_plotly_theme(fig, height=220)
+        return _sized(fig, height=220)
 
     fig = go.Figure(
         data=[
             go.Histogram(
                 x=plotted,
                 nbinsx=20,
-                marker_color=GRUVBOX["yellow"],
+                marker_color=C_PURPLE,
                 opacity=0.85,
                 hovertemplate="Missing rate %{x:.1f}%<br>%{y} sensors<extra></extra>",
             )
@@ -333,12 +371,12 @@ def fig_missing_rate_distribution(
                 x=0,
                 y=1.14,
                 showarrow=False,
-                font=dict(size=11, color=GRUVBOX["fg_muted"]),
+                font=dict(size=11),
                 align="left",
             )
         ]
     fig.update_layout(**layout_kw)
-    return apply_plotly_theme(fig, height=240, margin=dict(t=72))
+    return _sized(fig, height=240, margin=dict(t=72))
 
 
 def fig_sensor_scatter(
@@ -353,7 +391,7 @@ def fig_sensor_scatter(
     plot_df["label"] = plot_df[target_col].map({0: "Pass", 1: "Fail"})
 
     fig = go.Figure()
-    for label, color in [("Pass", GRUVBOX["pass"]), ("Fail", GRUVBOX["fail"])]:
+    for label, color in (("Pass", C_GREEN), ("Fail", C_RED)):
         subset = plot_df.loc[plot_df["label"] == label]
         fig.add_trace(
             go.Scatter(
@@ -378,7 +416,7 @@ def fig_sensor_scatter(
         yaxis_title=sensor_y,
         showlegend=True,
     )
-    return apply_plotly_theme(fig, height=400)
+    return _sized(fig, height=400)
 
 
 def fig_sensor_multicollinearity(
@@ -391,7 +429,7 @@ def fig_sensor_multicollinearity(
 ) -> tuple[go.Figure, dict[str, Any]]:
     """Correlation heatmap on a capped sensor subset for multicollinearity review."""
     if not sensor_cols:
-        return apply_plotly_theme(go.Figure(), height=420), {
+        return _sized(go.Figure(), height=420), {
             "n_candidates": 0,
             "n_used": 0,
             "high_corr_pairs": 0,
@@ -404,7 +442,7 @@ def fig_sensor_multicollinearity(
     variances = variances[variances > 0].sort_values(ascending=False)
     selected = variances.head(top_n).index.tolist()
     if len(selected) < 2:
-        return apply_plotly_theme(go.Figure(), height=420), {
+        return _sized(go.Figure(), height=420), {
             "n_candidates": len(sensor_cols),
             "n_used": len(selected),
             "high_corr_pairs": 0,
@@ -437,12 +475,8 @@ def fig_sensor_multicollinearity(
             y=labels,
             zmin=-1,
             zmax=1,
-            colorscale=[
-                [0.0, GRUVBOX["accent"]],
-                [0.5, GRUVBOX["bg_soft"]],
-                [1.0, GRUVBOX["fail"]],
-            ],
-            colorbar=dict(title="r", tickcolor=GRUVBOX["fg_muted"]),
+            colorscale=COLORSCALE_CORRELATION,
+            colorbar=dict(title="r"),
             xgap=1,
             ygap=1,
             hovertemplate="%{x} vs %{y}<br>corr=%{z:.2f}<extra></extra>",
@@ -462,13 +496,13 @@ def fig_sensor_multicollinearity(
         "max_pair": max_pair,
         "max_abs_corr": max_abs,
     }
-    return apply_plotly_theme(fig, height=440, margin=dict(l=70, r=40, t=72, b=60)), stats
+    return _sized(fig, height=440, margin=dict(l=70, r=40, t=72, b=60)), stats
 
 
 def fig_reduction_impact(stage_counts: list[tuple[str, int]]) -> go.Figure:
     """Horizontal bar chart of retained feature counts by preprocessing stage."""
     if not stage_counts:
-        return apply_plotly_theme(go.Figure(), height=320)
+        return _sized(go.Figure(), height=320)
 
     labels = [label for label, _ in stage_counts]
     counts = [count for _, count in stage_counts]
@@ -478,7 +512,7 @@ def fig_reduction_impact(stage_counts: list[tuple[str, int]]) -> go.Figure:
                 x=counts,
                 y=labels,
                 orientation="h",
-                marker_color=GRUVBOX["yellow"],
+                marker_color=C[2],
                 text=[f"{n:,}" for n in counts],
                 textposition="outside",
                 hovertemplate="%{y}: %{x:,} sensors<extra></extra>",
@@ -492,7 +526,7 @@ def fig_reduction_impact(stage_counts: list[tuple[str, int]]) -> go.Figure:
         showlegend=False,
     )
     fig.update_yaxes(autorange="reversed")
-    return apply_plotly_theme(fig, height=360, margin=dict(l=140, r=48, t=72, b=50))
+    return _sized(fig, height=360, margin=dict(l=140, r=48, t=72, b=50))
 
 
 def fig_pipeline_flow_order() -> go.Figure:
@@ -501,7 +535,7 @@ def fig_pipeline_flow_order() -> go.Figure:
         "Raw sensors",
         "Median imputation",
         "Redundancy clustering",
-        "Hub features (top-k + T² + pairs)",
+        "RF top-k + T² + hub pairs",
         "Scaled classifier input",
     ]
     fig = go.Figure(
@@ -511,31 +545,18 @@ def fig_pipeline_flow_order() -> go.Figure:
                     label=labels,
                     pad=18,
                     thickness=18,
-                    color=[
-                        GRUVBOX["bg_soft"],
-                        GRUVBOX["yellow"],
-                        GRUVBOX["accent"],
-                        GRUVBOX["orange"],
-                        GRUVBOX["pass"],
-                    ],
-                    line=dict(color=GRUVBOX["border"], width=1),
+                    color=[C[i % len(C)] for i in range(len(labels))],
                 ),
                 link=dict(
                     source=[0, 1, 2, 3],
                     target=[1, 2, 3, 4],
                     value=[591, 591, 250, 52],
-                    color=[
-                        "rgba(216,166,87,0.35)",
-                        "rgba(78,154,204,0.35)",
-                        "rgba(231,138,78,0.35)",
-                        "rgba(80,161,79,0.35)",
-                    ],
                 ),
             )
         ]
     )
     fig.update_layout(title=dict(text="Pipeline operation order (shared steps then split)"))
-    return apply_plotly_theme(fig, height=320, margin=dict(l=20, r=20, t=70, b=20))
+    return _sized(fig, height=320, margin=dict(l=20, r=20, t=70, b=20))
 
 
 def fig_hotelling_t2_intuition() -> go.Figure:
@@ -553,7 +574,7 @@ def fig_hotelling_t2_intuition() -> go.Figure:
             y=base_y,
             mode="markers",
             name="In-control profile",
-            marker=dict(color=GRUVBOX["accent"], size=6, opacity=0.45),
+            marker=dict(color=C[0], size=6, opacity=0.45),
         )
     )
     fig.add_trace(
@@ -562,7 +583,7 @@ def fig_hotelling_t2_intuition() -> go.Figure:
             y=drift_y,
             mode="markers",
             name="Drifted profile",
-            marker=dict(color=GRUVBOX["fail"], size=8, opacity=0.9, symbol="diamond"),
+            marker=dict(color=C[1], size=8, opacity=0.9, symbol="diamond"),
         )
     )
     theta = np.linspace(0, 2 * np.pi, 200)
@@ -572,7 +593,7 @@ def fig_hotelling_t2_intuition() -> go.Figure:
             y=1.2 * np.sin(theta),
             mode="lines",
             name="T2 control region",
-            line=dict(color=GRUVBOX["fg_muted"], dash="dash"),
+            line=dict(color=C[5], dash="dash"),
         )
     )
     fig.update_layout(
@@ -580,14 +601,14 @@ def fig_hotelling_t2_intuition() -> go.Figure:
         xaxis_title="Latent axis 1",
         yaxis_title="Latent axis 2",
     )
-    return apply_plotly_theme(fig, height=340)
+    return _sized(fig, height=340)
 
 
 def fig_rf_topk_selection_example(top_k: int) -> go.Figure:
     """Illustrative feature-importance ranking with top-k cutoff."""
     names = [f"c_{i}" for i in range(20)]
     importances = np.linspace(0.19, 0.03, num=20)
-    colors = [GRUVBOX["fail"] if i < top_k else GRUVBOX["fg_muted"] for i in range(20)]
+    colors = [C[1] if i < top_k else C[5] for i in range(20)]
     fig = go.Figure(
         data=[
             go.Bar(
@@ -606,7 +627,7 @@ def fig_rf_topk_selection_example(top_k: int) -> go.Figure:
         showlegend=False,
     )
     fig.update_yaxes(autorange="reversed")
-    return apply_plotly_theme(fig, height=360, margin=dict(l=80, r=20, t=70, b=45))
+    return _sized(fig, height=360, margin=dict(l=80, r=20, t=70, b=45))
 
 
 def fig_spearman_cluster_example() -> go.Figure:
@@ -627,16 +648,14 @@ def fig_rf_topk_selection(model_artifact: dict) -> go.Figure:
     rf = model_artifact.get("rf_selection") or {}
     ranked = rf.get("importances") or []
     top_k = rf.get("top_k", len(rf.get("selected_features", [])))
-    selected = set(rf.get("selected_features") or [])
 
     if not ranked:
         return fig_rf_topk_selection_example(top_k=top_k or 15)
 
     names = [r["feature"] for r in ranked]
     importances = [r["importance"] for r in ranked]
-    colors = [
-        GRUVBOX["fail"] if n in selected else GRUVBOX["fg_muted"] for n in names
-    ]
+    selected_set = set(rf.get("selected_features") or [])
+    colors = [C[1] if r["feature"] in selected_set else C[5] for r in ranked]
     fig = go.Figure(
         data=[
             go.Bar(
@@ -655,7 +674,7 @@ def fig_rf_topk_selection(model_artifact: dict) -> go.Figure:
         showlegend=False,
     )
     fig.update_yaxes(autorange="reversed")
-    return apply_plotly_theme(fig, height=360, margin=dict(l=80, r=20, t=70, b=45))
+    return _sized(fig, height=360, margin=dict(l=80, r=20, t=70, b=45))
 
 
 def fig_spearman_cluster(cluster_example: dict | None) -> go.Figure:
@@ -679,11 +698,7 @@ def fig_spearman_cluster(cluster_example: dict | None) -> go.Figure:
             y=sensors,
             zmin=0.0,
             zmax=1.0,
-            colorscale=[
-                [0.0, GRUVBOX["bg_soft"]],
-                [0.55, GRUVBOX["yellow"]],
-                [1.0, GRUVBOX["fail"]],
-            ],
+            colorscale=COLORSCALE_LOW_GREEN_HIGH_RED,
             colorbar=dict(title="Spearman ρ"),
             text=np.round(corr, 2),
             texttemplate="%{text:.2f}",
@@ -698,7 +713,7 @@ def fig_spearman_cluster(cluster_example: dict | None) -> go.Figure:
         yaxis_title="Sensor",
         showlegend=False,
     )
-    return apply_plotly_theme(fig, height=340, margin=dict(l=70, r=40, t=78, b=60))
+    return _sized(fig, height=340, margin=dict(l=70, r=40, t=78, b=60))
 
 
 def fig_reduction_impact_from_stages(profile: dict[str, int]) -> go.Figure:
@@ -728,10 +743,11 @@ def fig_benchmark_leaderboard(
     error_col: str | None = None,
     title: str = "Benchmark leaderboard",
     ascending: bool = False,
+    marker_color: str | None = None,
 ) -> go.Figure:
     """Horizontal ranked bar chart for a benchmark metric column."""
     if df.empty:
-        return apply_plotly_theme(go.Figure(), height=360)
+        return _sized(go.Figure(), height=360)
 
     plot_df = df.sort_values(metric_col, ascending=ascending).copy()
     error_x = None
@@ -745,7 +761,7 @@ def fig_benchmark_leaderboard(
                 x=plot_df[metric_col],
                 y=plot_df[label_col],
                 orientation="h",
-                marker_color=GRUVBOX["yellow"],
+                marker_color=marker_color or C[2],
                 error_x=error_x,
                 text=[f"{v:.3f}" for v in plot_df[metric_col]],
                 textposition="outside",
@@ -760,13 +776,13 @@ def fig_benchmark_leaderboard(
         showlegend=False,
     )
     fig.update_yaxes(autorange="reversed")
-    return apply_plotly_theme(fig, height=380, margin=dict(l=100, r=48, t=72, b=48))
+    return _sized(fig, height=380, margin=dict(l=100, r=48, t=72, b=48))
 
 
 def fig_cv_vs_holdout_scatter(merged_df: pd.DataFrame) -> go.Figure:
     """CV mean PR AUC vs holdout PR AUC per pipeline."""
     if merged_df.empty:
-        return apply_plotly_theme(go.Figure(), height=360)
+        return _sized(go.Figure(), height=360)
 
     fig = go.Figure()
     fig.add_trace(
@@ -776,7 +792,7 @@ def fig_cv_vs_holdout_scatter(merged_df: pd.DataFrame) -> go.Figure:
             mode="markers+text",
             text=merged_df["pipeline"],
             textposition="top center",
-            marker=dict(color=GRUVBOX["accent"], size=12),
+            marker=dict(color=C[0], size=12),
             hovertemplate="%{text}<br>CV PR AUC=%{x:.3f}<br>Holdout PR AUC=%{y:.3f}<extra></extra>",
         )
     )
@@ -788,7 +804,7 @@ def fig_cv_vs_holdout_scatter(merged_df: pd.DataFrame) -> go.Figure:
             y=[lo, hi],
             mode="lines",
             name="y = x",
-            line=dict(color=GRUVBOX["fg_muted"], dash="dash"),
+            line=dict(color=C[5], dash="dash"),
             hoverinfo="skip",
         )
     )
@@ -798,10 +814,15 @@ def fig_cv_vs_holdout_scatter(merged_df: pd.DataFrame) -> go.Figure:
         yaxis_title="PR AUC (holdout)",
         showlegend=False,
     )
-    return apply_plotly_theme(fig, height=380)
+    return _sized(fig, height=380)
 
 
-def fig_holdout_confusion(confusion_matrix: list[list[int]], pipeline_name: str) -> go.Figure:
+def fig_holdout_confusion(
+    confusion_matrix: list[list[int]],
+    pipeline_name: str,
+    *,
+    height: int = 320,
+) -> go.Figure:
     """Confusion matrix heatmap for holdout evaluation."""
     cm = np.asarray(confusion_matrix)
     labels = [["TN", "FP"], ["FN", "TP"]]
@@ -812,11 +833,7 @@ def fig_holdout_confusion(confusion_matrix: list[list[int]], pipeline_name: str)
             z=cm,
             x=["Pred pass (0)", "Pred fail (1)"],
             y=["Actual pass (0)", "Actual fail (1)"],
-            colorscale=[
-                [0.0, GRUVBOX["bg_soft"]],
-                [0.5, GRUVBOX["yellow"]],
-                [1.0, GRUVBOX["fail"]],
-            ],
+            colorscale=COLORSCALE_LOW_GREEN_HIGH_RED,
             text=text,
             texttemplate="%{text}",
             hovertemplate="%{y}, %{x}<br>count=%{z}<extra></extra>",
@@ -829,14 +846,14 @@ def fig_holdout_confusion(confusion_matrix: list[list[int]], pipeline_name: str)
         yaxis_title="Actual",
     )
     fig.update_yaxes(autorange="reversed")
-    return apply_plotly_theme(fig, height=320)
+    return _sized(fig, height=height)
 
 
 def fig_ber_cv_vs_holdout(merged_df: pd.DataFrame, pipeline: str) -> go.Figure:
     """Grouped bar comparing CV mean BER vs holdout BER for one pipeline."""
     row = merged_df.loc[merged_df["pipeline"] == pipeline]
     if row.empty:
-        return apply_plotly_theme(go.Figure(), height=280)
+        return _sized(go.Figure(), height=280)
     row = row.iloc[0]
     labels = ["CV mean BER", "Holdout BER"]
     values = [float(row["ber_cv"]), float(row["ber_holdout"])]
@@ -845,7 +862,7 @@ def fig_ber_cv_vs_holdout(merged_df: pd.DataFrame, pipeline: str) -> go.Figure:
             go.Bar(
                 x=labels,
                 y=values,
-                marker_color=[GRUVBOX["accent"], GRUVBOX["fail"]],
+                marker_color=[C[0], C[1]],
                 text=[f"{v:.1f}%" for v in values],
                 textposition="outside",
             )
@@ -856,7 +873,86 @@ def fig_ber_cv_vs_holdout(merged_df: pd.DataFrame, pipeline: str) -> go.Figure:
         yaxis_title="BER (%)",
         showlegend=False,
     )
-    return apply_plotly_theme(fig, height=300)
+    return _sized(fig, height=300)
+
+
+def fig_threshold_objective_curves(
+    curves_df: pd.DataFrame,
+    best_thresholds: dict[str, float],
+    *,
+    title: str = "CV mean F-score vs threshold",
+) -> go.Figure:
+    """F1 / F2 / F3 mean scores vs probability threshold with vertical lines at optima."""
+    fig = go.Figure()
+    x = curves_df["threshold"]
+
+    for pid in PROFILE_IDS:
+        col = f"mean_fbeta_{pid}"
+        if col not in curves_df.columns:
+            continue
+        prof = THRESHOLD_PROFILES[pid]
+        color = PROFILE_TRACE_COLORS[pid]
+        fig.add_trace(
+            go.Scatter(
+                x=x,
+                y=curves_df[col],
+                mode="lines",
+                name=f"{prof.display_name} (β={prof.beta:g})",
+                line=dict(color=color, width=2),
+            )
+        )
+
+    for pid, thr in best_thresholds.items():
+        fig.add_vline(
+            x=float(thr),
+            line_dash="dash",
+            line_color=PROFILE_TRACE_COLORS.get(pid, C[5]),
+            annotation_text=str(pid),
+            annotation_position="top",
+        )
+
+    fig.update_layout(
+        title=dict(text=title),
+        xaxis_title="Probability threshold (fail)",
+        yaxis=dict(title="Mean F-beta score", range=[0, 1.05]),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+    )
+    return _sized(fig, height=420)
+
+
+def fig_holdout_by_profile(
+    profile_df: pd.DataFrame,
+    *,
+    metric_col: str = "ber_percent",
+    title: str = "Holdout by threshold profile",
+) -> go.Figure:
+    """Grouped bars: one pipeline per group, three profile bars."""
+    pipelines = profile_df["pipeline"].unique().tolist()
+    profiles = profile_df["profile"].unique().tolist()
+    fig = go.Figure()
+    for profile in profiles:
+        sub = profile_df.loc[profile_df["profile"] == profile].set_index("pipeline")
+        y_vals = [
+            float(sub.loc[p, metric_col]) if p in sub.index else float("nan")
+            for p in pipelines
+        ]
+        fig.add_trace(
+            go.Bar(
+                name=profile,
+                x=pipelines,
+                y=y_vals,
+                marker_color=PROFILE_TRACE_COLORS.get(profile, C[2]),
+            )
+        )
+    y_label = "BER (%)" if "ber" in metric_col else "F-beta score"
+    fig.update_layout(
+        title=dict(text=title),
+        barmode="group",
+        xaxis_title="Pipeline",
+        yaxis_title=y_label,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+    )
+    return _sized(fig, height=380)
 
 
 def fig_sensor_histogram(
@@ -870,14 +966,14 @@ def fig_sensor_histogram(
     plot_df["label"] = plot_df[target_col].map({0: "Pass", 1: "Fail"})
 
     fig = go.Figure()
-    for label, color in [("Pass", GRUVBOX["pass"]), ("Fail", GRUVBOX["fail"])]:
+    for label, color in (("Pass", C_GREEN), ("Fail", C_RED)):
         values = plot_df.loc[plot_df["label"] == label, sensor]
         fig.add_trace(
             go.Histogram(
                 x=values,
                 name=label,
-                opacity=0.55,
                 marker_color=color,
+                opacity=0.55,
                 nbinsx=40,
             )
         )
@@ -889,4 +985,100 @@ def fig_sensor_histogram(
         yaxis=dict(title="Count", type="log" if log_scale else "linear"),
         showlegend=True,
     )
-    return apply_plotly_theme(fig, height=380)
+    return _sized(fig, height=380)
+
+
+def fig_top_features_bar(
+    df: pd.DataFrame,
+    *,
+    value_col: str = "importance",
+    feature_col: str = "feature",
+    title: str = "Top features",
+    height: int = 420,
+) -> go.Figure:
+    """Horizontal bar chart of ranked feature importance."""
+    if df.empty:
+        return _sized(go.Figure(), height=height)
+    plot_df = df.sort_values(value_col, ascending=True)
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=plot_df[value_col],
+                y=plot_df[feature_col],
+                orientation="h",
+                marker_color=C[2],
+                text=[f"{v:.4g}" for v in plot_df[value_col]],
+                textposition="outside",
+                hovertemplate="%{y}<br>%{x:.4g}<extra></extra>",
+            )
+        ]
+    )
+    fig.update_layout(
+        title=dict(text=title),
+        xaxis_title=value_col.replace("_", " "),
+        yaxis_title="Feature",
+        showlegend=False,
+    )
+    return _sized(fig, height=height, margin=dict(l=140, r=48, t=72, b=48))
+
+
+def fig_coef_signed_bar(
+    df: pd.DataFrame,
+    *,
+    title: str = "Largest positive and negative coefficients",
+    height: int = 400,
+) -> go.Figure:
+    """Diverging-style bars: green positive, red negative coefficients."""
+    if df.empty:
+        return _sized(go.Figure(), height=height)
+    plot_df = df.sort_values("coefficient", ascending=True)
+    colors = [C_GREEN if c >= 0 else C_RED for c in plot_df["coefficient"]]
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=plot_df["coefficient"],
+                y=plot_df["feature"],
+                orientation="h",
+                marker_color=colors,
+                hovertemplate="%{y}<br>coef=%{x:.4g}<extra></extra>",
+            )
+        ]
+    )
+    fig.update_layout(
+        title=dict(text=title),
+        xaxis_title="Coefficient (scaled features)",
+        yaxis_title="Feature",
+        showlegend=False,
+    )
+    return _sized(fig, height=height, margin=dict(l=140, r=48, t=72, b=48))
+
+
+def fig_local_contributions(
+    df: pd.DataFrame,
+    *,
+    title: str = "Top local contributions",
+    height: int = 320,
+) -> go.Figure:
+    """Wafer-level feature contributions (signed or unsigned)."""
+    if df.empty:
+        return _sized(fig, height=height)
+    plot_df = df.sort_values("contribution", key=lambda s: s.abs(), ascending=True)
+    colors = [C_RED if v < 0 else C_GREEN for v in plot_df["contribution"]]
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=plot_df["contribution"],
+                y=plot_df["feature"],
+                orientation="h",
+                marker_color=colors,
+                hovertemplate="%{y}<br>contrib=%{x:.4g}<extra></extra>",
+            )
+        ]
+    )
+    fig.update_layout(
+        title=dict(text=title),
+        xaxis_title="Contribution",
+        yaxis_title="Feature",
+        showlegend=False,
+    )
+    return _sized(fig, height=height, margin=dict(l=120, r=40, t=64, b=40))

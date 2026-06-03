@@ -8,7 +8,19 @@ from typing import Any
 
 import pandas as pd
 
-from scripts.secom_pipelines import BENCHMARK_MODEL_IDS, BENCHMARK_RESULTS_PATH
+from scripts.secom_costs import (
+    DEFAULT_PROFILE_ID,
+    PROFILE_IDS,
+    THRESHOLD_PROFILES,
+    has_multi_profile_thresholds,
+    normalize_profile_id,
+    threshold_profile_config,
+)
+from scripts.secom_pipelines import (
+    BENCHMARK_MODEL_IDS,
+    BENCHMARK_RESULTS_PATH,
+    TUNED_PARAMS_DIR,
+)
 
 
 @dataclass(frozen=True)
@@ -22,59 +34,46 @@ class ModelInfo:
     tuning_notebook: str
 
 
+_SHARED_FEATURE_PATH = (
+    "Median impute → cluster → RF top-k → T² → hub pairs → scale"
+)
+
 MODEL_CATALOG: dict[str, ModelInfo] = {
     "linear_lr": ModelInfo(
         model_id="linear_lr",
-        display_name="Linear (hub interactions)",
-        family="Linear",
+        display_name="Linear LR",
+        family="Shared preprocess",
         classifier="Logistic regression (elastic net, saga)",
-        feature_path=(
-            "Median impute → cluster → RF top-k → Hotelling T² → "
-            "hub×hub interactions → neighbor fail rate → isolation forest score → scale → elastic-net LR"
-        ),
-        description=(
-            "Sparse linear path: RF-selected sensors, T², hub×hub products, "
-            "KNN neighbor fail-rate meta feature, isolation-forest score, with elastic-net LR."
-        ),
+        feature_path=f"{_SHARED_FEATURE_PATH} → elastic-net LR",
+        description="Elastic-net logistic regression on the shared sensor path.",
         tuning_notebook="tuning/linear_lr.ipynb",
     ),
     "topk_rf": ModelInfo(
         model_id="topk_rf",
-        display_name="Hub features + Random Forest",
-        family="Top-k + hubs",
+        display_name="Random Forest",
+        family="Shared preprocess",
         classifier="Random forest",
-        feature_path=(
-            "Median impute → cluster → RF top-k → Hotelling T² → "
-            "hub×hub interactions → neighbor fail rate → isolation forest score → scale → RF"
-        ),
-        description=(
-            "Same hub preprocess as linear_lr with a random forest classifier."
-        ),
+        feature_path=f"{_SHARED_FEATURE_PATH} → RF",
+        description="Random forest on the shared sensor path.",
         tuning_notebook="tuning/topk_rf.ipynb",
     ),
     "topk_knn": ModelInfo(
         model_id="topk_knn",
-        display_name="Hub features + k-NN",
-        family="Top-k + hubs",
+        display_name="k-NN",
+        family="Shared preprocess",
         classifier="k-nearest neighbors",
-        feature_path=(
-            "Median impute → cluster → RF top-k → Hotelling T² → "
-            "hub×hub interactions → neighbor fail rate → isolation forest score → scale → k-NN"
-        ),
-        description="Shared hub preprocess with instance-based classification.",
+        feature_path=f"{_SHARED_FEATURE_PATH} → k-NN",
+        description="k-nearest neighbors on the shared sensor path.",
         tuning_notebook="tuning/topk_knn.ipynb",
     ),
     "topk_xgb": ModelInfo(
         model_id="topk_xgb",
-        display_name="Hub features + XGBoost",
-        family="Top-k + hubs",
+        display_name="XGBoost",
+        family="Shared preprocess",
         classifier="XGBoost",
-        feature_path=(
-            "Median impute → cluster → RF top-k → Hotelling T² → "
-            "hub×hub interactions → neighbor fail rate → isolation forest score → scale → XGBoost"
-        ),
+        feature_path=f"{_SHARED_FEATURE_PATH} → XGBoost",
         description=(
-            "Shared hub preprocess with gradient boosting (scale_pos_weight for imbalance)."
+            "Gradient boosting on the shared sensor path (scale_pos_weight for imbalance)."
         ),
         tuning_notebook="tuning/topk_xgb.ipynb",
     ),
@@ -158,3 +157,184 @@ def list_model_ids(payload: dict[str, Any] | None = None) -> list[str]:
     if payload and payload.get("model_ids"):
         return list(payload["model_ids"])
     return list(BENCHMARK_MODEL_IDS)
+
+
+def load_tuned_payload(
+    model_id: str,
+    base_dir: Path | str = TUNED_PARAMS_DIR,
+) -> dict[str, Any]:
+    path = Path(base_dir) / f"{model_id}.json"
+    if not path.exists():
+        raise FileNotFoundError(f"Missing tuned params: {path}")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_threshold_curves(model_id: str) -> pd.DataFrame:
+    """Objective curves from tuned JSON (empty if not yet re-tuned)."""
+    payload = load_tuned_payload(model_id)
+    rows = payload.get("objective_curves") or []
+    if not rows:
+        legacy = payload.get("threshold_tuning") or {}
+        grid = legacy.get("threshold_grid") or []
+        per_ber = legacy.get("per_threshold_mean_ber") or []
+        if per_ber:
+            return pd.DataFrame(per_ber)
+        if grid and legacy.get("mean_ber_percent") is not None:
+            return pd.DataFrame()
+    return pd.DataFrame(rows)
+
+
+def holdout_by_profile_df(payload: dict[str, Any]) -> pd.DataFrame:
+    """Long holdout table: pipeline, profile, fbeta, ber_percent, threshold."""
+    ho = holdout_df(payload)
+    if ho.empty:
+        return pd.DataFrame()
+    rows: list[dict] = []
+    for _, row in ho.iterrows():
+        pipeline = row["pipeline"]
+        for profile_id in PROFILE_IDS:
+            ber_col = f"{profile_id}_ber_percent"
+            if ber_col not in row.index:
+                continue
+            entry: dict = {
+                "pipeline": pipeline,
+                "profile": profile_id,
+                "display_name": THRESHOLD_PROFILES[profile_id].display_name,
+                "threshold": row.get(f"{profile_id}_threshold"),
+                "ber_percent": row.get(ber_col),
+                "true_positive_percent": row.get(f"{profile_id}_true_positive_percent"),
+                "true_negative_percent": row.get(f"{profile_id}_true_negative_percent"),
+            }
+            fbeta_col = f"{profile_id}_fbeta"
+            if fbeta_col in row.index:
+                entry["fbeta"] = row.get(fbeta_col)
+            rows.append(entry)
+    if not rows:
+        return pd.DataFrame(
+            columns=[
+                "pipeline",
+                "profile",
+                "display_name",
+                "threshold",
+                "ber_percent",
+                "true_positive_percent",
+                "true_negative_percent",
+                "fbeta",
+            ]
+        )
+    return pd.DataFrame(rows)
+
+
+def _parse_confusion_matrix(raw: object) -> list[list[int]] | None:
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        raw = json.loads(raw)
+    if isinstance(raw, list):
+        return raw
+    return None
+
+
+def holdout_confusion_by_profile(
+    ho_df: pd.DataFrame,
+    pipeline_id: str,
+) -> dict[str, list[list[int]] | None]:
+    """Holdout confusion matrices per F-beta profile for one pipeline."""
+    out: dict[str, list[list[int]] | None] = {pid: None for pid in PROFILE_IDS}
+    if ho_df.empty or "pipeline" not in ho_df.columns:
+        return out
+    rows = ho_df.loc[ho_df["pipeline"] == pipeline_id]
+    if rows.empty:
+        return out
+    row = rows.iloc[0]
+    for pid in PROFILE_IDS:
+        cm_col = f"{pid}_confusion_matrix"
+        if cm_col in row.index:
+            out[pid] = _parse_confusion_matrix(row[cm_col])
+    if out[DEFAULT_PROFILE_ID] is None and "confusion_matrix" in row.index:
+        legacy = _parse_confusion_matrix(row["confusion_matrix"])
+        if legacy is not None:
+            out[DEFAULT_PROFILE_ID] = legacy
+    return out
+
+
+def _holdout_row_for_profile(
+    ho_long: pd.DataFrame,
+    model_id: str,
+    profile_id: str,
+) -> pd.Series | None:
+    if ho_long.empty or "pipeline" not in ho_long.columns:
+        return None
+    ho_sub = ho_long.loc[
+        (ho_long["pipeline"] == model_id) & (ho_long["profile"] == profile_id)
+    ]
+    return ho_sub.iloc[0] if not ho_sub.empty else None
+
+
+def profile_threshold_summary_table(
+    payload: dict[str, Any],
+    tuned_dir: Path | str = TUNED_PARAMS_DIR,
+) -> pd.DataFrame:
+    """CV + holdout metrics for each model × threshold profile."""
+    ho_long = holdout_by_profile_df(payload)
+    rows: list[dict] = []
+    for model_id in list_model_ids(payload):
+        try:
+            tuned = load_tuned_payload(model_id, tuned_dir)
+        except FileNotFoundError:
+            continue
+        raw_profiles = tuned.get("threshold_profiles") or {}
+        raw_keys = {str(k) for k in raw_profiles}
+        profiles = {
+            normalize_profile_id(k, raw_keys): v for k, v in raw_profiles.items()
+        }
+        for profile_id in PROFILE_IDS:
+            cv = profiles.get(profile_id) or {}
+            ho_row = _holdout_row_for_profile(ho_long, model_id, profile_id)
+            row = {
+                "pipeline": model_id,
+                "profile": profile_id,
+                "cv_threshold": cv.get("best_threshold"),
+                "cv_mean_fbeta": cv.get("mean_fbeta"),
+                "cv_mean_ber_percent": cv.get("mean_ber_percent"),
+                "holdout_threshold": ho_row["threshold"] if ho_row is not None else None,
+                "holdout_fbeta": ho_row.get("fbeta") if ho_row is not None else None,
+                "holdout_ber_percent": ho_row["ber_percent"] if ho_row is not None else None,
+                "holdout_tpr_percent": ho_row["true_positive_percent"]
+                if ho_row is not None
+                else None,
+                "holdout_tnr_percent": ho_row["true_negative_percent"]
+                if ho_row is not None
+                else None,
+            }
+            rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def benchmark_has_multi_profile_thresholds(payload: dict[str, Any]) -> bool:
+    for model_id in list_model_ids(payload):
+        try:
+            if has_multi_profile_thresholds(load_tuned_payload(model_id)):
+                return True
+        except FileNotFoundError:
+            continue
+    return False
+
+
+def resolved_threshold_profile_config(
+    payload: dict[str, Any],
+) -> dict[str, float | str]:
+    cfg = payload.get("threshold_profile_config")
+    if isinstance(cfg, dict) and cfg:
+        return dict(cfg)
+    frozen = payload.get("frozen_config") or {}
+    if isinstance(frozen, dict) and (
+        frozen.get("f1_beta") is not None or frozen.get("f2_beta") is not None
+    ):
+        return {
+            "f1_beta": frozen.get("f1_beta"),
+            "f2_beta": frozen.get("f2_beta"),
+            "f3_beta": frozen.get("f3_beta"),
+            "default_profile": frozen.get("default_profile", "f2"),
+        }
+    return threshold_profile_config()

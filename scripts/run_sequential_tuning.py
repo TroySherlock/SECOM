@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Run sequential PR-AUC hyperparameter + BER threshold tuning for all four models."""
+"""Run sequential PR-AUC hyperparameter + multi-profile threshold tuning for all models.
+
+After changing linear_lr calibration, re-tune at least linear_lr and run benchmark_models.
+"""
 from __future__ import annotations
 
 import sys
@@ -16,7 +19,7 @@ from scripts.tuning.registry import (
     run_grid_search,
     save_tuned_params,
     summarize_cv_search,
-    tune_classifier_threshold,
+    tune_classifier_threshold_profiles,
     tuned_params_path,
 )
 
@@ -36,12 +39,16 @@ def main() -> None:
         search = fit_with_progress(search, X_train, y_train)
         cv_summary, fold_results, aggregated = summarize_cv_search(search, spec)
         print(f"Stage 1: mean_pr_auc={cv_summary['mean_pr_auc']:.4f}", flush=True)
-        threshold_result = tune_classifier_threshold(spec, X_train, y_train, cv_summary)
-        print(
-            f"Stage 2: threshold={threshold_result['best_threshold']:.2f}, "
-            f"mean_ber={threshold_result['mean_ber_percent']:.2f}%",
-            flush=True,
+        threshold_result = tune_classifier_threshold_profiles(
+            spec, X_train, y_train, cv_summary
         )
+        for pid, prof in threshold_result["profiles"].items():
+            print(
+                f"  {pid}: threshold={prof['best_threshold']:.4f}, "
+                f"mean_fbeta={prof['mean_fbeta']:.4f}, "
+                f"mean_ber={prof['mean_ber_percent']:.2f}%",
+                flush=True,
+            )
         save_tuned_params(
             spec,
             cv_summary,

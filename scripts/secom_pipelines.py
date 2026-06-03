@@ -24,9 +24,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import RobustScaler
 from xgboost import XGBClassifier
 
-from scripts.anomaly_features import IsolationForestScoreFeatures
 from scripts.hub_interactions import LinearSelectT2HubBlock
-from scripts.neighbor_meta_features import NeighborFailRateFeatures, SensorBranchPipeline
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = REPO_ROOT / "secom.duckdb"
 SOURCE_RELATION = "public.mart_secom_features"
@@ -53,53 +51,40 @@ ID_COL = "observation_id"
 RANDOM_SEED = 42
 TEST_SIZE = 0.20
 N_SPLITS = 5
-N_REPEATS = 5
+N_REPEATS = 2
 GRID_SEARCH_VERBOSE = 1
 
-C_GRID = [0.005, 0.0075, 0.01]
-L1_RATIO_GRID = [0.2, 0.25, 0.3, 0.4, 0.5]
+C_GRID = [0.005, 0.0075]
+L1_RATIO_GRID = [0.3, 0.4, 0.5]
 
 MODEL_NAME = "secom_linear_elastic_net"
 
 N_MISSING_SENSORS_COL = "n_missing_sensors"
 CHAMPION_IMPUTATION_METHOD = "median"
 KNN_IMPUTE_NEIGHBORS = 5
-ELASTIC_NET_MAX_ITER = 12000
+ELASTIC_NET_MAX_ITER = 20000
 
 KNN_CLASSIFIER_NEIGHBORS = 10
 KNN_CLASSIFIER_WEIGHTS = "uniform"
 KNN_NEIGHBORS_GRID = [35]
 
-RF_N_ESTIMATORS = 1500
-RF_MAX_DEPTH = 8
-RF_MAX_DEPTH_GRID = [8, 10, 12, 16, 20]
+RF_N_ESTIMATORS = 1000
+RF_MAX_DEPTH = 6
+RF_MAX_DEPTH_GRID = [8, 10, 12, 16]
 RF_MIN_SAMPLES_LEAF = 10
-RF_SELECT_TOP_K = 15
+RF_SELECT_TOP_K = 35
 RF_SELECT_TOP_K_GRID = [35]
 
 N_HUBS_DEFAULT = 5
 N_HUBS_GRID = [5]
 
-NEIGHBOR_FAIL_RATE_STEP = "neighbor_fail_rate"
-ISOLATION_FOREST_STEP = "isolation_forest"
-
-ENABLE_NEIGHBOR_FAIL_RATE = False
-ENABLE_ISOLATION_FOREST = False
-
-META_KNN_NEIGHBORS_DEFAULT = 30
-META_KNN_NEIGHBORS_GRID = [40]
-
-ISOLATION_FOREST_N_ESTIMATORS = 200
-ISOLATION_FOREST_N_ESTIMATORS_GRID = [1000]
-ISOLATION_FOREST_CONTAMINATION = "auto"
-
-CORRELATED_SELECTION_THRESHOLD = 0.80
-CORRELATED_SELECTION_THRESHOLD_GRID = [0.70]
+CORRELATED_SELECTION_THRESHOLD = 0.7
+CORRELATED_SELECTION_THRESHOLD_GRID = [0.85]
 CORRELATED_SELECTION_METHOD = "spearman"
 CORRELATED_SELECTION_CRITERION = "corr_with_target"
 
-XGB_N_ESTIMATORS = 1500
-XGB_MAX_DEPTH = 10
+XGB_N_ESTIMATORS = 1000
+XGB_MAX_DEPTH = 4
 XGB_MAX_DEPTH_GRID = [8, 12, 16, 18]
 XGB_LEARNING_RATE = 0.05
 XGB_LEARNING_RATE_GRID = [0.005, 0.01, 0.03, 0.1]
@@ -109,7 +94,10 @@ CV_N_JOBS = -1
 ESTIMATOR_N_JOBS = 1
 
 PRIMARY_TUNING_METRIC = "pr_auc"
-THRESHOLD_GRID = np.linspace(0.45, 0.55, num=1000) #np.linspace(0.001, 0.999, num=500)  # np.linspace(0.45, 0.55, num=500)
+THRESHOLD_GRID = np.linspace(0.001, 0.999, num=1000)
+
+LINEAR_CALIBRATION_METHOD = "isotonic"
+LINEAR_CALIBRATION_CV = 3
 
 HOLDOUT_BOOTSTRAP_N = 1000
 HOLDOUT_BOOTSTRAP_CI = 0.95
@@ -184,6 +172,8 @@ xgboost_classifier = partial(
 
 
 def frozen_config() -> dict:
+    from scripts.secom_costs import threshold_profile_config
+
     return {
         "random_seed": RANDOM_SEED,
         "test_size": TEST_SIZE,
@@ -194,10 +184,12 @@ def frozen_config() -> dict:
         "model_name": MODEL_NAME,
         "champion_imputation_method": CHAMPION_IMPUTATION_METHOD,
         "knn_impute_neighbors": int(KNN_IMPUTE_NEIGHBORS),
-        "tuning_protocol": "sequential_pr_auc_hyperparams_ber_threshold",
+        "tuning_protocol": "sequential_pr_auc_hyperparams_multi_threshold",
         "primary_tuning_metric": PRIMARY_TUNING_METRIC,
-        "threshold_tuning_metric": "ber",
+        "threshold_tuning_profiles": ["f1", "f2", "f3"],
         "threshold_grid": [float(t) for t in THRESHOLD_GRID],
+        "linear_calibration_method": str(LINEAR_CALIBRATION_METHOD),
+        "linear_calibration_cv": int(LINEAR_CALIBRATION_CV),
         "elastic_net_max_iter": int(ELASTIC_NET_MAX_ITER),
         "knn_classifier_neighbors": int(KNN_CLASSIFIER_NEIGHBORS),
         "knn_neighbors_grid": [int(k) for k in KNN_NEIGHBORS_GRID],
@@ -213,13 +205,6 @@ def frozen_config() -> dict:
         "rf_select_top_k_grid": [int(k) for k in RF_SELECT_TOP_K_GRID],
         "n_hubs_default": int(N_HUBS_DEFAULT),
         "n_hubs_grid": [int(k) for k in N_HUBS_GRID],
-        "meta_knn_neighbors_default": int(META_KNN_NEIGHBORS_DEFAULT),
-        "meta_knn_neighbors_grid": [int(k) for k in META_KNN_NEIGHBORS_GRID],
-        "isolation_forest_n_estimators": int(ISOLATION_FOREST_N_ESTIMATORS),
-        "isolation_forest_n_estimators_grid": [
-            int(k) for k in ISOLATION_FOREST_N_ESTIMATORS_GRID
-        ],
-        "isolation_forest_contamination": ISOLATION_FOREST_CONTAMINATION,
         "benchmark_model_ids": list(BENCHMARK_MODEL_IDS),
         "correlated_selection_threshold": float(CORRELATED_SELECTION_THRESHOLD),
         "correlated_selection_threshold_grid": [
@@ -227,10 +212,9 @@ def frozen_config() -> dict:
         ],
         "correlated_selection_method": CORRELATED_SELECTION_METHOD,
         "correlated_selection_criterion": CORRELATED_SELECTION_CRITERION,
-        "enable_neighbor_fail_rate": bool(ENABLE_NEIGHBOR_FAIL_RATE),
-        "enable_isolation_forest": bool(ENABLE_ISOLATION_FOREST),
         "holdout_bootstrap_n": int(HOLDOUT_BOOTSTRAP_N),
         "holdout_bootstrap_ci": float(HOLDOUT_BOOTSTRAP_CI),
+        **threshold_profile_config(),
     }
 
 
@@ -292,48 +276,6 @@ def _auxiliary_transformers() -> list[tuple[str, str, object]]:
     ]
 
 
-def preprocess_step_enabled(step_name: str) -> bool:
-    """Whether a named sensor-branch step is included (see ENABLE_* flags)."""
-    if step_name == NEIGHBOR_FAIL_RATE_STEP:
-        return ENABLE_NEIGHBOR_FAIL_RATE
-    if step_name == ISOLATION_FOREST_STEP:
-        return ENABLE_ISOLATION_FOREST
-    return True
-
-
-def _optional_meta_steps(
-    *,
-    meta_knn_neighbors: int = META_KNN_NEIGHBORS_DEFAULT,
-    isolation_forest_n_estimators: int = ISOLATION_FOREST_N_ESTIMATORS,
-    isolation_forest_contamination: str | float = ISOLATION_FOREST_CONTAMINATION,
-) -> list[tuple[str, object]]:
-    """Append neighbor_fail_rate and/or isolation_forest when ENABLE_* is True."""
-    steps: list[tuple[str, object]] = []
-    if ENABLE_NEIGHBOR_FAIL_RATE:
-        steps.append(
-            (
-                NEIGHBOR_FAIL_RATE_STEP,
-                NeighborFailRateFeatures(
-                    n_neighbors=int(meta_knn_neighbors),
-                    n_jobs=ESTIMATOR_N_JOBS,
-                ),
-            )
-        )
-    if ENABLE_ISOLATION_FOREST:
-        steps.append(
-            (
-                ISOLATION_FOREST_STEP,
-                IsolationForestScoreFeatures(
-                    n_estimators=int(isolation_forest_n_estimators),
-                    contamination=isolation_forest_contamination,
-                    random_state=RANDOM_SEED,
-                    n_jobs=ESTIMATOR_N_JOBS,
-                ),
-            )
-        )
-    return steps
-
-
 def _cluster_step() -> Pipeline:
     return Pipeline(
         steps=[
@@ -353,13 +295,6 @@ def _cluster_step() -> Pipeline:
     ).set_output(transform="pandas")
 
 
-def _sensor_branch_pipeline(sensor_steps: list[tuple[str, object]]) -> Pipeline:
-    """SensorBranchPipeline when KNN meta is on; plain Pipeline otherwise."""
-    if ENABLE_NEIGHBOR_FAIL_RATE:
-        return SensorBranchPipeline(steps=sensor_steps)
-    return Pipeline(steps=sensor_steps)
-
-
 def _sensor_preprocess_column(
     sensor_steps: list[tuple[str, object]],
 ) -> ColumnTransformer:
@@ -367,7 +302,7 @@ def _sensor_preprocess_column(
         transformers=[
             (
                 "sensor_branch",
-                _sensor_branch_pipeline(sensor_steps).set_output(transform="pandas"),
+                Pipeline(steps=sensor_steps).set_output(transform="pandas"),
                 make_column_selector(pattern=_SENSOR_VALUE_PATTERN),
             ),
             *_auxiliary_transformers(),
@@ -380,24 +315,16 @@ def _sensor_preprocess_column(
 def linear_preprocess(
     top_k: int = RF_SELECT_TOP_K,
     n_hubs: int = N_HUBS_DEFAULT,
-    *,
-    meta_knn_neighbors: int = META_KNN_NEIGHBORS_DEFAULT,
-    isolation_forest_n_estimators: int = ISOLATION_FOREST_N_ESTIMATORS,
-    isolation_forest_contamination: str | float = ISOLATION_FOREST_CONTAMINATION,
 ) -> ColumnTransformer:
-    """Impute → cluster → hubs → optional meta steps; passthrough aux."""
+    """Impute → cluster → T² + hub pairs; passthrough aux."""
     sensor_steps: list[tuple[str, object]] = [
         ("impute", median_imputer()),
         ("cluster", _cluster_step()),
-        ("select_t2_hubs", LinearSelectT2HubBlock(top_k=top_k, n_hubs=n_hubs)),
+        (
+            "select_t2_hubs",
+            LinearSelectT2HubBlock(top_k=top_k, n_hubs=n_hubs),
+        ),
     ]
-    sensor_steps.extend(
-        _optional_meta_steps(
-            meta_knn_neighbors=meta_knn_neighbors,
-            isolation_forest_n_estimators=isolation_forest_n_estimators,
-            isolation_forest_contamination=isolation_forest_contamination,
-        )
-    )
     return _sensor_preprocess_column(sensor_steps)
 
 

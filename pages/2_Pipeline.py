@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from scripts.dashboard_app import ensure_repo_on_path
+from scripts.dashboard_app import ensure_repo_on_path, render_blue_note
 from scripts.dashboard_artifacts import (
     artifacts_available,
     build_reduction_profile,
@@ -97,7 +97,7 @@ def main() -> None:
         help="All feature engineering fit on training folds only (no leakage).",
         border=True,
     )
-    st.info(
+    render_blue_note(
         "All feature engineering is fit on training folds only (no leakage), "
         "then compared with PR AUC across repeated CV."
     )
@@ -113,10 +113,13 @@ def main() -> None:
     st.subheader("Shared preprocessing foundation")
 
     with st.expander("Step 1: dbt preprocessing context", expanded=True):
+        render_blue_note(
+            "`stg_secom` → `int_secom_features` → `int_secom_column_metadata` → "
+            "`mart_secom_features`\n\n"
+            "Training and benchmarking read **`public.mart_secom_features`**."
+        )
         st.markdown(
             """
-`stg_secom` → `int_secom_features` → `int_secom_column_metadata` → `mart_secom_features`
-
 - Cyclical time features (`month/dow/hour` sin/cos + `is_weekend`)
 - Missing indicators (`c_*__missing`) and `n_missing_sensors`
 - Profile sensors; drop high-missing (>10%) and zero-variance columns before the mart
@@ -238,7 +241,7 @@ def main() -> None:
         key="p2_reduction_impact",
     )
 
-    st.info(HYPERPARAM_NOTE)
+    render_blue_note(HYPERPARAM_NOTE)
 
     if artifact_caption:
         st.caption(artifact_caption)

@@ -3,7 +3,7 @@
 
 Models: linear_lr, topk_rf, topk_knn, topk_xgb.
 Each uses frozen hyperparameters from data/processed/tuned/<model_id>.json.
-Primary objective: maximize PR AUC on CV; tuned threshold for BER/TPR/TNR.
+Primary objective: maximize PR AUC on CV; three F-beta thresholds (F1 / F2 / F3).
 """
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import average_precision_score, roc_auc_score
 from sklearn.model_selection import cross_validate
 from sklearn.pipeline import Pipeline
 
@@ -21,10 +22,20 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.progress import tqdm_joblib_context  # noqa: E402
+from scripts.secom_costs import (  # noqa: E402
+    DEFAULT_PROFILE_ID,
+    PROFILE_IDS,
+    THRESHOLD_PROFILES,
+    fbeta_at_threshold,
+    resolve_threshold_profiles,
+    threshold_profile_config,
+)
 from scripts.secom_metrics import (  # noqa: E402
     compute_holdout_metrics,
+    predict_with_threshold,
     stratified_bootstrap_holdout_metrics,
 )
+from scripts.secom_pipelines import frozen_config  # noqa: E402
 from scripts.pipeline_artifacts import (  # noqa: E402
     collect_holdout_artifacts,
     save_pipeline_artifacts,
@@ -131,15 +142,39 @@ def run_pipeline_benchmark(
     return leaderboard.reset_index(drop=True)
 
 
+def _profile_holdout_columns(
+    y_test: pd.Series,
+    y_score: np.ndarray,
+    threshold: float,
+    profile_id: str,
+) -> dict:
+    profile = THRESHOLD_PROFILES[profile_id]  # type: ignore[index]
+    y_pred = predict_with_threshold(y_score, threshold)
+    metrics = compute_holdout_metrics(y_test, y_pred)
+    cols = {
+        f"{profile_id}_threshold": float(threshold),
+        f"{profile_id}_ber_percent": metrics["ber_percent"],
+        f"{profile_id}_true_positive_percent": metrics["true_positive_percent"],
+        f"{profile_id}_true_negative_percent": metrics["true_negative_percent"],
+        f"{profile_id}_confusion_matrix": metrics["confusion_matrix"],
+    }
+    cols[f"{profile_id}_fbeta"] = fbeta_at_threshold(
+        y_test, y_pred, beta=profile.beta
+    )
+    return cols
+
+
 def run_holdout_benchmark(
     pipelines: dict,
     X_train: pd.DataFrame,
     y_train: pd.Series,
     X_test: pd.DataFrame,
     y_test: pd.Series,
+    tuned: dict[str, dict] | None = None,
     *,
     show_progress: bool = True,
 ) -> pd.DataFrame:
+    tuned = tuned or load_all_tuned_params()
     rows = []
 
     if show_progress:
@@ -147,14 +182,39 @@ def run_holdout_benchmark(
 
     for name, pipeline in pipelines.items():
         pipeline.fit(X_train, y_train)
-        y_pred = pipeline.predict(X_test)
         y_score = pipeline.predict_proba(X_test)[:, 1]
-        row = {"pipeline": name, **compute_holdout_metrics(y_test, y_pred, y_score)}
+        row: dict = {
+            "pipeline": name,
+            "pr_auc": float(average_precision_score(y_test, y_score)),
+            "roc_auc": float(roc_auc_score(y_test, y_score)),
+        }
+
+        thresholds = resolve_threshold_profiles(tuned[name])
+        for profile_id in PROFILE_IDS:
+            if profile_id not in thresholds:
+                continue
+            row.update(
+                _profile_holdout_columns(
+                    y_test, y_score, thresholds[profile_id], profile_id
+                )
+            )
+
+        default_thr = thresholds.get(DEFAULT_PROFILE_ID, thresholds.get("ber", 0.5))
+        y_pred_default = predict_with_threshold(y_score, default_thr)
+        ber_metrics = compute_holdout_metrics(y_test, y_pred_default)
+        row.update(
+            {
+                "ber_percent": ber_metrics["ber_percent"],
+                "true_positive_percent": ber_metrics["true_positive_percent"],
+                "true_negative_percent": ber_metrics["true_negative_percent"],
+                "confusion_matrix": ber_metrics["confusion_matrix"],
+            }
+        )
         row.update(
             stratified_bootstrap_holdout_metrics(
                 y_test,
                 y_score,
-                y_pred,
+                y_pred_default,
                 n_bootstrap=HOLDOUT_BOOTSTRAP_N,
                 ci_level=HOLDOUT_BOOTSTRAP_CI,
                 rng=np.random.default_rng(RANDOM_SEED),
@@ -176,7 +236,7 @@ def run_holdout_benchmark(
             )
             print(
                 f"  {name}: holdout PR AUC {row['pr_auc']:.3f}{pr_ci}, "
-                f"BER {row['ber_percent']:.1f}%{ber_ci}"
+                f"BER (F2 threshold) {row['ber_percent']:.1f}%{ber_ci}"
             )
 
     holdout = pd.DataFrame(rows).sort_values(
@@ -235,6 +295,8 @@ def save_benchmark_results(
             "test_rows": test_rows,
         },
         "leaderboard": leaderboard.to_dict(orient="records"),
+        "threshold_profile_ids": list(PROFILE_IDS),
+        "threshold_profile_config": threshold_profile_config(),
     }
     if holdout is not None:
         payload["holdout"] = holdout.to_dict(orient="records")
@@ -244,6 +306,7 @@ def save_benchmark_results(
 
 
 def main() -> None:
+    """Re-run after tuning: Stage 2 writes threshold_profiles; this script refreshes holdout x3."""
     tuned = load_all_tuned_params()
     df = load_mart()
     cols = feature_columns(df)
@@ -256,7 +319,13 @@ def main() -> None:
     pipelines = build_benchmark_pipelines(tuned)
     leaderboard = run_pipeline_benchmark(pipelines, X_train, y_train, show_progress=True)
     holdout = run_holdout_benchmark(
-        pipelines, X_train, y_train, X_test, y_test, show_progress=True
+        pipelines,
+        X_train,
+        y_train,
+        X_test,
+        y_test,
+        tuned,
+        show_progress=True,
     )
     save_benchmark_results(
         tuned,

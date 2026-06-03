@@ -100,3 +100,13 @@ class MahalanobisT2Features(BaseEstimator, TransformerMixin):
             df = pd.DataFrame(X)
         df.columns = df.columns.astype(str)
         return df
+
+
+def covariance_precision(cov_estimator) -> np.ndarray | None:
+    """Inverse covariance (precision) for sklearn NearestNeighbors metric_params VI."""
+    if cov_estimator is None:
+        return None
+    precision = getattr(cov_estimator, "precision_", None)
+    if precision is None:
+        return None
+    return np.asarray(precision, dtype=float)

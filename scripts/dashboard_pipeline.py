@@ -1,12 +1,14 @@
 """Pipeline flowchart for the SECOM Streamlit dashboard."""
 from __future__ import annotations
 
-import json
+import html
 
 import streamlit as st
 
-from scripts.secom_pipelines import ENABLE_ISOLATION_FOREST, ENABLE_NEIGHBOR_FAIL_RATE
-from theme.gruvbox_material import GRUVBOX
+try:
+    import streamlit.components.v1 as components
+except ImportError:  # pragma: no cover
+    components = None  # type: ignore[assignment]
 
 PIPELINE_MERMAID = """
 flowchart LR
@@ -31,115 +33,34 @@ flowchart LR
   mart["mart_secom_features"]
   imp["Median impute"]
   cluster["Spearman cluster"]
-  hubs["RF top-k + T² + hub pairs"]
-  knnMeta["Neighbor fail rate"]
-  iforest["Isolation forest score"]
+  hubs["RF + T² + hub pairs"]
   scale["RobustScaler"]
   clf["Classifier"]
 
-  stg --> int_f --> meta --> mart --> imp --> cluster --> hubs --> knnMeta --> iforest --> scale --> clf
-"""
-
-
-def _mermaid_html(diagram: str, height: int = 300) -> str:
-    g = GRUVBOX
-    theme_vars = {
-        "primaryColor": g["bg_soft"],
-        "primaryTextColor": g["fg"],
-        "primaryBorderColor": g["border"],
-        "lineColor": g["fg_muted"],
-        "secondaryColor": g["bg"],
-        "tertiaryColor": g["bg_soft"],
-        "background": g["bg"],
-        "mainBkg": g["bg_soft"],
-        "nodeBorder": g["border"],
-        "clusterBkg": g["bg_soft"],
-        "titleColor": g["fg"],
-        "edgeLabelBackground": g["bg"],
-        "nodeTextColor": g["fg"],
-    }
-    theme_json = json.dumps(theme_vars)
-    diagram_text = diagram.strip()
-    return f"""
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-  <style>
-    body {{
-      margin: 0;
-      padding: 0.5rem;
-      background: {g["bg"]};
-      font-family: sans-serif;
-    }}
-    .mermaid {{
-      display: flex;
-      justify-content: center;
-    }}
-  </style>
-</head>
-<body>
-  <pre class="mermaid">{diagram_text}</pre>
-  <script>
-    (async () => {{
-      mermaid.initialize({{
-        startOnLoad: false,
-        theme: "base",
-        themeVariables: {theme_json},
-        flowchart: {{ useMaxWidth: true, htmlLabels: true }},
-      }});
-      await mermaid.run({{ querySelector: ".mermaid" }});
-    }})();
-  </script>
-</body>
-</html>
-"""
-
-
-def _html_flex_flowchart() -> str:
-    """No-JS fallback: Gruvbox boxes and arrows."""
-    g = GRUVBOX
-    nodes = ["Raw SECOM", "DuckDB", "dbt", "mart", "Dashboard"]
-    parts = []
-    for i, n in enumerate(nodes):
-        parts.append(
-            f'<div style="background:{g["bg_soft"]};color:{g["fg"]};border:1px solid {g["border"]};'
-            f'padding:0.5rem 0.75rem;border-radius:6px;font-size:12px;text-align:center;white-space:nowrap;">{n}</div>'
-        )
-        if i < len(nodes) - 1:
-            parts.append(f'<span style="color:{g["fg_muted"]};margin:0 0.2rem;">→</span>')
-    row = "".join(parts)
-    branch = (
-        f'<div style="margin-top:0.75rem;font-size:11px;color:{g["fg_muted"]};text-align:center;">'
-        f'mart → Tuning (CV) → Benchmark (CV) → dashboard</div>'
-    )
-    return f"""
-<div style="background:{g["bg"]};padding:0.75rem;font-family:sans-serif;">
-  <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:0.15rem;">{row}</div>
-  {branch}
-</div>
+  stg --> int_f --> meta --> mart --> imp --> cluster --> hubs --> scale --> clf
 """
 
 
 def _render_mermaid(diagram: str, *, height: int = 300) -> None:
-    try:
-        st.iframe(_mermaid_html(diagram, height=height), height=height)
-    except Exception:
-        if diagram.strip() == PIPELINE_MERMAID.strip():
-            st.markdown(_html_flex_flowchart(), unsafe_allow_html=True)
-        else:
-            st.code(diagram.strip(), language="text")
+    code = html.escape(diagram.strip())
+    html_doc = f"""
+        <pre class="mermaid">{code}</pre>
+        <script type="module">
+            import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+            mermaid.initialize({{ startOnLoad: true, theme: 'dark' }});
+        </script>
+        """
+    if hasattr(st, "iframe"):
+        st.iframe(html_doc, height=height)
+    elif components is not None:
+        components.html(html_doc, height=height, scrolling=False)
+    else:  # pragma: no cover
+        st.markdown(f"```mermaid\n{diagram.strip()}\n```")
 
 
 def render_pipeline_flowchart() -> None:
-    _render_mermaid(PIPELINE_MERMAID, height=300)
+    _render_mermaid(PIPELINE_MERMAID)
 
 
 def render_preprocessing_flowchart() -> None:
-    _render_mermaid(PREPROCESSING_MERMAID, height=340)
-    st.caption(
-        "Neighbor fail-rate and isolation-forest steps follow "
-        "`ENABLE_NEIGHBOR_FAIL_RATE` and `ENABLE_ISOLATION_FOREST` in "
-        "`scripts/secom_pipelines.py` (omitted from the pipeline when False)."
-    )
+    _render_mermaid(PREPROCESSING_MERMAID)

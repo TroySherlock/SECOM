@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from scripts.dashboard_app import ensure_repo_on_path
+from scripts.dashboard_app import ensure_repo_on_path, render_blue_note
 from scripts.dashboard_benchmark import model_info
 from scripts.secom_pipelines import BENCHMARK_MODEL_IDS
 from scripts.dashboard_charts import (
@@ -143,7 +143,7 @@ def main() -> None:
         )
 
     if inspect_model == "topk_knn":
-        st.info(
+        render_blue_note(
             "k-NN has no standard SHAP waterfall; local view highlights features that differ "
             "most from the training neighbors' centroid in scaled space, with neighbor fail-rate "
             "as context."

@@ -65,10 +65,13 @@ def load_champion_params(path: Path | None = None) -> dict:
 
 
 def fitted_base_classifier(pipeline) -> object:
-    """Underlying sklearn classifier after fit (unwraps FixedThresholdClassifier)."""
+    """Underlying sklearn classifier after fit (unwraps threshold + calibration)."""
     classifier = pipeline.named_steps["classifier"]
     if hasattr(classifier, "estimator_"):
-        return classifier.estimator_
+        classifier = classifier.estimator_
+    calibrated = getattr(classifier, "calibrated_classifiers_", None)
+    if calibrated:
+        return calibrated[0].estimator
     return classifier
 
 

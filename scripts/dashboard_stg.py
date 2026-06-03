@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import Any
 
 import duckdb
@@ -15,6 +16,31 @@ ROW_INDEX_COL = "row_index"
 N_SENSORS = 591
 
 _SENSOR_PATTERN = re.compile(r"^c_\d+$")
+
+
+@dataclass(frozen=True)
+class StgSnapshot:
+    df: pd.DataFrame
+    sensor_cols: list[str]
+    stats: dict[str, Any]
+    default_sensor: str
+
+
+def build_stg_snapshot(db_path=DB_PATH) -> StgSnapshot:
+    """Load stg_secom and precompute columns, summary stats, and default sensor once."""
+    df = load_stg_secom(db_path)
+    sensor_cols = stg_sensor_columns(df)
+    stats = stg_summary_stats(df)
+    default_sensor = ""
+    if sensor_cols:
+        variances = df[sensor_cols].var(numeric_only=True).sort_values(ascending=False)
+        default_sensor = str(variances.index[0])
+    return StgSnapshot(
+        df=df,
+        sensor_cols=sensor_cols,
+        stats=stats,
+        default_sensor=default_sensor,
+    )
 
 
 def stg_available(db_path=DB_PATH) -> bool:

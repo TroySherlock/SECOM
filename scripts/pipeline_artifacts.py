@@ -12,8 +12,6 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_selection import SelectFromModel
 from sklearn.pipeline import Pipeline
 from scripts.dashboard_stg import N_SENSORS
-from scripts.anomaly_features import IsolationForestScoreFeatures
-from scripts.neighbor_meta_features import NeighborFailRateFeatures
 from scripts.hub_interactions import LinearSelectT2HubBlock, extract_hub_interaction_info
 from scripts.mspc_features import sensor_value_columns
 from scripts.secom_pipelines import (
@@ -167,8 +165,6 @@ def extract_model_artifacts(
     family = _model_family(model_id)
     rf_selection = None
     hub_interactions = None
-    isolation_forest_info = None
-    neighbor_fail_rate_info = None
 
     if "select_t2_hubs" in sensor_pipe.named_steps:
         block: LinearSelectT2HubBlock = sensor_pipe.named_steps["select_t2_hubs"]
@@ -176,31 +172,10 @@ def extract_model_artifacts(
         rf_selection = _extract_rf_selection(block.select_, cluster_cols)
         stages["after_selection"] = rf_selection["selected_count"]
         hub_interactions = extract_hub_interaction_info(block)
+        n_interact = int(hub_interactions.get("n_interaction_features", 0))
         stages["after_hub_interactions"] = (
-            int(rf_selection["selected_count"])
-            + 1
-            + int(hub_interactions.get("n_interaction_features", 0))
+            int(rf_selection["selected_count"]) + 1 + n_interact
         )
-
-    if "neighbor_fail_rate" in sensor_pipe.named_steps:
-        knn_meta: NeighborFailRateFeatures = sensor_pipe.named_steps["neighbor_fail_rate"]
-        neighbor_fail_rate_info = {
-            "n_neighbors": int(knn_meta.n_neighbors),
-            "n_neighbors_fitted": int(getattr(knn_meta, "n_neighbors_fit_", 0)),
-            "score_column": str(knn_meta.score_col),
-        }
-        stages["after_neighbor_fail_rate"] = (
-            int(stages.get("after_hub_interactions", 0)) + 1
-        )
-
-    if "isolation_forest" in sensor_pipe.named_steps:
-        iforest: IsolationForestScoreFeatures = sensor_pipe.named_steps["isolation_forest"]
-        isolation_forest_info = {
-            "n_estimators": int(iforest.n_estimators),
-            "contamination": iforest.contamination,
-            "score_column": str(iforest.score_col),
-        }
-        stages["after_isolation_forest"] = len(sensor_pipe.get_feature_names_out())
 
     stages["after_preprocess"] = len(preprocess.get_feature_names_out())
     stages["classifier_input"] = len(scale.get_feature_names_out())
@@ -210,8 +185,6 @@ def extract_model_artifacts(
         "stages": stages,
         "rf_selection": rf_selection,
         "hub_interactions": hub_interactions,
-        "neighbor_fail_rate": neighbor_fail_rate_info,
-        "isolation_forest": isolation_forest_info,
     }
 
 

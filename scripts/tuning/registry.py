@@ -10,10 +10,17 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 from sklearn.base import clone
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import FixedThresholdClassifier, GridSearchCV, ParameterGrid
 from sklearn.pipeline import Pipeline
 
 from scripts.progress import tqdm_joblib_context
+from scripts.secom_costs import (
+    DEFAULT_PROFILE_ID,
+    PROFILE_IDS,
+    THRESHOLD_PROFILES,
+    fbeta_at_threshold,
+)
 from scripts.secom_metrics import compute_holdout_metrics, predict_with_threshold
 from scripts.secom_pipelines import (
     CHAMPION_IMPUTATION_METHOD,
@@ -36,15 +43,11 @@ from scripts.secom_pipelines import (
     C_GRID,
     CORRELATED_SELECTION_THRESHOLD,
     CORRELATED_SELECTION_THRESHOLD_GRID,
-    ENABLE_ISOLATION_FOREST,
-    ENABLE_NEIGHBOR_FAIL_RATE,
-    ISOLATION_FOREST_N_ESTIMATORS,
-    ISOLATION_FOREST_N_ESTIMATORS_GRID,
-    META_KNN_NEIGHBORS_DEFAULT,
-    META_KNN_NEIGHBORS_GRID,
     KNN_CLASSIFIER_NEIGHBORS,
     KNN_NEIGHBORS_GRID,
     L1_RATIO_GRID,
+    LINEAR_CALIBRATION_CV,
+    LINEAR_CALIBRATION_METHOD,
     N_HUBS_DEFAULT,
     N_HUBS_GRID,
     RF_MAX_DEPTH,
@@ -65,81 +68,54 @@ from scripts.secom_pipelines import (
 
 LINEAR_TOP_K_PARAM = "preprocess__sensor_branch__select_t2_hubs__top_k"
 LINEAR_N_HUBS_PARAM = "preprocess__sensor_branch__select_t2_hubs__n_hubs"
-META_KNN_N_NEIGHBORS_PARAM = (
+LEGACY_TOP_K_PARAM = "preprocess__sensor_branch__select__max_features"
+LEGACY_META_KNN_N_NEIGHBORS_PARAM = (
     "preprocess__sensor_branch__neighbor_fail_rate__n_neighbors"
 )
-LEGACY_TOP_K_PARAM = "preprocess__sensor_branch__select__max_features"
-IF_N_ESTIMATORS_PARAM = "preprocess__sensor_branch__isolation_forest__n_estimators"
+LEGACY_META_KNN_IN_HUB_PARAM = (
+    "preprocess__sensor_branch__select_t2_hubs__neighbor_n_neighbors"
+)
 SMART_CORR_THRESHOLD_PARAM = (
     "preprocess__sensor_branch__cluster__smart_corr__threshold"
 )
 
 
 def _hub_preprocess_grid() -> dict:
-    grid = {
+    return {
         LINEAR_TOP_K_PARAM: [int(k) for k in RF_SELECT_TOP_K_GRID],
         LINEAR_N_HUBS_PARAM: [int(k) for k in N_HUBS_GRID],
         SMART_CORR_THRESHOLD_PARAM: [float(t) for t in CORRELATED_SELECTION_THRESHOLD_GRID],
     }
-    if ENABLE_NEIGHBOR_FAIL_RATE:
-        grid[META_KNN_N_NEIGHBORS_PARAM] = [int(k) for k in META_KNN_NEIGHBORS_GRID]
-    if ENABLE_ISOLATION_FOREST:
-        grid[IF_N_ESTIMATORS_PARAM] = [int(k) for k in ISOLATION_FOREST_N_ESTIMATORS_GRID]
-    return grid
 
 
 def _hub_best_params(cv_summary: dict) -> dict:
-    params = {
+    return {
         LINEAR_TOP_K_PARAM: int(cv_summary["best_top_k"]),
         LINEAR_N_HUBS_PARAM: int(cv_summary["best_n_hubs"]),
         SMART_CORR_THRESHOLD_PARAM: float(
             cv_summary.get("best_corr_threshold", CORRELATED_SELECTION_THRESHOLD)
         ),
     }
-    if ENABLE_NEIGHBOR_FAIL_RATE:
-        params[META_KNN_N_NEIGHBORS_PARAM] = int(
-            cv_summary.get("best_meta_knn_neighbors", META_KNN_NEIGHBORS_DEFAULT)
-        )
-    if ENABLE_ISOLATION_FOREST:
-        params[IF_N_ESTIMATORS_PARAM] = int(
-            cv_summary.get("best_if_n_estimators", ISOLATION_FOREST_N_ESTIMATORS)
-        )
-    return params
 
 
 def _hub_preprocess_param_renames() -> dict[str, str]:
-    renames = {
+    return {
         f"param_{LINEAR_TOP_K_PARAM}": "top_k",
         f"param_{LINEAR_N_HUBS_PARAM}": "n_hubs",
         f"param_{SMART_CORR_THRESHOLD_PARAM}": "corr_threshold",
     }
-    if ENABLE_NEIGHBOR_FAIL_RATE:
-        renames[f"param_{META_KNN_N_NEIGHBORS_PARAM}"] = "meta_knn_neighbors"
-    if ENABLE_ISOLATION_FOREST:
-        renames[f"param_{IF_N_ESTIMATORS_PARAM}"] = "if_n_estimators"
-    return renames
 
 
 def _hub_preprocess_groupby_cols() -> list[str]:
-    cols = ["top_k", "n_hubs", "corr_threshold"]
-    if ENABLE_NEIGHBOR_FAIL_RATE:
-        cols.append("meta_knn_neighbors")
-    if ENABLE_ISOLATION_FOREST:
-        cols.append("if_n_estimators")
-    return cols
+    return ["top_k", "n_hubs", "corr_threshold"]
 
 
 def _hub_preprocess_best_defaults() -> dict[str, object]:
-    defaults: dict[str, object] = {
+    return {
         "top_k": int(RF_SELECT_TOP_K),
         "n_hubs": int(N_HUBS_DEFAULT),
         "corr_threshold": float(CORRELATED_SELECTION_THRESHOLD),
     }
-    if ENABLE_NEIGHBOR_FAIL_RATE:
-        defaults["meta_knn_neighbors"] = int(META_KNN_NEIGHBORS_DEFAULT)
-    if ENABLE_ISOLATION_FOREST:
-        defaults["if_n_estimators"] = int(ISOLATION_FOREST_N_ESTIMATORS)
-    return defaults
 
 
 def _hub_feature_pipeline(classifier, *, top_k: int = RF_SELECT_TOP_K, n_hubs: int = N_HUBS_DEFAULT):
@@ -160,25 +136,34 @@ class ModelSpec:
     build_grid_search_best_params: Callable[[dict], dict]
 
 
-def _linear_lr_pipeline() -> Pipeline:
-    return _hub_feature_pipeline(
-        elastic_net_lr(C=float(C_GRID[0]), l1_ratio=float(L1_RATIO_GRID[0])),
+def _linear_lr_classifier() -> CalibratedClassifierCV:
+    return CalibratedClassifierCV(
+        estimator=elastic_net_lr(
+            C=float(C_GRID[0]),
+            l1_ratio=float(L1_RATIO_GRID[0]),
+        ),
+        method=LINEAR_CALIBRATION_METHOD,
+        cv=int(LINEAR_CALIBRATION_CV),
     )
+
+
+def _linear_lr_pipeline() -> Pipeline:
+    return _hub_feature_pipeline(_linear_lr_classifier())
 
 
 def _linear_lr_grid() -> dict:
     return {
         **_hub_preprocess_grid(),
-        "classifier__C": [float(c) for c in C_GRID],
-        "classifier__l1_ratio": [float(r) for r in L1_RATIO_GRID],
+        "classifier__estimator__C": [float(c) for c in C_GRID],
+        "classifier__estimator__l1_ratio": [float(r) for r in L1_RATIO_GRID],
     }
 
 
 def _linear_lr_best_params(cv_summary: dict) -> dict:
     return {
         **_hub_best_params(cv_summary),
-        "classifier__C": float(cv_summary["best_c"]),
-        "classifier__l1_ratio": float(cv_summary["best_l1_ratio"]),
+        "classifier__estimator__C": float(cv_summary["best_c"]),
+        "classifier__estimator__l1_ratio": float(cv_summary["best_l1_ratio"]),
     }
 
 
@@ -245,8 +230,8 @@ MODEL_SPECS: dict[str, ModelSpec] = {
         make_param_grid=_linear_lr_grid,
         param_renames={
             **_hub_preprocess_param_renames(),
-            "param_classifier__C": "c",
-            "param_classifier__l1_ratio": "l1_ratio",
+            "param_classifier__estimator__C": "c",
+            "param_classifier__estimator__l1_ratio": "l1_ratio",
         },
         groupby_cols=[*_hub_preprocess_groupby_cols(), "c", "l1_ratio"],
         best_defaults={
@@ -332,23 +317,20 @@ def resolve_grid_search_best_params(model_id: str, tuned_payload: dict) -> dict:
         else:
             raw[LINEAR_N_HUBS_PARAM] = int(N_HUBS_DEFAULT)
 
-    if ENABLE_NEIGHBOR_FAIL_RATE and META_KNN_N_NEIGHBORS_PARAM not in raw:
-        if cv_summary.get("best_meta_knn_neighbors") is not None:
-            raw[META_KNN_N_NEIGHBORS_PARAM] = int(cv_summary["best_meta_knn_neighbors"])
-        else:
-            raw[META_KNN_N_NEIGHBORS_PARAM] = int(META_KNN_NEIGHBORS_DEFAULT)
-
-    if ENABLE_ISOLATION_FOREST and IF_N_ESTIMATORS_PARAM not in raw:
-        if cv_summary.get("best_if_n_estimators") is not None:
-            raw[IF_N_ESTIMATORS_PARAM] = int(cv_summary["best_if_n_estimators"])
-        else:
-            raw[IF_N_ESTIMATORS_PARAM] = int(ISOLATION_FOREST_N_ESTIMATORS)
+    for legacy_key in (LEGACY_META_KNN_N_NEIGHBORS_PARAM, LEGACY_META_KNN_IN_HUB_PARAM):
+        raw.pop(legacy_key, None)
 
     if SMART_CORR_THRESHOLD_PARAM not in raw:
         if cv_summary.get("best_corr_threshold") is not None:
             raw[SMART_CORR_THRESHOLD_PARAM] = float(cv_summary["best_corr_threshold"])
         else:
             raw[SMART_CORR_THRESHOLD_PARAM] = float(CORRELATED_SELECTION_THRESHOLD)
+
+    if model_id == "linear_lr":
+        if "classifier__C" in raw and "classifier__estimator__C" not in raw:
+            raw["classifier__estimator__C"] = raw.pop("classifier__C")
+        if "classifier__l1_ratio" in raw and "classifier__estimator__l1_ratio" not in raw:
+            raw["classifier__estimator__l1_ratio"] = raw.pop("classifier__l1_ratio")
 
     spec = MODEL_SPECS[model_id]
     valid = spec.build_pipeline().get_params(deep=True)
@@ -520,14 +502,76 @@ def summarize_cv_search(
     return summary, fold_results, aggregated
 
 
-def tune_classifier_threshold(
+def _fold_metrics_at_threshold(
+    fold_probas: list[np.ndarray],
+    fold_y_val: list[pd.Series],
+    threshold: float,
+    *,
+    beta: float,
+) -> tuple[list[float], list[float], list[float]]:
+    """Per-fold F-beta, BER %, and TPR at a single threshold."""
+    fold_fbetas: list[float] = []
+    fold_bers: list[float] = []
+    fold_tprs: list[float] = []
+    for proba, y_val in zip(fold_probas, fold_y_val, strict=True):
+        pred = predict_with_threshold(proba, threshold)
+        metrics = compute_holdout_metrics(y_val, pred)
+        fold_fbetas.append(fbeta_at_threshold(y_val, pred, beta=beta))
+        fold_bers.append(metrics["ber_percent"])
+        fold_tprs.append(metrics["true_positive_percent"])
+    return fold_fbetas, fold_bers, fold_tprs
+
+
+def _profile_result_at_best(
+    profile_id: str,
+    best_threshold: float,
+    fold_probas: list[np.ndarray],
+    fold_y_val: list[pd.Series],
+    *,
+    beta: float,
+) -> dict:
+    fold_fbetas, fold_bers, fold_tprs = _fold_metrics_at_threshold(
+        fold_probas, fold_y_val, best_threshold, beta=beta
+    )
+    fold_tnrs: list[float] = []
+    fold_results: list[dict] = []
+    for fold_idx, (proba, y_val) in enumerate(zip(fold_probas, fold_y_val, strict=True)):
+        pred = predict_with_threshold(proba, best_threshold)
+        metrics = compute_holdout_metrics(y_val, pred)
+        fold_tnrs.append(metrics["true_negative_percent"])
+        fold_results.append(
+            {
+                "fold": fold_idx + 1,
+                "threshold": float(best_threshold),
+                "fbeta": fbeta_at_threshold(y_val, pred, beta=beta),
+                "ber_percent": metrics["ber_percent"],
+                "true_positive_percent": metrics["true_positive_percent"],
+                "true_negative_percent": metrics["true_negative_percent"],
+            }
+        )
+
+    return {
+        "profile_id": profile_id,
+        "beta": float(beta),
+        "best_threshold": float(best_threshold),
+        "mean_fbeta": float(np.mean(fold_fbetas)),
+        "std_fbeta": float(np.std(fold_fbetas, ddof=0)),
+        "mean_ber_percent": float(np.mean(fold_bers)),
+        "std_ber_percent": float(np.std(fold_bers, ddof=0)),
+        "mean_true_positive_percent": float(np.mean(fold_tprs)),
+        "mean_true_negative_percent": float(np.mean(fold_tnrs)),
+        "fold_results_at_best_threshold": fold_results,
+    }
+
+
+def tune_classifier_threshold_profiles(
     spec: ModelSpec,
     X: pd.DataFrame,
     y: pd.Series,
     cv_summary: dict,
     cv=None,
 ) -> dict:
-    """Stage 2: sweep thresholds on CV validation probs; minimize mean BER."""
+    """Stage 2: sweep thresholds on CV validation probs; maximise mean F-beta per profile."""
     cv = cv or make_repeated_stratified_cv()
     best_params = spec.build_grid_search_best_params(cv_summary)
     base_pipeline = clone(spec.build_pipeline())
@@ -555,51 +599,85 @@ def tune_classifier_threshold(
         fold_probas.append(fold_pipe.predict_proba(X_val)[:, 1])
         fold_y_val.append(y_val)
 
-    mean_ber_by_threshold: dict[float, float] = {}
-    for threshold in threshold_grid:
-        fold_bers = []
-        for proba, y_val in zip(fold_probas, fold_y_val, strict=True):
-            pred = predict_with_threshold(proba, threshold)
-            metrics = compute_holdout_metrics(y_val, pred)
-            fold_bers.append(metrics["ber_percent"])
-        mean_ber_by_threshold[threshold] = float(np.mean(fold_bers))
-
-    best_threshold = min(mean_ber_by_threshold, key=mean_ber_by_threshold.get)
-    best_fold_bers = []
-    fold_results_at_best: list[dict] = []
-    for fold_idx, (proba, y_val) in enumerate(zip(fold_probas, fold_y_val, strict=True)):
-        pred = predict_with_threshold(proba, best_threshold)
-        metrics = compute_holdout_metrics(y_val, pred)
-        best_fold_bers.append(metrics["ber_percent"])
-        fold_results_at_best.append(
-            {
-                "fold": fold_idx + 1,
-                "threshold": best_threshold,
-                "ber_percent": metrics["ber_percent"],
-                "true_positive_percent": metrics["true_positive_percent"],
-                "true_negative_percent": metrics["true_negative_percent"],
-            }
-        )
-
-    per_threshold_mean_ber = (
-        pd.DataFrame(
-            [
-                {"threshold": t, "mean_ber_percent": mean_ber_by_threshold[t]}
-                for t in threshold_grid
-            ]
-        )
-        .sort_values("mean_ber_percent", ascending=True, kind="mergesort")
-        .reset_index(drop=True)
-    )
-
-    return {
-        "best_threshold": float(best_threshold),
-        "mean_ber_percent": float(np.mean(best_fold_bers)),
-        "std_ber_percent": float(np.std(best_fold_bers, ddof=0)),
-        "threshold_grid": threshold_grid,
-        "per_threshold_mean_ber": per_threshold_mean_ber,
-        "fold_results_at_best_threshold": fold_results_at_best,
+    mean_fbeta_by_profile: dict[str, dict[float, float]] = {
+        pid: {} for pid in PROFILE_IDS
     }
+    mean_ber_by_threshold: dict[float, float] = {}
+
+    for threshold in threshold_grid:
+        fold_bers, _, _ = _fold_metrics_at_threshold(
+            fold_probas, fold_y_val, threshold, beta=1.0
+        )
+        mean_ber_by_threshold[threshold] = float(np.mean(fold_bers))
+        for pid in PROFILE_IDS:
+            beta = THRESHOLD_PROFILES[pid].beta
+            fold_fbetas, _, _ = _fold_metrics_at_threshold(
+                fold_probas, fold_y_val, threshold, beta=beta
+            )
+            mean_fbeta_by_profile[pid][threshold] = float(np.mean(fold_fbetas))
+
+    best_thresholds = {
+        pid: max(scores, key=scores.get)
+        for pid, scores in mean_fbeta_by_profile.items()
+    }
+
+    profiles = {
+        pid: _profile_result_at_best(
+            pid,
+            best_thresholds[pid],
+            fold_probas,
+            fold_y_val,
+            beta=THRESHOLD_PROFILES[pid].beta,
+        )
+        for pid in PROFILE_IDS
+    }
+
+    curve_cols = {
+        "threshold": threshold_grid,
+        "mean_ber_percent": [mean_ber_by_threshold[t] for t in threshold_grid],
+        **{
+            f"mean_fbeta_{pid}": [
+                mean_fbeta_by_profile[pid][t] for t in threshold_grid
+            ]
+            for pid in PROFILE_IDS
+        },
+    }
+    objective_curves = pd.DataFrame(curve_cols)
+
+    default_prof = profiles[DEFAULT_PROFILE_ID]
+    neutral_col = f"mean_fbeta_{DEFAULT_PROFILE_ID}"
+    per_threshold_mean_ber = (
+        objective_curves[["threshold", "mean_ber_percent"]]
+        .sort_values("mean_ber_percent", ascending=True, kind="mergesort")
+    )
+    return {
+        "profiles": profiles,
+        "threshold_grid": threshold_grid,
+        "objective_curves": objective_curves,
+        "best_threshold": default_prof["best_threshold"],
+        "mean_fbeta": default_prof["mean_fbeta"],
+        "std_fbeta": default_prof["std_fbeta"],
+        "mean_ber_percent": default_prof["mean_ber_percent"],
+        "std_ber_percent": default_prof["std_ber_percent"],
+        "per_threshold_mean_ber": per_threshold_mean_ber,
+        f"per_threshold_mean_fbeta_{DEFAULT_PROFILE_ID}": objective_curves[
+            ["threshold", neutral_col]
+        ].sort_values(neutral_col, ascending=False, kind="mergesort"),
+        "fold_results_at_best_threshold": default_prof[
+            "fold_results_at_best_threshold"
+        ],
+    }
+
+
+def tune_classifier_threshold(
+    spec: ModelSpec,
+    X: pd.DataFrame,
+    y: pd.Series,
+    cv_summary: dict,
+    cv=None,
+) -> dict:
+    """Backward-compatible wrapper: F2 (neutral) profile fields at top level."""
+    return tune_classifier_threshold_profiles(spec, X, y, cv_summary, cv=cv)
 
 
 def save_tuned_params(
@@ -614,9 +692,34 @@ def save_tuned_params(
     path = path or tuned_params_path(spec.model_id)
     best_params = spec.build_grid_search_best_params(cv_summary)
     summary_out = dict(cv_summary)
-    if threshold_result is not None:
-        summary_out["mean_ber_percent_at_threshold"] = threshold_result["mean_ber_percent"]
-        summary_out["std_ber_percent_at_threshold"] = threshold_result["std_ber_percent"]
+    profile_map = (
+        threshold_result.get("profiles") if threshold_result is not None else None
+    )
+    default_profile = (
+        profile_map.get(DEFAULT_PROFILE_ID) if profile_map else None
+    )
+    if default_profile is None and profile_map:
+        default_profile = profile_map.get("ber") or profile_map.get("f3") or profile_map.get("f2")
+
+    if default_profile is not None:
+        summary_out["mean_fbeta_at_threshold"] = default_profile.get("mean_fbeta")
+        summary_out["mean_ber_percent_at_threshold"] = default_profile["mean_ber_percent"]
+        summary_out["std_ber_percent_at_threshold"] = default_profile["std_ber_percent"]
+        summary_out["classifier_threshold"] = default_profile["best_threshold"]
+        summary_out["mean_true_positive_percent_at_threshold"] = default_profile[
+            "mean_true_positive_percent"
+        ]
+        summary_out["mean_true_negative_percent_at_threshold"] = default_profile[
+            "mean_true_negative_percent"
+        ]
+    elif threshold_result is not None:
+        summary_out["mean_fbeta_at_threshold"] = threshold_result.get("mean_fbeta")
+        summary_out["mean_ber_percent_at_threshold"] = threshold_result.get(
+            "mean_ber_percent"
+        )
+        summary_out["std_ber_percent_at_threshold"] = threshold_result.get(
+            "std_ber_percent"
+        )
         summary_out["classifier_threshold"] = threshold_result["best_threshold"]
         tpr_vals = [
             r["true_positive_percent"]
@@ -632,7 +735,9 @@ def save_tuned_params(
         summary_out["classifier_threshold"] = 0.5
 
     best_threshold = float(
-        threshold_result["best_threshold"] if threshold_result else 0.5
+        default_profile["best_threshold"]
+        if default_profile
+        else (threshold_result["best_threshold"] if threshold_result else 0.5)
     )
     payload = {
         "model_id": spec.model_id,
@@ -645,24 +750,56 @@ def save_tuned_params(
         "tuned_at": datetime.now(timezone.utc).isoformat(),
     }
     if threshold_result is not None:
+        fold_at_best = (
+            default_profile["fold_results_at_best_threshold"]
+            if default_profile
+            else threshold_result["fold_results_at_best_threshold"]
+        )
+        per_thresh = threshold_result.get(
+            f"per_threshold_mean_fbeta_{DEFAULT_PROFILE_ID}"
+        )
+        if per_thresh is None:
+            per_thresh = threshold_result.get("per_threshold_mean_fbeta_f3")
+        if per_thresh is None:
+            per_thresh = threshold_result.get("per_threshold_mean_ber")
         payload["threshold_tuning"] = json_safe(
             {
-                "metric": "ber",
+                "metric": "fbeta",
+                "default_profile": DEFAULT_PROFILE_ID,
                 "best_threshold": best_threshold,
-                "mean_ber_percent": threshold_result["mean_ber_percent"],
-                "std_ber_percent": threshold_result["std_ber_percent"],
+                "mean_fbeta": (
+                    default_profile.get("mean_fbeta")
+                    if default_profile
+                    else threshold_result.get("mean_fbeta")
+                ),
+                "mean_ber_percent": (
+                    default_profile["mean_ber_percent"]
+                    if default_profile
+                    else threshold_result.get("mean_ber_percent")
+                ),
+                "std_ber_percent": (
+                    default_profile["std_ber_percent"]
+                    if default_profile
+                    else threshold_result.get("std_ber_percent")
+                ),
                 "threshold_grid": threshold_result["threshold_grid"],
-                "per_threshold_mean_ber": threshold_result["per_threshold_mean_ber"]
-                .head(10)
-                .to_dict(orient="records"),
-                "fold_results_at_best_threshold": threshold_result[
-                    "fold_results_at_best_threshold"
-                ],
+                "per_threshold_top": (
+                    per_thresh.head(10).to_dict(orient="records")
+                    if hasattr(per_thresh, "head")
+                    else per_thresh
+                ),
+                "fold_results_at_best_threshold": fold_at_best,
             }
         )
-        payload["cv_fold_results_at_threshold"] = threshold_result[
-            "fold_results_at_best_threshold"
-        ]
+        payload["cv_fold_results_at_threshold"] = fold_at_best
+
+        if profile_map:
+            payload["threshold_profiles"] = json_safe(profile_map)
+            curves = threshold_result.get("objective_curves")
+            if curves is not None:
+                payload["objective_curves"] = json_safe(
+                    curves.to_dict(orient="records")
+                )
     if "best_top_k" in cv_summary:
         payload["best_top_k"] = int(cv_summary["best_top_k"])
     if "best_n_hubs" in cv_summary:
