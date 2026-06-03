@@ -16,46 +16,22 @@ from scripts.dashboard_charts import (
 from scripts.dashboard_pipeline import render_pipeline_flowchart
 from scripts.dashboard_stg import (
     STG_RELATION,
+    StgSnapshot,
+    build_stg_snapshot,
     cohens_d,
-    load_stg_secom,
     slice_stg_for_display,
     stg_available,
-    stg_sensor_columns,
-    stg_summary_stats,
-)
-from scripts.dashboard_theme import (
-    STG_TABLE_MAX_ROWS,
-    display_stg_dataframe,
-    plotly_chart,
-    render_callout,
 )
 from scripts.secom_pipelines import DB_PATH, TARGET_COL, TIMESTAMP_COL
 
 ensure_repo_on_path()
 
+MAX_TABLE_ROWS = 50
+
 
 @st.cache_data(show_spinner="Loading stg_secom...")
-def load_stg_df():
-    return load_stg_secom()
-
-
-@st.cache_data(show_spinner=False)
-def cached_stg_slice(target_filter: str, n_sensor_cols: int) -> tuple:
-    full = slice_stg_for_display(
-        load_stg_df(),
-        n_sensor_cols=n_sensor_cols,
-        target_filter=target_filter,
-    )
-    total_filtered = len(full)
-    display = full.head(STG_TABLE_MAX_ROWS)
-    return display, total_filtered
-
-
-def _default_sensor(df, sensor_cols: list[str]) -> str:
-    if not sensor_cols:
-        return ""
-    variances = df[sensor_cols].var(numeric_only=True).sort_values(ascending=False)
-    return str(variances.index[0])
+def load_stg_snapshot() -> StgSnapshot:
+    return build_stg_snapshot()
 
 
 def _stg_data_dictionary_md() -> str:
@@ -97,20 +73,21 @@ def main() -> None:
         return
 
     try:
-        df = load_stg_df()
+        snapshot = load_stg_snapshot()
     except Exception as exc:
         st.error(f"Could not load `{STG_RELATION}`.\n\n**Error:** {exc}")
         return
 
-    sensor_cols = stg_sensor_columns(df)
-    stats = stg_summary_stats(df)
+    df = snapshot.df
+    sensor_cols = snapshot.sensor_cols
+    stats = snapshot.stats
     pass_rate = 100 * (1 - stats["fail_rate"])
 
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Total wafers processed", f"{stats['n_obs']:,}")
-    k2.metric("Detected failures", f"{stats['n_fail']:,}")
-    k3.metric("Baseline sensors", f"{stats['n_sensors']:,}")
-    k4.metric("Yield pass rate", f"{pass_rate:.1f}%")
+    k1.metric("Total wafers processed", f"{stats['n_obs']:,}", border=True)
+    k2.metric("Detected failures", f"{stats['n_fail']:,}", border=True)
+    k3.metric("Baseline sensors", f"{stats['n_sensors']:,}", border=True)
+    k4.metric("Yield pass rate", f"{pass_rate:.1f}%", border=True)
 
     st.divider()
     st.subheader("Project pipeline")
@@ -118,7 +95,8 @@ def main() -> None:
     with flow_col:
         render_pipeline_flowchart()
     with mart_col:
-        render_callout("pipeline", _mart_pipeline_md(), key_suffix="mart")
+        with st.container(border=True):
+            st.markdown(_mart_pipeline_md())
 
     st.divider()
 
@@ -135,33 +113,44 @@ def main() -> None:
         drift_left, drift_right = st.columns([1.4, 1], gap="large")
         with drift_left:
             show_weekly = st.checkbox("Show weekly fail rate overlay", value=False, key="p1_weekly")
-            plotly_chart(
+            st.plotly_chart(
                 fig_fails_over_time(
                     df,
                     timestamp_col=TIMESTAMP_COL,
                     target_col=TARGET_COL,
                     show_weekly=show_weekly,
                 ),
+                width="stretch",
+                theme="streamlit",
                 key="p1_fails_time",
             )
         with drift_right:
-            plotly_chart(fig_class_donut(df, TARGET_COL), key="p1_class_donut")
+            st.plotly_chart(
+                fig_class_donut(df, TARGET_COL),
+                width="stretch",
+                theme="streamlit",
+                key="p1_class_donut",
+            )
 
         st.markdown("---")
         st.subheader("Missingness and redundancy")
         miss_col, corr_col = st.columns(2, gap="large")
         with miss_col:
             st.info("Missing values cluster by sensor and time—not as independent random gaps.")
-            plotly_chart(
+            st.plotly_chart(
                 fig_missingness_structure(
                     df,
                     timestamp_col=TIMESTAMP_COL,
                     sensor_cols=sensor_cols,
                 ),
+                width="stretch",
+                theme="streamlit",
                 key="p1_missingness",
             )
-            plotly_chart(
+            st.plotly_chart(
                 fig_missing_rate_distribution(df, sensor_cols),
+                width="stretch",
+                theme="streamlit",
                 key="p1_missing_rate",
             )
         with corr_col:
@@ -169,17 +158,19 @@ def main() -> None:
                 auto_x, auto_y = best_pair_sensors(df, sensor_cols, TARGET_COL)
                 d_x = cohens_d(df, auto_x, TARGET_COL)
                 d_y = cohens_d(df, auto_y, TARGET_COL)
-                render_callout(
-                    "edu",
-                    _cohens_d_explanation_md(auto_x, auto_y, d_x, d_y),
-                    key_suffix="cohens",
-                )
+                with st.container(border=True):
+                    st.markdown(_cohens_d_explanation_md(auto_x, auto_y, d_x, d_y))
                 fig_corr, corr_stats = fig_sensor_multicollinearity(df, sensor_cols)
                 st.caption(
                     f"Top {corr_stats['n_used']} variance sensors; "
                     f"{corr_stats['high_corr_pairs']} pairs with |r| ≥ 0.90."
                 )
-                plotly_chart(fig_corr, key="p1_multicollinearity")
+                st.plotly_chart(
+                    fig_corr,
+                    width="stretch",
+                    theme="streamlit",
+                    key="p1_multicollinearity",
+                )
 
     with tab_sensor:
         st.subheader("Individual channel distributions")
@@ -188,17 +179,23 @@ def main() -> None:
         else:
             ctrl_col, chart_col = st.columns([1, 4], gap="medium")
             with ctrl_col:
-                default_sensor = _default_sensor(df, sensor_cols)
+                default_idx = (
+                    sensor_cols.index(snapshot.default_sensor)
+                    if snapshot.default_sensor in sensor_cols
+                    else 0
+                )
                 sensor = st.selectbox(
                     "Sensor",
                     sensor_cols,
-                    index=sensor_cols.index(default_sensor) if default_sensor in sensor_cols else 0,
+                    index=default_idx,
                     key="p1_sensor_select",
                 )
                 log_scale = st.checkbox("Log scale", value=False, key="p1_log_scale")
             with chart_col:
-                plotly_chart(
+                st.plotly_chart(
                     fig_sensor_histogram(df, sensor, target_col=TARGET_COL, log_scale=log_scale),
+                    width="stretch",
+                    theme="streamlit",
                     key="p1_sensor_hist",
                 )
 
@@ -206,7 +203,8 @@ def main() -> None:
         st.subheader("Cleaned telemetry matrix (`stg_secom`)")
         dict_col, table_col = st.columns([1, 2.5], gap="large")
         with dict_col:
-            render_callout("edu", _stg_data_dictionary_md(), key_suffix="stg_dict")
+            with st.container(border=True):
+                st.markdown(_stg_data_dictionary_md())
         with table_col:
             filt_col, ncol_col = st.columns(2)
             with filt_col:
@@ -222,10 +220,15 @@ def main() -> None:
                     index=0,
                     key="p1_n_cols",
                 )
-            display_df, total_filtered = cached_stg_slice(target_filter, n_cols)
-            display_stg_dataframe(display_df, height=400)
+            filtered = slice_stg_for_display(
+                df,
+                n_sensor_cols=n_cols,
+                target_filter=target_filter,
+            )
+            display_df = filtered.head(MAX_TABLE_ROWS)
+            st.dataframe(display_df, height=400, width="stretch", hide_index=True)
             st.caption(
-                f"Showing {len(display_df):,} of {total_filtered:,} filtered rows "
+                f"Showing {len(display_df):,} of {len(filtered):,} filtered rows "
                 f"× {len(display_df.columns)} columns."
             )
 

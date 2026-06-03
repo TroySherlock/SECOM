@@ -19,10 +19,7 @@ from scripts.dashboard_charts import (
     fig_spearman_cluster_example,
 )
 from scripts.dashboard_pipeline import render_preprocessing_flowchart
-from scripts.dashboard_theme import plotly_chart
 from scripts.secom_pipelines import (
-    ENABLE_ISOLATION_FOREST,
-    ENABLE_NEIGHBOR_FAIL_RATE,
     N_REPEATS,
     N_SPLITS,
     N_HUBS_GRID,
@@ -32,9 +29,6 @@ from scripts.secom_pipelines import (
 )
 
 ensure_repo_on_path()
-
-METHOD_LINEAR = "Linear: elastic-net LR"
-METHOD_TOPK = "Nonlinear: RF / k-NN / XGBoost"
 
 HYPERPARAM_NOTE = (
     "`top_k` and `n_hubs` are **hyperparameters** tuned "
@@ -57,28 +51,12 @@ def illustrative_reduction_profile() -> dict[str, int]:
     }
 
 
-def _architecture_selector() -> str:
-    options = [METHOD_LINEAR, METHOD_TOPK]
-    if hasattr(st, "segmented_control"):
-        return st.segmented_control(
-            "Classifier family",
-            options=options,
-            default=METHOD_LINEAR,
-            key="p2_architecture",
-        )
-    return st.radio(
-        "Classifier family",
-        options=options,
-        horizontal=True,
-        key="p2_architecture_radio",
-    )
-
-
 def main() -> None:
     st.title("Pipeline")
     st.caption(
         "How SECOM features are prepared before model training. "
-        "See the Models page for benchmark results."
+        "See the Models page for benchmark results and the **Threshold profiles (F1/F2/F3)** tab "
+        "(F1 conservative / F2 neutral / F3 aggressive threshold trade-offs)."
     )
 
     artifacts: dict | None = None
@@ -101,9 +79,24 @@ def main() -> None:
     cluster_example = shared.get("spearman_cluster_example")
 
     f1, f2, f3 = st.columns(3)
-    f1.metric("Fold-safe preprocessing", "In each CV fold")
-    f2.metric("CV protocol", f"{N_SPLITS}x{N_REPEATS} repeated stratified")
-    f3.metric("Comparison metric", PRIMARY_TUNING_METRIC.upper())
+    f1.metric(
+        "CV protocol",
+        f"{N_SPLITS}×{N_REPEATS}",
+        help="Repeated stratified cross-validation.",
+        border=True,
+    )
+    f2.metric(
+        "Primary metric",
+        PRIMARY_TUNING_METRIC.upper(),
+        help="Model comparison metric across repeated CV (e.g. PR AUC).",
+        border=True,
+    )
+    f3.metric(
+        "Fold-safe preprocessing",
+        "Yes",
+        help="All feature engineering fit on training folds only (no leakage).",
+        border=True,
+    )
     st.info(
         "All feature engineering is fit on training folds only (no leakage), "
         "then compared with PR AUC across repeated CV."
@@ -112,7 +105,8 @@ def main() -> None:
     st.subheader("Preprocessing flow")
     render_preprocessing_flowchart()
     st.caption(
-        "dbt profiles sensors before sklearn; shared steps run in-fold during CV and benchmark."
+        "dbt profiles sensors before sklearn; shared steps run in-fold during CV and benchmark. "
+        "All four benchmark models use the same preprocess ending in scale → classifier."
     )
 
     st.divider()
@@ -146,13 +140,23 @@ def main() -> None:
             """
         )
         if cluster_example:
-            plotly_chart(fig_spearman_cluster(cluster_example), key="p2_spearman_cluster")
+            st.plotly_chart(
+                fig_spearman_cluster(cluster_example),
+                width="stretch",
+                theme="streamlit",
+                key="p2_spearman_cluster",
+            )
             members = cluster_example.get("members", [])
             st.caption(
                 f"Correlated cluster from holdout training fit: {', '.join(members)}."
             )
         else:
-            plotly_chart(fig_spearman_cluster_example(), key="p2_spearman_cluster")
+            st.plotly_chart(
+                fig_spearman_cluster_example(),
+                width="stretch",
+                theme="streamlit",
+                key="p2_spearman_cluster",
+            )
             st.caption(
                 "Example cluster: `c_340`, `c_204`, `c_67` grouped by high Spearman ρ (illustrative)."
             )
@@ -166,70 +170,34 @@ def main() -> None:
         )
         ref_for_rf = topk_ref or linear_ref
         if ref_for_rf and ref_for_rf.get("rf_selection"):
-            plotly_chart(fig_rf_topk_selection(ref_for_rf), key="p2_rf_topk")
+            st.plotly_chart(
+                fig_rf_topk_selection(ref_for_rf),
+                width="stretch",
+                theme="streamlit",
+                key="p2_rf_topk",
+            )
         else:
-            plotly_chart(
+            st.plotly_chart(
                 fig_rf_topk_selection_example(top_k=RF_SELECT_TOP_K),
+                width="stretch",
+                theme="streamlit",
                 key="p2_rf_topk",
             )
 
-    with st.expander("Step 5: Hotelling T² (Mahalanobis)"):
+    with st.expander("Step 5: Hotelling T² and hub pairs"):
         st.markdown(
             """
-- **Action:** multivariate distance from normal operating structure on selected `c_*` sensors.
-- **Impact:** detects joint drifts invisible to single sensors.
+- **Action:** Hotelling T² on RF-selected `c_*` sensors; hub×hub product features from the top `n_hubs` ranked sensors.
+- **Impact:** joint drift score plus nonlinear interactions among the strongest sensors.
             """
         )
         st.latex(r"T^2 = (\mathbf{x}-\boldsymbol{\mu})^\top \Sigma^{-1}(\mathbf{x}-\boldsymbol{\mu})")
-        plotly_chart(fig_hotelling_t2_intuition(), key="p2_hotelling_intuition")
-
-    st.divider()
-    st.subheader("Classifier family")
-    architecture = _architecture_selector()
-    st.caption(HYPERPARAM_NOTE)
-
-    chart_col, note_col = st.columns([2, 1], gap="large")
-    with chart_col:
-        active_ref = linear_ref if METHOD_LINEAR in architecture else topk_ref
-        hub = (active_ref or linear_ref or topk_ref or {}).get("hub_interactions")
-        if hub:
-            n_pairs = hub.get("n_interaction_features", 0)
-            n_hubs = hub.get("n_hubs_selected", 0)
-            st.info(
-                f"All models share hub×hub products from the top {n_hubs} RF-importance "
-                f"sensors ({n_pairs} interaction columns), on top of all top-k `c_*` and T²."
-            )
-        else:
-            meta_parts = []
-            if ENABLE_NEIGHBOR_FAIL_RATE:
-                meta_parts.append("KNN neighbor fail-rate")
-            if ENABLE_ISOLATION_FOREST:
-                meta_parts.append("isolation forest score")
-            meta_tail = (
-                " → ".join(meta_parts) + " → " if meta_parts else ""
-            )
-            st.info(
-                f"All models share RF top-k → T² → hub×hub products → {meta_tail}"
-                "scale → classifier. Optional meta steps are toggled via "
-                "`ENABLE_NEIGHBOR_FAIL_RATE` and `ENABLE_ISOLATION_FOREST` in "
-                "`scripts/secom_pipelines.py`."
-            )
-
-    with note_col:
-        active_ref = linear_ref if METHOD_LINEAR in architecture else topk_ref
-        if active_ref:
-            clf_in = active_ref.get("stages", {}).get("classifier_input", "—")
-            st.metric("Classifier input features", f"{clf_in:,}")
-        if METHOD_LINEAR in architecture:
-            st.info(
-                "**Linear:** shared hub preprocess → scale → "
-                "elastic-net logistic regression (saga)."
-            )
-        else:
-            st.info(
-                "**Nonlinear:** same hub preprocess → scale → "
-                "random forest, k-NN, or XGBoost (per model)."
-            )
+        st.plotly_chart(
+            fig_hotelling_t2_intuition(),
+            width="stretch",
+            theme="streamlit",
+            key="p2_hotelling_intuition",
+        )
 
     st.divider()
     st.subheader("Feature reduction profile")
@@ -244,23 +212,31 @@ def main() -> None:
         "Sensors after clustering",
         f"{sensors_cluster:,}",
         help="Sensors retained after Spearman correlated selection (sklearn, in-fold).",
+        border=True,
     )
     b.metric(
         "Auxiliary features",
         f"{aux:,}",
         help="Calendar, missing flags, and n_missing_sensors passed through preprocess.",
+        border=True,
     )
     c.metric(
         "Classifier input features",
         f"{profile['classifier_input']:,}",
         help="Total columns after preprocess + scale (linear reference model, holdout fit).",
+        border=True,
     )
     st.caption(
         f"After clustering: **{sensors_cluster:,} sensors + {aux:,} auxiliary features** "
         f"(calendar, missing indicators, `n_missing_sensors`)."
     )
 
-    plotly_chart(fig_reduction_impact_from_stages(profile), key="p2_reduction_impact")
+    st.plotly_chart(
+        fig_reduction_impact_from_stages(profile),
+        width="stretch",
+        theme="streamlit",
+        key="p2_reduction_impact",
+    )
 
     st.info(HYPERPARAM_NOTE)
 

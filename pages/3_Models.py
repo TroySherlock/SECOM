@@ -7,20 +7,29 @@ import streamlit as st
 
 from scripts.dashboard_app import ensure_repo_on_path
 from scripts.dashboard_benchmark import (
+    benchmark_has_multi_profile_thresholds,
     cv_leaderboard_df,
+    holdout_by_profile_df,
+    holdout_confusion_by_profile,
     holdout_df,
     list_model_ids,
     load_benchmark_results,
+    load_threshold_curves,
+    load_tuned_payload,
     merged_comparison_df,
     model_info,
+    profile_threshold_summary_table,
+    resolved_threshold_profile_config,
 )
 from scripts.dashboard_charts import (
     fig_benchmark_leaderboard,
     fig_ber_cv_vs_holdout,
     fig_cv_vs_holdout_scatter,
+    fig_holdout_by_profile,
     fig_holdout_confusion,
+    fig_threshold_objective_curves,
 )
-from scripts.dashboard_theme import plotly_chart
+from scripts.secom_costs import PROFILE_IDS, THRESHOLD_PROFILES
 from scripts.secom_pipelines import N_REPEATS, N_SPLITS, PRIMARY_TUNING_METRIC
 
 ensure_repo_on_path()
@@ -56,7 +65,10 @@ def _format_params(params: dict) -> str:
 
 def main() -> None:
     st.title("Models & benchmark results")
-    st.caption("Six tuned pipelines compared on repeated CV and a held-out test split.")
+    st.caption(
+        "Four tuned pipelines compared on repeated CV and a held-out test split, "
+        "each with F1 (conservative), F2 (neutral), and F3 (aggressive) F-beta thresholds."
+    )
 
     try:
         payload = _load_payload()
@@ -72,10 +84,30 @@ def main() -> None:
     tuned = payload.get("tuned_hyperparameters") or {}
 
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric("CV protocol", f"{N_SPLITS}×{N_REPEATS} stratified")
-    k2.metric("Primary metric", PRIMARY_TUNING_METRIC.upper())
-    k3.metric("Train rows", f"{holdout_split.get('train_rows', '—'):,}")
-    k4.metric("Holdout rows", f"{holdout_split.get('test_rows', '—'):,}")
+    k1.metric(
+        "CV protocol",
+        f"{N_SPLITS}×{N_REPEATS}",
+        help="Repeated stratified cross-validation.",
+        border=True,
+    )
+    k2.metric(
+        "Primary metric",
+        PRIMARY_TUNING_METRIC.upper(),
+        help="Model comparison metric across repeated CV.",
+        border=True,
+    )
+    k3.metric(
+        "Train rows",
+        f"{holdout_split.get('train_rows', '—'):,}",
+        help="Holdout split training set size.",
+        border=True,
+    )
+    k4.metric(
+        "Holdout rows",
+        f"{holdout_split.get('test_rows', '—'):,}",
+        help="Holdout split test set size (reporting only).",
+        border=True,
+    )
 
     st.info(
         "**5×5 CV benchmark** ranks models using mean metrics from repeated stratified folds "
@@ -84,10 +116,11 @@ def main() -> None:
         "not used to select hyperparameters."
     )
 
-    tab_cv, tab_holdout, tab_model, tab_compare = st.tabs(
+    tab_cv, tab_holdout, tab_cost, tab_model, tab_compare = st.tabs(
         [
             "CV leaderboard (5×5)",
             "Holdout reporting",
+            "Threshold profiles (F1/F2/F3)",
             "Model deep-dive",
             "CV vs holdout",
         ]
@@ -98,13 +131,15 @@ def main() -> None:
         if cv_df.empty:
             st.warning("No CV leaderboard rows in benchmark JSON.")
         else:
-            plotly_chart(
+            st.plotly_chart(
                 fig_benchmark_leaderboard(
                     cv_df,
                     metric_col="mean_pr_auc",
                     error_col="std_pr_auc",
                     title="Mean PR AUC (5×5 repeated stratified CV)",
                 ),
+                width="stretch",
+                theme="streamlit",
                 key="p3_cv_leaderboard",
             )
             display_cv = cv_df.copy()
@@ -120,15 +155,18 @@ def main() -> None:
         if ho_df.empty:
             st.warning("No holdout rows in benchmark JSON.")
         else:
-            plotly_chart(
+            st.plotly_chart(
                 fig_benchmark_leaderboard(
                     ho_df,
                     metric_col="pr_auc",
                     title="Holdout PR AUC (20% test split)",
                 ),
+                width="stretch",
+                theme="streamlit",
                 key="p3_holdout_leaderboard",
             )
-            ho_display = ho_df.drop(columns=["confusion_matrix"], errors="ignore").copy()
+            cm_cols = [c for c in ho_df.columns if c.endswith("_confusion_matrix") or c == "confusion_matrix"]
+            ho_display = ho_df.drop(columns=cm_cols, errors="ignore").copy()
             for col in ho_display.select_dtypes(include="float").columns:
                 ho_display[col] = ho_display[col].round(3)
             st.dataframe(ho_display, width="stretch", hide_index=True)
@@ -150,10 +188,144 @@ def main() -> None:
                 cm = row["confusion_matrix"]
                 if isinstance(cm, str):
                     cm = json.loads(cm)
-                plotly_chart(
+                st.plotly_chart(
                     fig_holdout_confusion(cm, selected),
+                    width="stretch",
+                    theme="streamlit",
                     key="p3_holdout_confusion",
                 )
+
+    with tab_cost:
+        st.subheader("Threshold profiles (F-beta)")
+        profile_cfg = resolved_threshold_profile_config(payload)
+        st.markdown(
+            "**F-beta tuning** (edit `F1_BETA` / `F2_BETA` / `F3_BETA` in "
+            "`scripts/secom_costs.py`, then re-tune). Custom β sliders may be added later."
+        )
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("F1 β (conservative)", f"{profile_cfg.get('f1_beta', 1)}", border=True)
+        c2.metric("F2 β (neutral, default)", f"{profile_cfg.get('f2_beta', 2)}", border=True)
+        c3.metric("F3 β (aggressive)", f"{profile_cfg.get('f3_beta', 3)}", border=True)
+        c4.metric("Deploy profile", str(profile_cfg.get("default_profile", "f2")), border=True)
+
+        for pid, prof in THRESHOLD_PROFILES.items():
+            st.caption(f"**{prof.display_name}:** {prof.description}")
+
+        if not benchmark_has_multi_profile_thresholds(payload):
+            st.warning(
+                "Tuned JSONs lack f1/f2/f3 `threshold_profiles`. Re-run Stage 2 tuning and "
+                "`python -m scripts.benchmark_models` to populate F-score curves and holdout metrics."
+            )
+
+        curve_model = st.selectbox(
+            "Model for objective curves",
+            model_ids,
+            format_func=lambda mid: model_info(mid).display_name,
+            key="p3_cost_curve_model",
+        )
+        curves_df = load_threshold_curves(curve_model)
+        if curves_df.empty:
+            st.info("No `objective_curves` in tuned JSON for this model yet.")
+        else:
+            try:
+                tuned_full = load_tuned_payload(curve_model)
+                profiles = tuned_full.get("threshold_profiles") or {}
+                best_thresholds = {
+                    pid: float(profiles[pid]["best_threshold"])
+                    for pid in profiles
+                    if pid in profiles and "best_threshold" in profiles[pid]
+                }
+            except FileNotFoundError:
+                best_thresholds = {}
+            st.plotly_chart(
+                fig_threshold_objective_curves(
+                    curves_df,
+                    best_thresholds,
+                    title=f"CV mean F-score vs threshold — {curve_model}",
+                ),
+                width="stretch",
+                theme="streamlit",
+                key="p3_threshold_curves",
+            )
+
+        st.markdown("---")
+        st.subheader("Holdout confusion matrices")
+        cms = holdout_confusion_by_profile(ho_df, curve_model)
+        ho_row_cm = (
+            ho_df.loc[ho_df["pipeline"] == curve_model].iloc[0]
+            if not ho_df.empty and curve_model in ho_df["pipeline"].values
+            else None
+        )
+        cm_cols = st.columns(3)
+        for col_widget, pid in zip(cm_cols, PROFILE_IDS, strict=True):
+            with col_widget:
+                prof = THRESHOLD_PROFILES[pid]
+                thr_val = None
+                if ho_row_cm is not None:
+                    thr_col = f"{pid}_threshold"
+                    if thr_col in ho_row_cm.index:
+                        thr_val = ho_row_cm[thr_col]
+                thr_txt = f"threshold = {float(thr_val):.4f}" if thr_val is not None else ""
+                st.markdown(f"**{prof.display_name}**  \n{thr_txt}")
+                cm = cms.get(pid)
+                if cm is not None:
+                    st.plotly_chart(
+                        fig_holdout_confusion(
+                            cm,
+                            prof.display_name,
+                            height=280,
+                        ),
+                        width="stretch",
+                        theme="streamlit",
+                        key=f"p3_cm_{curve_model}_{pid}",
+                    )
+                else:
+                    st.caption("Re-run `python -m scripts.benchmark_models` after tuning.")
+
+        ho_long = holdout_by_profile_df(payload)
+        if not ho_long.empty:
+            st.markdown("---")
+            st.subheader("Holdout comparison by profile")
+            metric_choice = st.radio(
+                "Holdout comparison metric",
+                ["F-beta score", "BER %"],
+                index=1,
+                horizontal=True,
+                key="p3_cost_metric_choice",
+            )
+            metric_col = "fbeta" if metric_choice == "F-beta score" else "ber_percent"
+            if metric_col == "fbeta" and (
+                "fbeta" not in ho_long.columns or ho_long["fbeta"].isna().all()
+            ):
+                st.info(
+                    "F-beta columns appear after re-running the benchmark with f1/f2/f3 profiles."
+                )
+            else:
+                st.plotly_chart(
+                    fig_holdout_by_profile(
+                        ho_long.dropna(subset=[metric_col]),
+                        metric_col=metric_col,
+                        title=f"Holdout {metric_choice} by threshold profile",
+                    ),
+                    width="stretch",
+                    theme="streamlit",
+                    key="p3_holdout_by_profile",
+                )
+
+        summary = profile_threshold_summary_table(payload)
+        if not summary.empty:
+            st.markdown("**CV vs holdout by profile**")
+            display_summary = summary.copy()
+            for col in display_summary.select_dtypes(include="float").columns:
+                display_summary[col] = display_summary[col].round(4)
+            st.dataframe(display_summary, width="stretch", hide_index=True)
+
+        st.info(
+            "**F1 (conservative) thresholds** often hurt **Linear LR** and **k-NN**: "
+            "their scores are less well-calibrated than tree models, so a stricter fail-class "
+            "threshold misses more true fails (higher BER) while **Random Forest** and **XGBoost** "
+            "retain ranking under conservative cutoffs. **F2** is the default deploy profile."
+        )
 
     with tab_model:
         st.subheader("Pipeline architecture & tuning")
@@ -179,14 +351,14 @@ def main() -> None:
         if not merged.empty and selected_id in merged["pipeline"].values:
             row = merged.loc[merged["pipeline"] == selected_id].iloc[0]
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("PR AUC (CV)", f"{row['pr_auc_cv']:.3f}")
+            m1.metric("PR AUC (CV)", f"{row['pr_auc_cv']:.3f}", border=True)
             pr_label, pr_help = _metric_with_ci(
                 float(row["pr_auc_holdout"]),
                 row.get("pr_auc_holdout_ci_low"),
                 row.get("pr_auc_holdout_ci_high"),
             )
-            m2.metric("PR AUC (holdout)", pr_label, help=pr_help)
-            m3.metric("BER (CV)", f"{row['ber_cv']:.1f}%")
+            m2.metric("PR AUC (holdout)", pr_label, help=pr_help, border=True)
+            m3.metric("BER (CV)", f"{row['ber_cv']:.1f}%", border=True)
             ber_label, ber_help = _metric_with_ci(
                 float(row["ber_holdout"]),
                 row.get("ber_holdout_ci_low"),
@@ -194,9 +366,11 @@ def main() -> None:
                 fmt=".1f",
                 suffix="%",
             )
-            m4.metric("BER (holdout)", ber_label, help=ber_help)
-            plotly_chart(
+            m4.metric("BER (holdout)", ber_label, help=ber_help, border=True)
+            st.plotly_chart(
                 fig_ber_cv_vs_holdout(merged, selected_id),
+                width="stretch",
+                theme="streamlit",
                 key="p3_model_ber_compare",
             )
 
@@ -205,7 +379,12 @@ def main() -> None:
         if merged.empty:
             st.warning("Need both CV and holdout sections in benchmark JSON.")
         else:
-            plotly_chart(fig_cv_vs_holdout_scatter(merged), key="p3_cv_holdout_scatter")
+            st.plotly_chart(
+                fig_cv_vs_holdout_scatter(merged),
+                width="stretch",
+                theme="streamlit",
+                key="p3_cv_holdout_scatter",
+            )
             compare_cols = [
                 "pipeline",
                 "pr_auc_cv",
