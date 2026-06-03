@@ -4,6 +4,7 @@ from __future__ import annotations
 import streamlit as st
 
 from scripts.dashboard_app import ensure_repo_on_path
+from scripts.dashboard_theme import plotly_theme_key
 from scripts.dashboard_charts import (
     best_pair_sensors,
     fig_class_donut,
@@ -122,14 +123,14 @@ def main() -> None:
                 ),
                 width="stretch",
                 theme="streamlit",
-                key="p1_fails_time",
+                key=plotly_theme_key("p1_fails_time"),
             )
         with drift_right:
             st.plotly_chart(
                 fig_class_donut(df, TARGET_COL),
                 width="stretch",
                 theme="streamlit",
-                key="p1_class_donut",
+                key=plotly_theme_key("p1_class_donut"),
             )
 
         st.markdown("---")
@@ -145,13 +146,13 @@ def main() -> None:
                 ),
                 width="stretch",
                 theme="streamlit",
-                key="p1_missingness",
+                key=plotly_theme_key("p1_missingness"),
             )
             st.plotly_chart(
                 fig_missing_rate_distribution(df, sensor_cols),
                 width="stretch",
                 theme="streamlit",
-                key="p1_missing_rate",
+                key=plotly_theme_key("p1_missing_rate"),
             )
         with corr_col:
             if sensor_cols:
@@ -169,7 +170,7 @@ def main() -> None:
                     fig_corr,
                     width="stretch",
                     theme="streamlit",
-                    key="p1_multicollinearity",
+                    key=plotly_theme_key("p1_multicollinearity"),
                 )
 
     with tab_sensor:
@@ -196,7 +197,7 @@ def main() -> None:
                     fig_sensor_histogram(df, sensor, target_col=TARGET_COL, log_scale=log_scale),
                     width="stretch",
                     theme="streamlit",
-                    key="p1_sensor_hist",
+                    key=plotly_theme_key("p1_sensor_hist"),
                 )
 
     with tab_data:
