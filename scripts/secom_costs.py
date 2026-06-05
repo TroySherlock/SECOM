@@ -23,15 +23,6 @@ DEFAULT_PROFILE_ID: ProfileId = "f2"
 
 PROFILE_IDS: tuple[ProfileId, ...] = ("f1", "f2", "f3")
 
-_LEGACY_NAME_MAP = {
-    "ber": "f2",
-    "conservative": "f1",
-    "aggressive": "f3",
-}
-# Old tuned JSON used f2/f3/f4 (β=2/3/4); new schema is f1/f2/f3 (β=1/2/3).
-_OLD_F234_TO_F123 = {"f2": "f1", "f3": "f2", "f4": "f3"}
-
-
 @dataclass(frozen=True)
 class ThresholdProfile:
     profile_id: ProfileId

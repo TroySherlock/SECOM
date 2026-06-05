@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-from scripts.dashboard_stg import ROW_INDEX_COL, cohens_d
+from scripts.dashboard.stg import ROW_INDEX_COL, cohens_d
 from scripts.secom_costs import PROFILE_IDS, THRESHOLD_PROFILES, ProfileId
 
 # SECOM chart palette — keep in sync with .streamlit/config.toml chartCategoricalColors
@@ -574,7 +574,7 @@ def fig_hotelling_t2_intuition() -> go.Figure:
             y=base_y,
             mode="markers",
             name="In-control profile",
-            marker=dict(color=C[0], size=6, opacity=0.45),
+            marker=dict(color=C[3], size=6, opacity=0.45),
         )
     )
     fig.add_trace(
@@ -583,7 +583,7 @@ def fig_hotelling_t2_intuition() -> go.Figure:
             y=drift_y,
             mode="markers",
             name="Drifted profile",
-            marker=dict(color=C[1], size=8, opacity=0.9, symbol="diamond"),
+            marker=dict(color=C[0], size=8, opacity=0.9, symbol="diamond"),
         )
     )
     theta = np.linspace(0, 2 * np.pi, 200)
@@ -862,7 +862,7 @@ def fig_ber_cv_vs_holdout(merged_df: pd.DataFrame, pipeline: str) -> go.Figure:
             go.Bar(
                 x=labels,
                 y=values,
-                marker_color=[C[0], C[1]],
+                marker_color=[C[6], C[2]],
                 text=[f"{v:.1f}%" for v in values],
                 textposition="outside",
             )

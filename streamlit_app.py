@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from scripts.dashboard_app import configure_page, ensure_repo_on_path
+from scripts.dashboard import configure_page, ensure_repo_on_path
 
 ensure_repo_on_path()
 

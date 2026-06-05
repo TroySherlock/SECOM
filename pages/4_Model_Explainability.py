@@ -3,15 +3,15 @@ from __future__ import annotations
 
 import streamlit as st
 
-from scripts.dashboard_app import ensure_repo_on_path, render_blue_note
-from scripts.dashboard_benchmark import model_info
+from scripts.dashboard import ensure_repo_on_path, render_blue_note
+from scripts.dashboard.data import model_info
 from scripts.secom_pipelines import BENCHMARK_MODEL_IDS
-from scripts.dashboard_charts import (
+from scripts.dashboard.charts import (
     fig_coef_signed_bar,
     fig_local_contributions,
     fig_top_features_bar,
 )
-from scripts.dashboard_explainability import (
+from scripts.dashboard.explainability import (
     cached_global_importance,
     cached_wafer_explanation,
     holdout_wafer_ids,

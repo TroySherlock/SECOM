@@ -11,11 +11,14 @@ from feature_engine.selection import SmartCorrelatedSelection
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_selection import SelectFromModel
 from sklearn.pipeline import Pipeline
-from scripts.dashboard_stg import N_SENSORS
-from scripts.hub_interactions import LinearSelectT2HubBlock, extract_hub_interaction_info
-from scripts.mspc_features import sensor_value_columns
+from scripts.hub_interactions import (
+    LinearSelectT2HubBlock,
+    extract_hub_interaction_info,
+    sensor_value_columns,
+)
 from scripts.secom_pipelines import (
     BENCHMARK_MODEL_IDS,
+    N_SENSORS,
     CORRELATED_SELECTION_CRITERION,
     CORRELATED_SELECTION_METHOD,
     CORRELATED_SELECTION_THRESHOLD,

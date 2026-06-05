@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import streamlit as st
 
-from scripts.dashboard_app import ensure_repo_on_path, render_blue_note
-from scripts.dashboard_charts import (
+from scripts.dashboard import ensure_repo_on_path, render_blue_note
+from scripts.dashboard.charts import (
     best_pair_sensors,
     fig_class_donut,
     fig_fails_over_time,
@@ -13,8 +13,8 @@ from scripts.dashboard_charts import (
     fig_sensor_histogram,
     fig_sensor_multicollinearity,
 )
-from scripts.dashboard_pipeline import render_pipeline_flowchart
-from scripts.dashboard_stg import (
+from scripts.dashboard.pipeline import render_pipeline_flowchart
+from scripts.dashboard.stg import (
     STG_RELATION,
     StgSnapshot,
     build_stg_snapshot,
@@ -91,11 +91,8 @@ def main() -> None:
 
     st.divider()
     st.subheader("Project pipeline")
-    flow_col, mart_col = st.columns([1.2, 1], gap="large")
-    with flow_col:
-        render_pipeline_flowchart()
-    with mart_col:
-        render_blue_note(_mart_pipeline_md())
+    render_pipeline_flowchart()
+    render_blue_note(_mart_pipeline_md())
 
     st.divider()
 
@@ -109,9 +106,9 @@ def main() -> None:
 
     with tab_drift:
         st.subheader("Multivariate process signals")
-        drift_left, drift_right = st.columns([1.4, 1], gap="large")
+        show_weekly = st.checkbox("Show weekly fail rate overlay", value=False, key="p1_weekly")
+        drift_left, drift_right = st.columns(2, gap="large")
         with drift_left:
-            show_weekly = st.checkbox("Show weekly fail rate overlay", value=False, key="p1_weekly")
             st.plotly_chart(
                 fig_fails_over_time(
                     df,
@@ -133,11 +130,11 @@ def main() -> None:
 
         st.markdown("---")
         st.subheader("Missingness and redundancy")
+        render_blue_note(
+            "Missing values cluster by sensor and time—not as independent random gaps."
+        )
         miss_col, corr_col = st.columns(2, gap="large")
         with miss_col:
-            render_blue_note(
-                "Missing values cluster by sensor and time—not as independent random gaps."
-            )
             st.plotly_chart(
                 fig_missingness_structure(
                     df,
@@ -148,30 +145,29 @@ def main() -> None:
                 theme="streamlit",
                 key="p1_missingness",
             )
-            st.plotly_chart(
-                fig_missing_rate_distribution(df, sensor_cols),
-                width="stretch",
-                theme="streamlit",
-                key="p1_missing_rate",
-            )
         with corr_col:
             if sensor_cols:
                 auto_x, auto_y = best_pair_sensors(df, sensor_cols, TARGET_COL)
                 d_x = cohens_d(df, auto_x, TARGET_COL)
                 d_y = cohens_d(df, auto_y, TARGET_COL)
-                with st.container(border=True):
-                    st.markdown(_cohens_d_explanation_md(auto_x, auto_y, d_x, d_y))
+                #render_blue_note(_cohens_d_explanation_md(auto_x, auto_y, d_x, d_y))
                 fig_corr, corr_stats = fig_sensor_multicollinearity(df, sensor_cols)
-                st.caption(
-                    f"Top {corr_stats['n_used']} variance sensors; "
-                    f"{corr_stats['high_corr_pairs']} pairs with |r| ≥ 0.90."
-                )
                 st.plotly_chart(
                     fig_corr,
                     width="stretch",
                     theme="streamlit",
                     key="p1_multicollinearity",
                 )
+                st.caption(
+                    f"Top {corr_stats['n_used']} variance sensors; "
+                    f"{corr_stats['high_corr_pairs']} pairs with |r| ≥ 0.90."
+                )
+        st.plotly_chart(
+            fig_missing_rate_distribution(df, sensor_cols),
+            width="stretch",
+            theme="streamlit",
+            key="p1_missing_rate",
+        )
 
     with tab_sensor:
         st.subheader("Individual channel distributions")

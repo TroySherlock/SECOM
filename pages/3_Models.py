@@ -5,8 +5,8 @@ import json
 
 import streamlit as st
 
-from scripts.dashboard_app import ensure_repo_on_path, render_blue_note
-from scripts.dashboard_benchmark import (
+from scripts.dashboard import ensure_repo_on_path, render_blue_note
+from scripts.dashboard.data import (
     benchmark_has_multi_profile_thresholds,
     cv_leaderboard_df,
     holdout_by_profile_df,
@@ -21,7 +21,7 @@ from scripts.dashboard_benchmark import (
     profile_threshold_summary_table,
     resolved_threshold_profile_config,
 )
-from scripts.dashboard_charts import (
+from scripts.dashboard.charts import (
     C_PURPLE,
     fig_benchmark_leaderboard,
     fig_ber_cv_vs_holdout,
@@ -83,32 +83,6 @@ def main() -> None:
     model_ids = list_model_ids(payload)
     holdout_split = payload.get("holdout_split") or {}
     tuned = payload.get("tuned_hyperparameters") or {}
-
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric(
-        "CV protocol",
-        f"{N_SPLITS}×{N_REPEATS}",
-        help="Repeated stratified cross-validation.",
-        border=True,
-    )
-    k2.metric(
-        "Primary metric",
-        PRIMARY_TUNING_METRIC.upper(),
-        help="Model comparison metric across repeated CV.",
-        border=True,
-    )
-    k3.metric(
-        "Train rows",
-        f"{holdout_split.get('train_rows', '—'):,}",
-        help="Holdout split training set size.",
-        border=True,
-    )
-    k4.metric(
-        "Holdout rows",
-        f"{holdout_split.get('test_rows', '—'):,}",
-        help="Holdout split test set size (reporting only).",
-        border=True,
-    )
 
     render_blue_note(
         "**5×5 CV benchmark** ranks models using mean metrics from repeated stratified folds "

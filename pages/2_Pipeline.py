@@ -3,14 +3,14 @@ from __future__ import annotations
 
 import streamlit as st
 
-from scripts.dashboard_app import ensure_repo_on_path, render_blue_note
-from scripts.dashboard_artifacts import (
+from scripts.dashboard import ensure_repo_on_path, render_blue_note
+from scripts.dashboard.data import (
     artifacts_available,
     build_reduction_profile,
     get_reference_artifacts,
     load_pipeline_artifacts,
 )
-from scripts.dashboard_charts import (
+from scripts.dashboard.charts import (
     fig_hotelling_t2_intuition,
     fig_reduction_impact_from_stages,
     fig_rf_topk_selection,
@@ -18,7 +18,7 @@ from scripts.dashboard_charts import (
     fig_spearman_cluster,
     fig_spearman_cluster_example,
 )
-from scripts.dashboard_pipeline import render_preprocessing_flowchart
+from scripts.dashboard.pipeline import render_preprocessing_flowchart
 from scripts.secom_pipelines import (
     N_REPEATS,
     N_SPLITS,
@@ -78,25 +78,6 @@ def main() -> None:
     shared = (artifacts or {}).get("shared", {})
     cluster_example = shared.get("spearman_cluster_example")
 
-    f1, f2, f3 = st.columns(3)
-    f1.metric(
-        "CV protocol",
-        f"{N_SPLITS}×{N_REPEATS}",
-        help="Repeated stratified cross-validation.",
-        border=True,
-    )
-    f2.metric(
-        "Primary metric",
-        PRIMARY_TUNING_METRIC.upper(),
-        help="Model comparison metric across repeated CV (e.g. PR AUC).",
-        border=True,
-    )
-    f3.metric(
-        "Fold-safe preprocessing",
-        "Yes",
-        help="All feature engineering fit on training folds only (no leakage).",
-        border=True,
-    )
     render_blue_note(
         "All feature engineering is fit on training folds only (no leakage), "
         "then compared with PR AUC across repeated CV."
@@ -210,25 +191,6 @@ def main() -> None:
 
     sensors_cluster = profile["after_cluster"]
     aux = profile["auxiliary_features"]
-    a, b, c = st.columns(3)
-    a.metric(
-        "Sensors after clustering",
-        f"{sensors_cluster:,}",
-        help="Sensors retained after Spearman correlated selection (sklearn, in-fold).",
-        border=True,
-    )
-    b.metric(
-        "Auxiliary features",
-        f"{aux:,}",
-        help="Calendar, missing flags, and n_missing_sensors passed through preprocess.",
-        border=True,
-    )
-    c.metric(
-        "Classifier input features",
-        f"{profile['classifier_input']:,}",
-        help="Total columns after preprocess + scale (linear reference model, holdout fit).",
-        border=True,
-    )
     st.caption(
         f"After clustering: **{sensors_cluster:,} sensors + {aux:,} auxiliary features** "
         f"(calendar, missing indicators, `n_missing_sensors`)."

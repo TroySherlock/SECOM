@@ -9,11 +9,10 @@ import duckdb
 import numpy as np
 import pandas as pd
 
-from scripts.secom_pipelines import DB_PATH, TARGET_COL, TIMESTAMP_COL
+from scripts.secom_pipelines import DB_PATH, N_SENSORS, TARGET_COL, TIMESTAMP_COL
 
 STG_RELATION = "public.stg_secom"
 ROW_INDEX_COL = "row_index"
-N_SENSORS = 591
 
 _SENSOR_PATTERN = re.compile(r"^c_\d+$")
 

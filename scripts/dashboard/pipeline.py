@@ -40,19 +40,38 @@ flowchart LR
   stg --> int_f --> meta --> mart --> imp --> cluster --> hubs --> scale --> clf
 """
 
+_MERMAID_INIT = """
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+const el = document.querySelector('.mermaid');
+await mermaid.run({ nodes: [el] });
+const svg = document.querySelector('.mermaid svg');
+if (svg) {
+    const h = Math.ceil(svg.getBoundingClientRect().height) + 16;
+    document.body.style.margin = '0';
+    document.body.style.overflow = 'hidden';
+    window.parent.postMessage({ type: 'streamlit:setFrameHeight', height: h }, '*');
+}
+"""
 
-def _render_mermaid(diagram: str, *, height: int = 300) -> None:
+
+def _render_mermaid(diagram: str, *, height: int = 140) -> None:
     code = html.escape(diagram.strip())
     html_doc = f"""
+        <body style="margin:0;padding:0;">
         <pre class="mermaid">{code}</pre>
         <script type="module">
-            import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-            mermaid.initialize({{ startOnLoad: true, theme: 'dark' }});
+        {_MERMAID_INIT}
         </script>
+        </body>
         """
     if hasattr(st, "iframe"):
-        st.iframe(html_doc, height=height)
-    elif components is not None:
+        try:
+            st.iframe(html_doc, height="content")
+            return
+        except (TypeError, ValueError):
+            pass
+    if components is not None:
         components.html(html_doc, height=height, scrolling=False)
     else:  # pragma: no cover
         st.markdown(f"```mermaid\n{diagram.strip()}\n```")

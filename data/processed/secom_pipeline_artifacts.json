@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-03T02:45:54.531236+00:00",
+  "generated_at": "2026-06-05T10:09:25.218137+00:00",
   "holdout_split": {
     "test_size": 0.2,
     "random_seed": 42,
@@ -69,16 +69,17 @@
           "c_102",
           "c_103",
           "c_122",
+          "c_124",
           "c_125",
           "c_126",
           "c_129",
           "c_130",
-          "c_14",
           "c_152",
-          "c_175",
+          "c_16",
           "c_183",
           "c_200",
           "c_21",
+          "c_270",
           "c_28",
           "c_281",
           "c_298",
@@ -88,15 +89,14 @@
           "c_333",
           "c_336",
           "c_351",
-          "c_405",
+          "c_39",
           "c_417",
           "c_423",
+          "c_431",
           "c_477",
           "c_488",
           "c_510",
-          "c_56",
           "c_59",
-          "c_63",
           "c_64",
           "c_81",
           "c_91"
@@ -104,123 +104,123 @@
         "importances": [
           {
             "feature": "c_103",
-            "importance": 0.03244135347723532
+            "importance": 0.029554768556497264
           },
           {
             "feature": "c_59",
-            "importance": 0.027446595606046405
+            "importance": 0.025672416245742336
           },
           {
             "feature": "c_33",
-            "importance": 0.026656992339160537
+            "importance": 0.024790128038347552
           },
           {
             "feature": "c_477",
-            "importance": 0.019020718292428008
-          },
-          {
-            "feature": "c_351",
-            "importance": 0.016066589240141788
+            "importance": 0.017213341558255213
           },
           {
             "feature": "c_64",
-            "importance": 0.01515179801340181
+            "importance": 0.01337009901904306
+          },
+          {
+            "feature": "c_351",
+            "importance": 0.013052858854312932
           },
           {
             "feature": "c_510",
-            "importance": 0.013107793018689395
+            "importance": 0.01264348680868152
           },
           {
             "feature": "c_130",
-            "importance": 0.012657127508276082
-          },
-          {
-            "feature": "c_129",
-            "importance": 0.01190270123498163
-          },
-          {
-            "feature": "c_125",
-            "importance": 0.011567364916083409
-          },
-          {
-            "feature": "c_31",
-            "importance": 0.011509503543635393
+            "importance": 0.011393052306159926
           },
           {
             "feature": "c_21",
-            "importance": 0.010972992214756378
+            "importance": 0.011301432847235218
+          },
+          {
+            "feature": "c_129",
+            "importance": 0.01084114966904909
+          },
+          {
+            "feature": "c_125",
+            "importance": 0.010602473202694114
           },
           {
             "feature": "c_281",
-            "importance": 0.010505830688706898
+            "importance": 0.010000365477647053
           },
           {
-            "feature": "c_200",
-            "importance": 0.00997156617035246
-          },
-          {
-            "feature": "c_316",
-            "importance": 0.009662584324069436
+            "feature": "c_31",
+            "importance": 0.009879708188430031
           },
           {
             "feature": "c_183",
-            "importance": 0.008937205461600851
+            "importance": 0.009824718322598267
           },
           {
-            "feature": "c_488",
-            "importance": 0.008374198968049518
+            "feature": "c_200",
+            "importance": 0.00952578041803861
           },
           {
-            "feature": "c_28",
-            "importance": 0.008298097090550623
+            "feature": "c_316",
+            "importance": 0.008696746754385027
           },
           {
             "feature": "c_81",
-            "importance": 0.008264464372541795
+            "importance": 0.008151714544710035
+          },
+          {
+            "feature": "c_28",
+            "importance": 0.00812547163455894
           },
           {
             "feature": "c_122",
-            "importance": 0.008226004379743213
+            "importance": 0.008072593469950769
+          },
+          {
+            "feature": "c_488",
+            "importance": 0.007862736789784018
           },
           {
             "feature": "c_333",
-            "importance": 0.007321064817441543
-          },
-          {
-            "feature": "c_336",
-            "importance": 0.007153689430052759
-          },
-          {
-            "feature": "c_126",
-            "importance": 0.00705226987092992
+            "importance": 0.007686560440730769
           },
           {
             "feature": "c_298",
-            "importance": 0.006973066973541478
+            "importance": 0.007442398578743377
           },
           {
-            "feature": "c_152",
-            "importance": 0.00696842121556908
-          },
-          {
-            "feature": "c_417",
-            "importance": 0.006870019079193736
+            "feature": "c_336",
+            "importance": 0.00721248839534732
           },
           {
             "feature": "c_423",
-            "importance": 0.006608466635937479
+            "importance": 0.006901158398671547
           },
           {
-            "feature": "c_14",
-            "importance": 0.0064520546217193015
+            "feature": "c_417",
+            "importance": 0.006584493827130518
           },
           {
-            "feature": "c_63",
-            "importance": 0.006288454274555469
+            "feature": "c_152",
+            "importance": 0.006369537207339565
           },
           {
-            "feature": "c_0",
-            "importance": 0.006243636951882129
+            "feature": "c_39",
+            "importance": 0.006286839326126028
+          },
+          {
+            "feature": "c_102",
+            "importance": 0.006268302209812885
+          },
+          {
+            "feature": "c_270",
+            "importance": 0.006178052801484451
+          },
+          {
+            "feature": "c_16",
+            "importance": 0.005967497038460289
           }
         ]
       },
@@ -234,7 +234,7 @@
           "c_59",
           "c_33",
           "c_477",
-          "c_351"
+          "c_64"
         ],
         "interaction_pairs": [
           {
@@ -254,8 +254,8 @@
           },
           {
             "a": "c_103",
-            "b": "c_351",
-            "column": "interact_c_103__c_351"
+            "b": "c_64",
+            "column": "interact_c_103__c_64"
           },
           {
             "a": "c_59",
@@ -269,8 +269,8 @@
           },
           {
             "a": "c_59",
-            "b": "c_351",
-            "column": "interact_c_59__c_351"
+            "b": "c_64",
+            "column": "interact_c_59__c_64"
           },
           {
             "a": "c_33",
@@ -279,13 +279,13 @@
           },
           {
             "a": "c_33",
-            "b": "c_351",
-            "column": "interact_c_33__c_351"
+            "b": "c_64",
+            "column": "interact_c_33__c_64"
           },
           {
             "a": "c_477",
-            "b": "c_351",
-            "column": "interact_c_477__c_351"
+            "b": "c_64",
+            "column": "interact_c_477__c_64"
           }
         ]
       }
@@ -315,16 +315,17 @@
           "c_102",
           "c_103",
           "c_122",
+          "c_124",
           "c_125",
           "c_126",
           "c_129",
           "c_130",
-          "c_14",
           "c_152",
-          "c_175",
+          "c_16",
           "c_183",
           "c_200",
           "c_21",
+          "c_270",
           "c_28",
           "c_281",
           "c_298",
@@ -334,15 +335,14 @@
           "c_333",
           "c_336",
           "c_351",
-          "c_405",
+          "c_39",
           "c_417",
           "c_423",
+          "c_431",
           "c_477",
           "c_488",
           "c_510",
-          "c_56",
           "c_59",
-          "c_63",
           "c_64",
           "c_81",
           "c_91"
@@ -350,123 +350,123 @@
         "importances": [
           {
             "feature": "c_103",
-            "importance": 0.03244135347723532
+            "importance": 0.029554768556497264
           },
           {
             "feature": "c_59",
-            "importance": 0.027446595606046405
+            "importance": 0.025672416245742336
           },
           {
             "feature": "c_33",
-            "importance": 0.026656992339160537
+            "importance": 0.024790128038347552
           },
           {
             "feature": "c_477",
-            "importance": 0.019020718292428008
-          },
-          {
-            "feature": "c_351",
-            "importance": 0.016066589240141788
+            "importance": 0.017213341558255213
           },
           {
             "feature": "c_64",
-            "importance": 0.01515179801340181
+            "importance": 0.01337009901904306
+          },
+          {
+            "feature": "c_351",
+            "importance": 0.013052858854312932
           },
           {
             "feature": "c_510",
-            "importance": 0.013107793018689395
+            "importance": 0.01264348680868152
           },
           {
             "feature": "c_130",
-            "importance": 0.012657127508276082
-          },
-          {
-            "feature": "c_129",
-            "importance": 0.01190270123498163
-          },
-          {
-            "feature": "c_125",
-            "importance": 0.011567364916083409
-          },
-          {
-            "feature": "c_31",
-            "importance": 0.011509503543635393
+            "importance": 0.011393052306159926
           },
           {
             "feature": "c_21",
-            "importance": 0.010972992214756378
+            "importance": 0.011301432847235218
+          },
+          {
+            "feature": "c_129",
+            "importance": 0.01084114966904909
+          },
+          {
+            "feature": "c_125",
+            "importance": 0.010602473202694114
           },
           {
             "feature": "c_281",
-            "importance": 0.010505830688706898
+            "importance": 0.010000365477647053
           },
           {
-            "feature": "c_200",
-            "importance": 0.00997156617035246
-          },
-          {
-            "feature": "c_316",
-            "importance": 0.009662584324069436
+            "feature": "c_31",
+            "importance": 0.009879708188430031
           },
           {
             "feature": "c_183",
-            "importance": 0.008937205461600851
+            "importance": 0.009824718322598267
           },
           {
-            "feature": "c_488",
-            "importance": 0.008374198968049518
+            "feature": "c_200",
+            "importance": 0.00952578041803861
           },
           {
-            "feature": "c_28",
-            "importance": 0.008298097090550623
+            "feature": "c_316",
+            "importance": 0.008696746754385027
           },
           {
             "feature": "c_81",
-            "importance": 0.008264464372541795
+            "importance": 0.008151714544710035
+          },
+          {
+            "feature": "c_28",
+            "importance": 0.00812547163455894
           },
           {
             "feature": "c_122",
-            "importance": 0.008226004379743213
+            "importance": 0.008072593469950769
+          },
+          {
+            "feature": "c_488",
+            "importance": 0.007862736789784018
           },
           {
             "feature": "c_333",
-            "importance": 0.007321064817441543
-          },
-          {
-            "feature": "c_336",
-            "importance": 0.007153689430052759
-          },
-          {
-            "feature": "c_126",
-            "importance": 0.00705226987092992
+            "importance": 0.007686560440730769
           },
           {
             "feature": "c_298",
-            "importance": 0.006973066973541478
+            "importance": 0.007442398578743377
           },
           {
-            "feature": "c_152",
-            "importance": 0.00696842121556908
-          },
-          {
-            "feature": "c_417",
-            "importance": 0.006870019079193736
+            "feature": "c_336",
+            "importance": 0.00721248839534732
           },
           {
             "feature": "c_423",
-            "importance": 0.006608466635937479
+            "importance": 0.006901158398671547
           },
           {
-            "feature": "c_14",
-            "importance": 0.0064520546217193015
+            "feature": "c_417",
+            "importance": 0.006584493827130518
           },
           {
-            "feature": "c_63",
-            "importance": 0.006288454274555469
+            "feature": "c_152",
+            "importance": 0.006369537207339565
           },
           {
-            "feature": "c_0",
-            "importance": 0.006243636951882129
+            "feature": "c_39",
+            "importance": 0.006286839326126028
+          },
+          {
+            "feature": "c_102",
+            "importance": 0.006268302209812885
+          },
+          {
+            "feature": "c_270",
+            "importance": 0.006178052801484451
+          },
+          {
+            "feature": "c_16",
+            "importance": 0.005967497038460289
           }
         ]
       },
@@ -480,7 +480,7 @@
           "c_59",
           "c_33",
           "c_477",
-          "c_351"
+          "c_64"
         ],
         "interaction_pairs": [
           {
@@ -500,8 +500,8 @@
           },
           {
             "a": "c_103",
-            "b": "c_351",
-            "column": "interact_c_103__c_351"
+            "b": "c_64",
+            "column": "interact_c_103__c_64"
           },
           {
             "a": "c_59",
@@ -515,8 +515,8 @@
           },
           {
             "a": "c_59",
-            "b": "c_351",
-            "column": "interact_c_59__c_351"
+            "b": "c_64",
+            "column": "interact_c_59__c_64"
           },
           {
             "a": "c_33",
@@ -525,13 +525,13 @@
           },
           {
             "a": "c_33",
-            "b": "c_351",
-            "column": "interact_c_33__c_351"
+            "b": "c_64",
+            "column": "interact_c_33__c_64"
           },
           {
             "a": "c_477",
-            "b": "c_351",
-            "column": "interact_c_477__c_351"
+            "b": "c_64",
+            "column": "interact_c_477__c_64"
           }
         ]
       }
@@ -561,16 +561,17 @@
           "c_102",
           "c_103",
           "c_122",
+          "c_124",
           "c_125",
           "c_126",
           "c_129",
           "c_130",
-          "c_14",
           "c_152",
-          "c_175",
+          "c_16",
           "c_183",
           "c_200",
           "c_21",
+          "c_270",
           "c_28",
           "c_281",
           "c_298",
@@ -580,15 +581,14 @@
           "c_333",
           "c_336",
           "c_351",
-          "c_405",
+          "c_39",
           "c_417",
           "c_423",
+          "c_431",
           "c_477",
           "c_488",
           "c_510",
-          "c_56",
           "c_59",
-          "c_63",
           "c_64",
           "c_81",
           "c_91"
@@ -596,123 +596,123 @@
         "importances": [
           {
             "feature": "c_103",
-            "importance": 0.03244135347723532
+            "importance": 0.029554768556497264
           },
           {
             "feature": "c_59",
-            "importance": 0.027446595606046405
+            "importance": 0.025672416245742336
           },
           {
             "feature": "c_33",
-            "importance": 0.026656992339160537
+            "importance": 0.024790128038347552
           },
           {
             "feature": "c_477",
-            "importance": 0.019020718292428008
-          },
-          {
-            "feature": "c_351",
-            "importance": 0.016066589240141788
+            "importance": 0.017213341558255213
           },
           {
             "feature": "c_64",
-            "importance": 0.01515179801340181
+            "importance": 0.01337009901904306
+          },
+          {
+            "feature": "c_351",
+            "importance": 0.013052858854312932
           },
           {
             "feature": "c_510",
-            "importance": 0.013107793018689395
+            "importance": 0.01264348680868152
           },
           {
             "feature": "c_130",
-            "importance": 0.012657127508276082
-          },
-          {
-            "feature": "c_129",
-            "importance": 0.01190270123498163
-          },
-          {
-            "feature": "c_125",
-            "importance": 0.011567364916083409
-          },
-          {
-            "feature": "c_31",
-            "importance": 0.011509503543635393
+            "importance": 0.011393052306159926
           },
           {
             "feature": "c_21",
-            "importance": 0.010972992214756378
+            "importance": 0.011301432847235218
+          },
+          {
+            "feature": "c_129",
+            "importance": 0.01084114966904909
+          },
+          {
+            "feature": "c_125",
+            "importance": 0.010602473202694114
           },
           {
             "feature": "c_281",
-            "importance": 0.010505830688706898
+            "importance": 0.010000365477647053
           },
           {
-            "feature": "c_200",
-            "importance": 0.00997156617035246
-          },
-          {
-            "feature": "c_316",
-            "importance": 0.009662584324069436
+            "feature": "c_31",
+            "importance": 0.009879708188430031
           },
           {
             "feature": "c_183",
-            "importance": 0.008937205461600851
+            "importance": 0.009824718322598267
           },
           {
-            "feature": "c_488",
-            "importance": 0.008374198968049518
+            "feature": "c_200",
+            "importance": 0.00952578041803861
           },
           {
-            "feature": "c_28",
-            "importance": 0.008298097090550623
+            "feature": "c_316",
+            "importance": 0.008696746754385027
           },
           {
             "feature": "c_81",
-            "importance": 0.008264464372541795
+            "importance": 0.008151714544710035
+          },
+          {
+            "feature": "c_28",
+            "importance": 0.00812547163455894
           },
           {
             "feature": "c_122",
-            "importance": 0.008226004379743213
+            "importance": 0.008072593469950769
+          },
+          {
+            "feature": "c_488",
+            "importance": 0.007862736789784018
           },
           {
             "feature": "c_333",
-            "importance": 0.007321064817441543
-          },
-          {
-            "feature": "c_336",
-            "importance": 0.007153689430052759
-          },
-          {
-            "feature": "c_126",
-            "importance": 0.00705226987092992
+            "importance": 0.007686560440730769
           },
           {
             "feature": "c_298",
-            "importance": 0.006973066973541478
+            "importance": 0.007442398578743377
           },
           {
-            "feature": "c_152",
-            "importance": 0.00696842121556908
-          },
-          {
-            "feature": "c_417",
-            "importance": 0.006870019079193736
+            "feature": "c_336",
+            "importance": 0.00721248839534732
           },
           {
             "feature": "c_423",
-            "importance": 0.006608466635937479
+            "importance": 0.006901158398671547
           },
           {
-            "feature": "c_14",
-            "importance": 0.0064520546217193015
+            "feature": "c_417",
+            "importance": 0.006584493827130518
           },
           {
-            "feature": "c_63",
-            "importance": 0.006288454274555469
+            "feature": "c_152",
+            "importance": 0.006369537207339565
           },
           {
-            "feature": "c_0",
-            "importance": 0.006243636951882129
+            "feature": "c_39",
+            "importance": 0.006286839326126028
+          },
+          {
+            "feature": "c_102",
+            "importance": 0.006268302209812885
+          },
+          {
+            "feature": "c_270",
+            "importance": 0.006178052801484451
+          },
+          {
+            "feature": "c_16",
+            "importance": 0.005967497038460289
           }
         ]
       },
@@ -726,7 +726,7 @@
           "c_59",
           "c_33",
           "c_477",
-          "c_351"
+          "c_64"
         ],
         "interaction_pairs": [
           {
@@ -746,8 +746,8 @@
           },
           {
             "a": "c_103",
-            "b": "c_351",
-            "column": "interact_c_103__c_351"
+            "b": "c_64",
+            "column": "interact_c_103__c_64"
           },
           {
             "a": "c_59",
@@ -761,8 +761,8 @@
           },
           {
             "a": "c_59",
-            "b": "c_351",
-            "column": "interact_c_59__c_351"
+            "b": "c_64",
+            "column": "interact_c_59__c_64"
           },
           {
             "a": "c_33",
@@ -771,13 +771,13 @@
           },
           {
             "a": "c_33",
-            "b": "c_351",
-            "column": "interact_c_33__c_351"
+            "b": "c_64",
+            "column": "interact_c_33__c_64"
           },
           {
             "a": "c_477",
-            "b": "c_351",
-            "column": "interact_c_477__c_351"
+            "b": "c_64",
+            "column": "interact_c_477__c_64"
           }
         ]
       }
@@ -807,16 +807,17 @@
           "c_102",
           "c_103",
           "c_122",
+          "c_124",
           "c_125",
           "c_126",
           "c_129",
           "c_130",
-          "c_14",
           "c_152",
-          "c_175",
+          "c_16",
           "c_183",
           "c_200",
           "c_21",
+          "c_270",
           "c_28",
           "c_281",
           "c_298",
@@ -826,15 +827,14 @@
           "c_333",
           "c_336",
           "c_351",
-          "c_405",
+          "c_39",
           "c_417",
           "c_423",
+          "c_431",
           "c_477",
           "c_488",
           "c_510",
-          "c_56",
           "c_59",
-          "c_63",
           "c_64",
           "c_81",
           "c_91"
@@ -842,123 +842,123 @@
         "importances": [
           {
             "feature": "c_103",
-            "importance": 0.03244135347723532
+            "importance": 0.029554768556497264
           },
           {
             "feature": "c_59",
-            "importance": 0.027446595606046405
+            "importance": 0.025672416245742336
           },
           {
             "feature": "c_33",
-            "importance": 0.026656992339160537
+            "importance": 0.024790128038347552
           },
           {
             "feature": "c_477",
-            "importance": 0.019020718292428008
-          },
-          {
-            "feature": "c_351",
-            "importance": 0.016066589240141788
+            "importance": 0.017213341558255213
           },
           {
             "feature": "c_64",
-            "importance": 0.01515179801340181
+            "importance": 0.01337009901904306
+          },
+          {
+            "feature": "c_351",
+            "importance": 0.013052858854312932
           },
           {
             "feature": "c_510",
-            "importance": 0.013107793018689395
+            "importance": 0.01264348680868152
           },
           {
             "feature": "c_130",
-            "importance": 0.012657127508276082
-          },
-          {
-            "feature": "c_129",
-            "importance": 0.01190270123498163
-          },
-          {
-            "feature": "c_125",
-            "importance": 0.011567364916083409
-          },
-          {
-            "feature": "c_31",
-            "importance": 0.011509503543635393
+            "importance": 0.011393052306159926
           },
           {
             "feature": "c_21",
-            "importance": 0.010972992214756378
+            "importance": 0.011301432847235218
+          },
+          {
+            "feature": "c_129",
+            "importance": 0.01084114966904909
+          },
+          {
+            "feature": "c_125",
+            "importance": 0.010602473202694114
           },
           {
             "feature": "c_281",
-            "importance": 0.010505830688706898
+            "importance": 0.010000365477647053
           },
           {
-            "feature": "c_200",
-            "importance": 0.00997156617035246
-          },
-          {
-            "feature": "c_316",
-            "importance": 0.009662584324069436
+            "feature": "c_31",
+            "importance": 0.009879708188430031
           },
           {
             "feature": "c_183",
-            "importance": 0.008937205461600851
+            "importance": 0.009824718322598267
           },
           {
-            "feature": "c_488",
-            "importance": 0.008374198968049518
+            "feature": "c_200",
+            "importance": 0.00952578041803861
           },
           {
-            "feature": "c_28",
-            "importance": 0.008298097090550623
+            "feature": "c_316",
+            "importance": 0.008696746754385027
           },
           {
             "feature": "c_81",
-            "importance": 0.008264464372541795
+            "importance": 0.008151714544710035
+          },
+          {
+            "feature": "c_28",
+            "importance": 0.00812547163455894
           },
           {
             "feature": "c_122",
-            "importance": 0.008226004379743213
+            "importance": 0.008072593469950769
+          },
+          {
+            "feature": "c_488",
+            "importance": 0.007862736789784018
           },
           {
             "feature": "c_333",
-            "importance": 0.007321064817441543
-          },
-          {
-            "feature": "c_336",
-            "importance": 0.007153689430052759
-          },
-          {
-            "feature": "c_126",
-            "importance": 0.00705226987092992
+            "importance": 0.007686560440730769
           },
           {
             "feature": "c_298",
-            "importance": 0.006973066973541478
+            "importance": 0.007442398578743377
           },
           {
-            "feature": "c_152",
-            "importance": 0.00696842121556908
-          },
-          {
-            "feature": "c_417",
-            "importance": 0.006870019079193736
+            "feature": "c_336",
+            "importance": 0.00721248839534732
           },
           {
             "feature": "c_423",
-            "importance": 0.006608466635937479
+            "importance": 0.006901158398671547
           },
           {
-            "feature": "c_14",
-            "importance": 0.0064520546217193015
+            "feature": "c_417",
+            "importance": 0.006584493827130518
           },
           {
-            "feature": "c_63",
-            "importance": 0.006288454274555469
+            "feature": "c_152",
+            "importance": 0.006369537207339565
           },
           {
-            "feature": "c_0",
-            "importance": 0.006243636951882129
+            "feature": "c_39",
+            "importance": 0.006286839326126028
+          },
+          {
+            "feature": "c_102",
+            "importance": 0.006268302209812885
+          },
+          {
+            "feature": "c_270",
+            "importance": 0.006178052801484451
+          },
+          {
+            "feature": "c_16",
+            "importance": 0.005967497038460289
           }
         ]
       },
@@ -972,7 +972,7 @@
           "c_59",
           "c_33",
           "c_477",
-          "c_351"
+          "c_64"
         ],
         "interaction_pairs": [
           {
@@ -992,8 +992,8 @@
           },
           {
             "a": "c_103",
-            "b": "c_351",
-            "column": "interact_c_103__c_351"
+            "b": "c_64",
+            "column": "interact_c_103__c_64"
           },
           {
             "a": "c_59",
@@ -1007,8 +1007,8 @@
           },
           {
             "a": "c_59",
-            "b": "c_351",
-            "column": "interact_c_59__c_351"
+            "b": "c_64",
+            "column": "interact_c_59__c_64"
           },
           {
             "a": "c_33",
@@ -1017,13 +1017,13 @@
           },
           {
             "a": "c_33",
-            "b": "c_351",
-            "column": "interact_c_33__c_351"
+            "b": "c_64",
+            "column": "interact_c_33__c_64"
           },
           {
             "a": "c_477",
-            "b": "c_351",
-            "column": "interact_c_477__c_351"
+            "b": "c_64",
+            "column": "interact_c_477__c_64"
           }
         ]
       }
