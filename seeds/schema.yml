@@ -1,0 +1,19 @@
+version: 2
+
+seeds:
+  - name: raw_secom
+    description: >
+      Merged UCI SECOM labels and 591 sensor columns, built by
+      `python -m secom.cli.build_seed` from data/secom_labels.data and data/secom.data.
+    columns:
+      - name: target
+        description: "0 = pass, 1 = fail (mapped from UCI -1/1 labels)."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+      - name: timestamp
+        description: Raw measurement timestamp string; parsed in stg_secom.
+        tests:
+          - not_null

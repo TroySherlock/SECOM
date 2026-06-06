@@ -16,8 +16,9 @@ with base as (
 
 ),
 
--- Step 1: Remove irrelevant or constant columns
-filtered as (
+-- Step 1: Select target, timestamp, and sensor columns (high-missing / zero-variance
+-- sensors are dropped later in int_secom_column_metadata → mart_secom_features)
+selected as (
     select
         measurement_ts,
         target,
@@ -35,7 +36,7 @@ time_features as (
         extract(dow from measurement_ts) as day_of_week,  -- 0=Sunday, 6=Saturday
         extract(hour from measurement_ts) as hour,
         case when extract(dow from measurement_ts) in (0,6) then 1 else 0 end as is_weekend
-    from filtered
+    from selected
 ),
 
 -- Step 3: Cyclical encoding (n_missing_sensors added in mart after profiling)
