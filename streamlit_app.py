@@ -7,9 +7,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from scripts.dashboard import configure_page, ensure_repo_on_path
-
-ensure_repo_on_path()
+from secom.dashboard import configure_page
 
 pages = [
     st.Page("pages/1_Introduction.py", title="Introduction", default=True),

@@ -3,14 +3,14 @@ from __future__ import annotations
 
 import streamlit as st
 
-from scripts.dashboard import ensure_repo_on_path, render_blue_note
-from scripts.dashboard.data import (
+from secom.dashboard import render_blue_note
+from secom.dashboard.data import (
     artifacts_available,
     build_reduction_profile,
     get_reference_artifacts,
     load_pipeline_artifacts,
 )
-from scripts.dashboard.charts import (
+from secom.dashboard.charts import (
     fig_hotelling_t2_intuition,
     fig_reduction_impact_from_stages,
     fig_rf_topk_selection,
@@ -18,8 +18,8 @@ from scripts.dashboard.charts import (
     fig_spearman_cluster,
     fig_spearman_cluster_example,
 )
-from scripts.dashboard.pipeline import render_preprocessing_flowchart
-from scripts.secom_pipelines import (
+from secom.dashboard.pipeline import render_preprocessing_flowchart
+from secom.pipelines import (
     N_REPEATS,
     N_SPLITS,
     N_HUBS_GRID,
@@ -28,7 +28,6 @@ from scripts.secom_pipelines import (
     RF_SELECT_TOP_K_GRID,
 )
 
-ensure_repo_on_path()
 
 HYPERPARAM_NOTE = (
     "`top_k` and `n_hubs` are **hyperparameters** tuned "
@@ -69,7 +68,7 @@ def main() -> None:
         )
     else:
         st.warning(
-            "Pipeline artifacts not found. Run `python -m scripts.benchmark_models` "
+            "Pipeline artifacts not found. Run `python -m secom.cli.benchmark` "
             "after tuning to populate reporting charts. Showing illustrative fallbacks."
         )
 

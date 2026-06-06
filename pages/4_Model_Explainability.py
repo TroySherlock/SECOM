@@ -3,23 +3,22 @@ from __future__ import annotations
 
 import streamlit as st
 
-from scripts.dashboard import ensure_repo_on_path, render_blue_note
-from scripts.dashboard.data import model_info
-from scripts.secom_pipelines import BENCHMARK_MODEL_IDS
-from scripts.dashboard.charts import (
+from secom.dashboard import render_blue_note
+from secom.dashboard.data import model_info
+from secom.pipelines import BENCHMARK_MODEL_IDS
+from secom.dashboard.charts import (
     fig_coef_signed_bar,
     fig_local_contributions,
     fig_top_features_bar,
 )
-from scripts.dashboard.explainability import (
+from secom.dashboard.explainability import (
     cached_global_importance,
     cached_wafer_explanation,
     holdout_wafer_ids,
 )
-from scripts.dashboard.narrator import LINEAR_LR_MODEL_ID, get_wafer_narrative, load_narratives
-from scripts.secom_pipelines import TUNED_PARAMS_DIR
+from secom.dashboard.narrator import LINEAR_LR_MODEL_ID, get_wafer_narrative, load_narratives
+from secom.pipelines import TUNED_PARAMS_DIR
 
-ensure_repo_on_path()
 
 
 @st.cache_data(show_spinner=False)
@@ -42,7 +41,7 @@ def main() -> None:
     try:
         wafer_ids = holdout_wafer_ids()
     except FileNotFoundError as exc:
-        st.error(f"{exc}\n\nRun tuning and `python -m scripts.benchmark_models` first.")
+        st.error(f"{exc}\n\nRun tuning and `python -m secom.cli.benchmark` first.")
         return
 
     model_ids = list(BENCHMARK_MODEL_IDS)
@@ -173,14 +172,14 @@ def main() -> None:
         if narratives_payload is None:
             st.warning(
                 "No frozen narratives file found. Run: "
-                "`python -m scripts.build_wafer_narratives`"
+                "`python -m secom.cli.build_narratives`"
             )
         else:
             narrative = get_wafer_narrative(wafer_id, narratives_payload)
             if narrative is None:
                 st.warning(
                     f"No frozen narrative for wafer {wafer_id}. Run: "
-                    "`python -m scripts.build_wafer_narratives`"
+                    "`python -m secom.cli.build_narratives`"
                 )
             else:
                 st.markdown(narrative)

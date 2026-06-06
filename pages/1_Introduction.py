@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import streamlit as st
 
-from scripts.dashboard import ensure_repo_on_path, render_blue_note
-from scripts.dashboard.charts import (
+from secom.dashboard import render_blue_note
+from secom.dashboard.charts import (
     best_pair_sensors,
     fig_class_donut,
     fig_fails_over_time,
@@ -13,8 +13,8 @@ from scripts.dashboard.charts import (
     fig_sensor_histogram,
     fig_sensor_multicollinearity,
 )
-from scripts.dashboard.pipeline import render_pipeline_flowchart
-from scripts.dashboard.stg import (
+from secom.dashboard.pipeline import render_pipeline_flowchart
+from secom.dashboard.stg import (
     STG_RELATION,
     StgSnapshot,
     build_stg_snapshot,
@@ -22,9 +22,8 @@ from scripts.dashboard.stg import (
     slice_stg_for_display,
     stg_available,
 )
-from scripts.secom_pipelines import DB_PATH, TARGET_COL, TIMESTAMP_COL
+from secom.pipelines import DB_PATH, TARGET_COL, TIMESTAMP_COL
 
-ensure_repo_on_path()
 
 MAX_TABLE_ROWS = 50
 

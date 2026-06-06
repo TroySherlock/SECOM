@@ -5,8 +5,8 @@ import json
 
 import streamlit as st
 
-from scripts.dashboard import ensure_repo_on_path, render_blue_note
-from scripts.dashboard.data import (
+from secom.dashboard import render_blue_note
+from secom.dashboard.data import (
     benchmark_has_multi_profile_thresholds,
     cv_leaderboard_df,
     holdout_by_profile_df,
@@ -21,7 +21,7 @@ from scripts.dashboard.data import (
     profile_threshold_summary_table,
     resolved_threshold_profile_config,
 )
-from scripts.dashboard.charts import (
+from secom.dashboard.charts import (
     C_PURPLE,
     fig_benchmark_leaderboard,
     fig_ber_cv_vs_holdout,
@@ -30,10 +30,9 @@ from scripts.dashboard.charts import (
     fig_holdout_confusion,
     fig_threshold_objective_curves,
 )
-from scripts.secom_costs import PROFILE_IDS, THRESHOLD_PROFILES
-from scripts.secom_pipelines import N_REPEATS, N_SPLITS, PRIMARY_TUNING_METRIC
+from secom.costs import PROFILE_IDS, THRESHOLD_PROFILES
+from secom.pipelines import N_REPEATS, N_SPLITS, PRIMARY_TUNING_METRIC
 
-ensure_repo_on_path()
 
 
 def _metric_with_ci(
@@ -190,7 +189,7 @@ def main() -> None:
         if not benchmark_has_multi_profile_thresholds(payload):
             st.warning(
                 "Tuned JSONs lack f1/f2/f3 `threshold_profiles`. Re-run Stage 2 tuning and "
-                "`python -m scripts.benchmark_models` to populate F-score curves and holdout metrics."
+                "`python -m secom.cli.benchmark` to populate F-score curves and holdout metrics."
             )
 
         curve_model = st.selectbox(
@@ -256,7 +255,7 @@ def main() -> None:
                         key=f"p3_cm_{curve_model}_{pid}",
                     )
                 else:
-                    st.caption("Re-run `python -m scripts.benchmark_models` after tuning.")
+                    st.caption("Re-run `python -m secom.cli.benchmark` after tuning.")
 
         ho_long = holdout_by_profile_df(payload)
         if not ho_long.empty:

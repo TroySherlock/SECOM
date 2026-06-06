@@ -29,8 +29,8 @@ pkgs.mkShell {
 
     source .venv/bin/activate
 
-    echo "⚡ Installing dbt-duckdb..."
-    uv pip install dbt-duckdb pandas ipykernel duckdb scikit-learn feature-engine xgboost tqdm tqdm-joblib "streamlit>=1.47" plotly shap
+    echo "⚡ Installing secom (editable)..."
+    uv pip install -e .
     echo "✅ SECOM Environment Ready (DuckDB + dbt)"
   '';
 }
