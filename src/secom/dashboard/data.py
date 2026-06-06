@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pandas as pd
 
@@ -23,6 +23,7 @@ from secom.pipelines import (
     PIPELINE_ARTIFACTS_PATH,
     TUNED_PARAMS_DIR,
 )
+from secom.utils import load_tuned_params
 
 REFERENCE_MODELS = {"linear": "linear_lr", "topk": "topk_rf"}
 
@@ -36,6 +37,7 @@ class ModelInfo:
     feature_path: str
     description: str
     tuning_notebook: str
+    explainability: Literal["linear", "tree", "knn"]
 
 
 _SHARED_FEATURE_PATH = (
@@ -51,6 +53,7 @@ MODEL_CATALOG: dict[str, ModelInfo] = {
         feature_path=f"{_SHARED_FEATURE_PATH} → elastic-net LR",
         description="Elastic-net logistic regression on the shared sensor path.",
         tuning_notebook="tuning/linear_lr.ipynb",
+        explainability="linear",
     ),
     "topk_rf": ModelInfo(
         model_id="topk_rf",
@@ -60,6 +63,7 @@ MODEL_CATALOG: dict[str, ModelInfo] = {
         feature_path=f"{_SHARED_FEATURE_PATH} → RF",
         description="Random forest on the shared sensor path.",
         tuning_notebook="tuning/topk_rf.ipynb",
+        explainability="tree",
     ),
     "topk_knn": ModelInfo(
         model_id="topk_knn",
@@ -69,6 +73,7 @@ MODEL_CATALOG: dict[str, ModelInfo] = {
         feature_path=f"{_SHARED_FEATURE_PATH} → k-NN",
         description="k-nearest neighbors on the shared sensor path.",
         tuning_notebook="tuning/topk_knn.ipynb",
+        explainability="knn",
     ),
     "topk_xgb": ModelInfo(
         model_id="topk_xgb",
@@ -80,6 +85,7 @@ MODEL_CATALOG: dict[str, ModelInfo] = {
             "Gradient boosting on the shared sensor path (scale_pos_weight for imbalance)."
         ),
         tuning_notebook="tuning/topk_xgb.ipynb",
+        explainability="tree",
     ),
 }
 
@@ -147,10 +153,6 @@ def merged_comparison_df(payload: dict[str, Any]) -> pd.DataFrame:
     return merged.sort_values("pr_auc_cv", ascending=False).reset_index(drop=True)
 
 
-def model_catalog() -> dict[str, ModelInfo]:
-    return MODEL_CATALOG
-
-
 def model_info(model_id: str) -> ModelInfo:
     if model_id not in MODEL_CATALOG:
         raise KeyError(f"Unknown model_id: {model_id}")
@@ -163,19 +165,9 @@ def list_model_ids(payload: dict[str, Any] | None = None) -> list[str]:
     return list(BENCHMARK_MODEL_IDS)
 
 
-def load_tuned_payload(
-    model_id: str,
-    base_dir: Path | str = TUNED_PARAMS_DIR,
-) -> dict[str, Any]:
-    path = Path(base_dir) / f"{model_id}.json"
-    if not path.exists():
-        raise FileNotFoundError(f"Missing tuned params: {path}")
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
 def load_threshold_curves(model_id: str) -> pd.DataFrame:
     """Objective curves from tuned JSON (empty if not yet re-tuned)."""
-    payload = load_tuned_payload(model_id)
+    payload = load_tuned_params(model_id)
     rows = payload.get("objective_curves") or []
     if not rows:
         legacy = payload.get("threshold_tuning") or {}
@@ -284,7 +276,7 @@ def profile_threshold_summary_table(
     rows: list[dict] = []
     for model_id in list_model_ids(payload):
         try:
-            tuned = load_tuned_payload(model_id, tuned_dir)
+            tuned = load_tuned_params(model_id, tuned_dir)
         except FileNotFoundError:
             continue
         raw_profiles = tuned.get("threshold_profiles") or {}
@@ -318,7 +310,7 @@ def profile_threshold_summary_table(
 def benchmark_has_multi_profile_thresholds(payload: dict[str, Any]) -> bool:
     for model_id in list_model_ids(payload):
         try:
-            if has_multi_profile_thresholds(load_tuned_payload(model_id)):
+            if has_multi_profile_thresholds(load_tuned_params(model_id)):
                 return True
         except FileNotFoundError:
             continue

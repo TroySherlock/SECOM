@@ -1,14 +1,13 @@
 """Plotly chart builders for the SECOM Streamlit dashboard."""
 from __future__ import annotations
 
-import re
 from typing import Any
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-from secom.dashboard.stg import ROW_INDEX_COL, cohens_d
+from secom.dashboard.stg import ROW_INDEX_COL, sensor_columns
 from secom.costs import PROFILE_IDS, THRESHOLD_PROFILES, ProfileId
 
 # SECOM chart palette — keep in sync with .streamlit/config.toml chartCategoricalColors
@@ -52,27 +51,6 @@ def _sized(fig: go.Figure, *, height: int, **layout: Any) -> go.Figure:
         **layout,
     )
     return fig
-
-
-
-_SENSOR_PATTERN = re.compile(r"^c_\d+$")
-
-
-def _sensor_columns(df: pd.DataFrame) -> list[str]:
-    return [c for c in df.columns if _SENSOR_PATTERN.fullmatch(str(c))]
-
-
-def best_pair_sensors(
-    df: pd.DataFrame,
-    sensor_cols: list[str],
-    target_col: str,
-) -> tuple[str, str]:
-    """Return two sensors with largest |Cohen's d| for pass vs fail."""
-    ranked = [(col, cohens_d(df, col, target_col)) for col in sensor_cols]
-    ranked.sort(key=lambda x: x[1], reverse=True)
-    first = ranked[0][0] if ranked else sensor_cols[0]
-    second = next((s for s, _ in ranked if s != first), ranked[1][0] if len(ranked) > 1 else first)
-    return first, second
 
 
 def fig_class_donut(
@@ -206,7 +184,7 @@ def fig_missingness_structure(
     sensor_cols: list[str] | None = None,
     column_stride: int = 10,
 ) -> go.Figure:
-    sensor_cols = sensor_cols or _sensor_columns(df)
+    sensor_cols = sensor_cols or sensor_columns(df)
     if not sensor_cols:
         return _sized(go.Figure(), height=360)
 
@@ -379,46 +357,6 @@ def fig_missing_rate_distribution(
     return _sized(fig, height=240, margin=dict(t=72))
 
 
-def fig_sensor_scatter(
-    df: pd.DataFrame,
-    *,
-    sensor_x: str,
-    sensor_y: str,
-    target_col: str,
-    row_index_col: str = ROW_INDEX_COL,
-) -> go.Figure:
-    plot_df = df[[sensor_x, sensor_y, target_col, row_index_col]].dropna(subset=[sensor_x, sensor_y]).copy()
-    plot_df["label"] = plot_df[target_col].map({0: "Pass", 1: "Fail"})
-
-    fig = go.Figure()
-    for label, color in (("Pass", C_GREEN), ("Fail", C_RED)):
-        subset = plot_df.loc[plot_df["label"] == label]
-        fig.add_trace(
-            go.Scatter(
-                x=subset[sensor_x],
-                y=subset[sensor_y],
-                mode="markers",
-                name=label,
-                marker=dict(color=color, size=6, opacity=0.7 if label == "Fail" else 0.4),
-                customdata=subset[row_index_col],
-                hovertemplate=(
-                    f"{label}<br>"
-                    f"{sensor_x}=%{{x:.4g}}<br>"
-                    f"{sensor_y}=%{{y:.4g}}<br>"
-                    "row=%{customdata}<extra></extra>"
-                ),
-            )
-        )
-
-    fig.update_layout(
-        title=dict(text=f"Scatter: {sensor_x} vs {sensor_y}"),
-        xaxis_title=sensor_x,
-        yaxis_title=sensor_y,
-        showlegend=True,
-    )
-    return _sized(fig, height=400)
-
-
 def fig_sensor_multicollinearity(
     df: pd.DataFrame,
     sensor_cols: list[str],
@@ -527,36 +465,6 @@ def fig_reduction_impact(stage_counts: list[tuple[str, int]]) -> go.Figure:
     )
     fig.update_yaxes(autorange="reversed")
     return _sized(fig, height=360, margin=dict(l=140, r=48, t=72, b=50))
-
-
-def fig_pipeline_flow_order() -> go.Figure:
-    """Sankey-like flow for shared steps then split methods."""
-    labels = [
-        "Raw sensors",
-        "Median imputation",
-        "Redundancy clustering",
-        "RF top-k + T² + hub pairs",
-        "Scaled classifier input",
-    ]
-    fig = go.Figure(
-        data=[
-            go.Sankey(
-                node=dict(
-                    label=labels,
-                    pad=18,
-                    thickness=18,
-                    color=[C[i % len(C)] for i in range(len(labels))],
-                ),
-                link=dict(
-                    source=[0, 1, 2, 3],
-                    target=[1, 2, 3, 4],
-                    value=[591, 591, 250, 52],
-                ),
-            )
-        ]
-    )
-    fig.update_layout(title=dict(text="Pipeline operation order (shared steps then split)"))
-    return _sized(fig, height=320, margin=dict(l=20, r=20, t=70, b=20))
 
 
 def fig_hotelling_t2_intuition() -> go.Figure:

@@ -13,8 +13,8 @@ from secom.tuning.registry import (
     save_tuned_params,
     summarize_cv_search,
     tune_classifier_threshold_profiles,
-    tuned_params_path,
 )
+from secom.utils import tuned_params_path
 
 
 def main() -> int:

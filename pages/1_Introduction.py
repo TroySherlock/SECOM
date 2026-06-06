@@ -5,7 +5,6 @@ import streamlit as st
 
 from secom.dashboard import render_blue_note
 from secom.dashboard.charts import (
-    best_pair_sensors,
     fig_class_donut,
     fig_fails_over_time,
     fig_missing_rate_distribution,
@@ -18,7 +17,6 @@ from secom.dashboard.stg import (
     STG_RELATION,
     StgSnapshot,
     build_stg_snapshot,
-    cohens_d,
     slice_stg_for_display,
     stg_available,
 )
@@ -42,13 +40,6 @@ def _stg_data_dictionary_md() -> str:
 | `c_0` … `c_590` | 591 sensor readings; `NaN` = missing |
 
 **1,567 rows × 591 sensors.** Missingness clusters by sensor and time window.
-"""
-
-
-def _cohens_d_explanation_md(sensor_x: str, sensor_y: str, d_x: float, d_y: float) -> str:
-    return f"""**Cohen's d** — standardized pass vs fail separation.
-
-**Top sensors:** `{sensor_x}` (d = {d_x:.2f}), `{sensor_y}` (d = {d_y:.2f}). Defects are multivariate; collinearity clusters matter as much as single-sensor effect size.
 """
 
 
@@ -146,10 +137,6 @@ def main() -> None:
             )
         with corr_col:
             if sensor_cols:
-                auto_x, auto_y = best_pair_sensors(df, sensor_cols, TARGET_COL)
-                d_x = cohens_d(df, auto_x, TARGET_COL)
-                d_y = cohens_d(df, auto_y, TARGET_COL)
-                #render_blue_note(_cohens_d_explanation_md(auto_x, auto_y, d_x, d_y))
                 fig_corr, corr_stats = fig_sensor_multicollinearity(df, sensor_cols)
                 st.plotly_chart(
                     fig_corr,

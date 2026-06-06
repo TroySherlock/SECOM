@@ -6,10 +6,9 @@ from dataclasses import dataclass
 from typing import Any
 
 import duckdb
-import numpy as np
 import pandas as pd
 
-from secom.pipelines import DB_PATH, N_SENSORS, TARGET_COL, TIMESTAMP_COL
+from secom.pipelines import DB_PATH, TARGET_COL, TIMESTAMP_COL
 
 STG_RELATION = "public.stg_secom"
 ROW_INDEX_COL = "row_index"
@@ -28,7 +27,7 @@ class StgSnapshot:
 def build_stg_snapshot(db_path=DB_PATH) -> StgSnapshot:
     """Load stg_secom and precompute columns, summary stats, and default sensor once."""
     df = load_stg_secom(db_path)
-    sensor_cols = stg_sensor_columns(df)
+    sensor_cols = sensor_columns(df)
     stats = stg_summary_stats(df)
     default_sensor = ""
     if sensor_cols:
@@ -63,26 +62,12 @@ def load_stg_secom(db_path=DB_PATH) -> pd.DataFrame:
     return df
 
 
-def stg_sensor_columns(df: pd.DataFrame) -> list[str]:
+def sensor_columns(df: pd.DataFrame) -> list[str]:
     return [c for c in df.columns if _SENSOR_PATTERN.fullmatch(str(c))]
 
 
-def cohens_d(df: pd.DataFrame, sensor: str, target_col: str = TARGET_COL) -> float:
-    y = df[target_col].astype(int)
-    pass_mask = y == 0
-    fail_mask = y == 1
-    p_vals = df.loc[pass_mask, sensor].dropna()
-    f_vals = df.loc[fail_mask, sensor].dropna()
-    if len(p_vals) < 2 or len(f_vals) < 2:
-        return 0.0
-    pooled = np.sqrt((p_vals.std(ddof=1) ** 2 + f_vals.std(ddof=1) ** 2) / 2)
-    if pooled == 0 or np.isnan(pooled):
-        return 0.0
-    return float(abs((f_vals.mean() - p_vals.mean()) / pooled))
-
-
 def stg_summary_stats(df: pd.DataFrame) -> dict[str, Any]:
-    sensor_cols = stg_sensor_columns(df)
+    sensor_cols = sensor_columns(df)
     y = df[TARGET_COL].astype(int)
     ts = pd.to_datetime(df[TIMESTAMP_COL], errors="coerce")
     miss_rate = df[sensor_cols].isna().mean() if sensor_cols else pd.Series(dtype=float)
@@ -120,7 +105,7 @@ def slice_stg_for_display(
     max_rows: int | None = None,
 ) -> pd.DataFrame:
     label_cols = [TIMESTAMP_COL, TARGET_COL]
-    sensors = stg_sensor_columns(df)
+    sensors = sensor_columns(df)
     n_sensor_cols = min(n_sensor_cols, len(sensors))
     cols = label_cols + sensors[:n_sensor_cols]
     out = df[cols].copy()

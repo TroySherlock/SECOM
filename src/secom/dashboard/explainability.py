@@ -11,6 +11,7 @@ from sklearn.inspection import permutation_importance
 from sklearn.neighbors import KNeighborsClassifier
 
 from secom.costs import DEFAULT_PROFILE_ID, resolve_threshold_profiles
+from secom.dashboard.data import model_info
 from secom.metrics import predict_with_threshold
 from secom.pipelines import (
     BENCHMARK_MODEL_IDS,
@@ -50,18 +51,6 @@ class WaferExplanation:
     threshold: float
     local_df: pd.DataFrame
     method: str
-
-
-def _is_tree_model(model_id: str) -> bool:
-    return model_id in ("topk_rf", "topk_xgb")
-
-
-def _is_linear_model(model_id: str) -> bool:
-    return model_id == "linear_lr"
-
-
-def _is_knn_model(model_id: str) -> bool:
-    return model_id == "topk_knn"
 
 
 @st.cache_data(show_spinner=False)
@@ -187,7 +176,8 @@ def global_importance(model_id: str, pipeline) -> tuple[pd.DataFrame, pd.DataFra
     """
     Returns (top_df, optional_signed_coef_df, method_caption).
     """
-    if _is_linear_model(model_id):
+    kind = model_info(model_id).explainability
+    if kind == "linear":
         top, signed = global_importance_linear(pipeline)
         return (
             top,
@@ -195,10 +185,10 @@ def global_importance(model_id: str, pipeline) -> tuple[pd.DataFrame, pd.DataFra
             "Global view uses elastic-net coefficients on scaled features "
             "(underlying logistic inside isotonic calibration).",
         )
-    if _is_tree_model(model_id):
+    if kind == "tree":
         top = global_importance_shap(pipeline, model_id)
         return top, None, "Global view uses mean |SHAP| from TreeExplainer on a train subsample."
-    if _is_knn_model(model_id):
+    if kind == "knn":
         top = global_importance_knn(pipeline)
         return (
             top,
@@ -303,13 +293,14 @@ def wafer_explanation(
     X_scaled, names = scaled_matrix(pipeline, X_row)
     row_scaled = X_scaled[0]
 
-    if _is_linear_model(model_id):
+    kind = model_info(model_id).explainability
+    if kind == "linear":
         local_df = _local_linear(pipeline, row_scaled, names)
         method = "Local: coefficient × scaled feature value."
-    elif _is_tree_model(model_id):
+    elif kind == "tree":
         local_df = _local_shap(pipeline, row_scaled, names)
         method = "Local: SHAP values for this wafer (TreeExplainer)."
-    elif _is_knn_model(model_id):
+    elif kind == "knn":
         X_train_scaled, _ = scaled_matrix(pipeline, split.X_train)
         local_df = _local_knn(
             pipeline, row_scaled, names, split.y_train, X_train_scaled

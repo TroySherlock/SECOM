@@ -15,12 +15,12 @@ from secom.dashboard.data import (
     list_model_ids,
     load_benchmark_results,
     load_threshold_curves,
-    load_tuned_payload,
     merged_comparison_df,
     model_info,
     profile_threshold_summary_table,
     resolved_threshold_profile_config,
 )
+from secom.utils import load_tuned_params
 from secom.dashboard.charts import (
     C_PURPLE,
     fig_benchmark_leaderboard,
@@ -203,7 +203,7 @@ def main() -> None:
             render_blue_note("No `objective_curves` in tuned JSON for this model yet.")
         else:
             try:
-                tuned_full = load_tuned_payload(curve_model)
+                tuned_full = load_tuned_params(curve_model)
                 profiles = tuned_full.get("threshold_profiles") or {}
                 best_thresholds = {
                     pid: float(profiles[pid]["best_threshold"])

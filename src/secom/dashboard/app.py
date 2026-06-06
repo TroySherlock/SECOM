@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import streamlit as st
 
-from secom.paths import REPO_ROOT
-
 METRIC_BG = "#3c3836"
 NOTE_BLUE = "#7daea3"
 TEXT_COLOR = "#d4be98"
@@ -62,8 +60,3 @@ def render_blue_note(message: str) -> None:
 def configure_page(*, page_title: str = "SECOM", page_icon: str = "🔬") -> None:
     st.set_page_config(page_title=page_title, page_icon=page_icon, layout="wide")
     inject_dashboard_styles()
-
-
-def repo_root():
-    """Return repository root (for static assets etc.)."""
-    return REPO_ROOT

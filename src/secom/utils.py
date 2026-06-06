@@ -57,13 +57,6 @@ def load_all_tuned_params(base_dir: Path = TUNED_PARAMS_DIR) -> dict[str, dict]:
     return {model_id: load_tuned_params(model_id, base_dir) for model_id in BENCHMARK_MODEL_IDS}
 
 
-def load_champion_params(path: Path | None = None) -> dict:
-    """Backward-compatible alias for linear_lr tuned params."""
-    if path is not None:
-        return json.loads(path.read_text(encoding="utf-8"))
-    return load_tuned_params("linear_lr")
-
-
 def fitted_base_classifier(pipeline) -> object:
     """Underlying sklearn classifier after fit (unwraps threshold + calibration)."""
     classifier = pipeline.named_steps["classifier"]

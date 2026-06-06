@@ -7,10 +7,9 @@ from secom.tuning.registry import (
     run_grid_search,
     save_tuned_params,
     summarize_cv_search,
-    tune_classifier_threshold,
     tune_classifier_threshold_profiles,
-    tuned_params_path,
 )
+from secom.utils import tuned_params_path
 
 __all__ = [
     "MODEL_SPECS",
@@ -19,7 +18,6 @@ __all__ = [
     "run_grid_search",
     "save_tuned_params",
     "summarize_cv_search",
-    "tune_classifier_threshold",
     "tune_classifier_threshold_profiles",
     "tuned_params_path",
 ]

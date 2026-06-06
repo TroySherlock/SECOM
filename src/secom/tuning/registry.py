@@ -37,7 +37,7 @@ from secom.pipelines import (
     make_repeated_stratified_cv,
     split_train_test,
 )
-from secom.utils import json_safe
+from secom.utils import json_safe, tuned_params_path
 
 from secom.pipelines import (
     C_GRID,
@@ -349,10 +349,6 @@ def build_tuned_pipeline(model_id: str, tuned_payload: dict) -> Pipeline:
         FixedThresholdClassifier(classifier, threshold=threshold),
     )
     return pipeline
-
-
-def tuned_params_path(model_id: str, base_dir: Path = TUNED_PARAMS_DIR) -> Path:
-    return base_dir / f"{model_id}.json"
 
 
 def grid_search_workload(
@@ -667,17 +663,6 @@ def tune_classifier_threshold_profiles(
             "fold_results_at_best_threshold"
         ],
     }
-
-
-def tune_classifier_threshold(
-    spec: ModelSpec,
-    X: pd.DataFrame,
-    y: pd.Series,
-    cv_summary: dict,
-    cv=None,
-) -> dict:
-    """Backward-compatible wrapper: F2 (neutral) profile fields at top level."""
-    return tune_classifier_threshold_profiles(spec, X, y, cv_summary, cv=cv)
 
 
 def save_tuned_params(
