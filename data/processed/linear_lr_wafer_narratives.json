@@ -1,0 +1,10 @@
+{
+  "model_id": "linear_lr",
+  "generated_at": "2026-06-06T09:28:59.589434+00:00",
+  "llm_base_url": "http://127.0.0.1:8080/v1",
+  "llm_model": "gemma-4-12B-it-qat-UD-Q4_K_XL.gguf",
+  "prompt_version": "statistical-interpreter-v1",
+  "narratives": {
+    "10": "The Linear LR model predicted a Fail for wafer 10, although the actual result was a Pass. The model calculated a fail probability of 0.2024 against a threshold of 0.0844. The local contribution method identifies five features, with \"interact_c_59__c_477\" providing the highest contribution of 2.8019. Other contributing features include \"interact_c_59__c_33,\" \"interact_c_59__c_64,\" \"c_5"
+  }
+}

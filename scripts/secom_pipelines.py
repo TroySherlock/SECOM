@@ -33,9 +33,11 @@ OUTPUT_DIR = REPO_ROOT / "data" / "processed"
 #   tuned/<model_id>.json           — frozen hyperparameters from tuning notebooks
 #   secom_pipeline_benchmark.json   — CV leaderboard + holdout metrics
 #   secom_pipeline_artifacts.json   — holdout-fit pipeline reporting (feature counts, RF, clusters)
+#   linear_lr_wafer_narratives.json — pre-generated Gemma summaries (python -m scripts.build_wafer_narratives)
 TUNED_PARAMS_DIR = OUTPUT_DIR / "tuned"
 BENCHMARK_RESULTS_PATH = OUTPUT_DIR / "secom_pipeline_benchmark.json"
 PIPELINE_ARTIFACTS_PATH = OUTPUT_DIR / "secom_pipeline_artifacts.json"
+LINEAR_LR_NARRATIVES_PATH = OUTPUT_DIR / "linear_lr_wafer_narratives.json"
 
 BENCHMARK_MODEL_IDS = (
     "linear_lr",
@@ -67,28 +69,28 @@ ELASTIC_NET_MAX_ITER = 20000
 
 KNN_CLASSIFIER_NEIGHBORS = 10
 KNN_CLASSIFIER_WEIGHTS = "uniform"
-KNN_NEIGHBORS_GRID = [35]
+KNN_NEIGHBORS_GRID = [30, 35, 40]
 
-RF_N_ESTIMATORS = 1000
+RF_N_ESTIMATORS = 1500
 RF_MAX_DEPTH = 8
-RF_MAX_DEPTH_GRID = [12]
+RF_MAX_DEPTH_GRID = [8, 10, 12, 16]
 RF_MIN_SAMPLES_LEAF = 10
 RF_SELECT_TOP_K = 35
-RF_SELECT_TOP_K_GRID = [35]
+RF_SELECT_TOP_K_GRID = [30, 35, 40, 50, 60]
 
 N_HUBS_DEFAULT = 5
 N_HUBS_GRID = [5]
 
 CORRELATED_SELECTION_THRESHOLD = 0.7
-CORRELATED_SELECTION_THRESHOLD_GRID = [0.85]
+CORRELATED_SELECTION_THRESHOLD_GRID = [0.75, 0.8, 0.85]
 CORRELATED_SELECTION_METHOD = "spearman"
 CORRELATED_SELECTION_CRITERION = "corr_with_target"
 
-XGB_N_ESTIMATORS = 1500
+XGB_N_ESTIMATORS = 2000
 XGB_MAX_DEPTH = 10
-XGB_MAX_DEPTH_GRID = [10, 12, 16]
+XGB_MAX_DEPTH_GRID = [8, 10, 12, 16]
 XGB_LEARNING_RATE = 0.05
-XGB_LEARNING_RATE_GRID = [0.005, 0.01, 0.03]
+XGB_LEARNING_RATE_GRID = [0.001,0.005]
 XGB_SCALE_POS_WEIGHT = 14.151515
 
 CV_N_JOBS = -1

@@ -16,9 +16,20 @@ from scripts.dashboard.explainability import (
     cached_wafer_explanation,
     holdout_wafer_ids,
 )
+from scripts.dashboard.narrator import LINEAR_LR_MODEL_ID, get_wafer_narrative, load_narratives
 from scripts.secom_pipelines import TUNED_PARAMS_DIR
 
 ensure_repo_on_path()
+
+
+@st.cache_data(show_spinner=False)
+def _load_frozen_narratives() -> dict | None:
+    try:
+        return load_narratives()
+    except FileNotFoundError:
+        return None
+    except (ValueError, OSError):
+        return None
 
 
 def main() -> None:
@@ -148,6 +159,32 @@ def main() -> None:
             "most from the training neighbors' centroid in scaled space, with neighbor fail-rate "
             "as context."
         )
+    elif inspect_model != LINEAR_LR_MODEL_ID:
+        st.caption("Plain-English summary is available for Linear LR only.")
+
+    if inspect_model == LINEAR_LR_MODEL_ID:
+        st.divider()
+        st.subheader("Plain-English summary")
+        render_blue_note(
+            "Statistical interpreter only — summarizes model inputs and attributions. "
+            "Not a fab diagnosis or root-cause analysis."
+        )
+        narratives_payload = _load_frozen_narratives()
+        if narratives_payload is None:
+            st.warning(
+                "No frozen narratives file found. Run: "
+                "`python -m scripts.build_wafer_narratives`"
+            )
+        else:
+            narrative = get_wafer_narrative(wafer_id, narratives_payload)
+            if narrative is None:
+                st.warning(
+                    f"No frozen narrative for wafer {wafer_id}. Run: "
+                    "`python -m scripts.build_wafer_narratives`"
+                )
+            else:
+                st.markdown(narrative)
+                st.caption("Pre-generated summary (local Gemma)")
 
 
 main()

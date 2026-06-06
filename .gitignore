@@ -1,0 +1,10 @@
+.env
+.venv/
+target/
+logs/
+dbt_modules/
+result
+result-*
+.direnv/
+models/
+*.gguf
