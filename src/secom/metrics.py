@@ -51,6 +51,9 @@ def _empty_bootstrap_ci() -> dict[str, None]:
         "pr_auc_median": None,
         "pr_auc_ci_low": None,
         "pr_auc_ci_high": None,
+        "roc_auc_median": None,
+        "roc_auc_ci_low": None,
+        "roc_auc_ci_high": None,
         "ber_percent_median": None,
         "ber_percent_ci_low": None,
         "ber_percent_ci_high": None,
@@ -67,7 +70,7 @@ def stratified_bootstrap_holdout_metrics(
     ci_level: float = 0.95,
     rng: np.random.Generator | None = None,
 ) -> dict[str, float | None]:
-    """Stratified bootstrap CIs for holdout PR AUC and BER (no model refit)."""
+    """Stratified bootstrap CIs for holdout PR AUC, ROC AUC, and BER (no model refit)."""
     y_true = np.asarray(y_true).astype(int)
     y_score = np.asarray(y_score, dtype=float)
     if y_pred is None:
@@ -88,6 +91,7 @@ def stratified_bootstrap_holdout_metrics(
     hi_pct = 100.0 * (1.0 - alpha)
 
     pr_aucs: list[float] = []
+    roc_aucs: list[float] = []
     bers: list[float] = []
     for _ in range(int(n_bootstrap)):
         bp = rng.choice(pos_idx, size=len(pos_idx), replace=True)
@@ -97,14 +101,19 @@ def stratified_bootstrap_holdout_metrics(
         score_b = y_score[idx]
         pred_b = y_pred[idx]
         pr_aucs.append(float(average_precision_score(y_b, score_b)))
+        roc_aucs.append(float(roc_auc_score(y_b, score_b)))
         bers.append(float(compute_holdout_metrics(y_b, pred_b)["ber_percent"]))
 
     pr_arr = np.asarray(pr_aucs)
+    roc_arr = np.asarray(roc_aucs)
     ber_arr = np.asarray(bers)
     return {
         "pr_auc_median": float(np.median(pr_arr)),
         "pr_auc_ci_low": float(np.percentile(pr_arr, lo_pct)),
         "pr_auc_ci_high": float(np.percentile(pr_arr, hi_pct)),
+        "roc_auc_median": float(np.median(roc_arr)),
+        "roc_auc_ci_low": float(np.percentile(roc_arr, lo_pct)),
+        "roc_auc_ci_high": float(np.percentile(roc_arr, hi_pct)),
         "ber_percent_median": float(np.median(ber_arr)),
         "ber_percent_ci_low": float(np.percentile(ber_arr, lo_pct)),
         "ber_percent_ci_high": float(np.percentile(ber_arr, hi_pct)),

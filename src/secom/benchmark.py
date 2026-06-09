@@ -217,10 +217,16 @@ def run_holdout_benchmark(
         rows.append(row)
         if show_progress:
             pr_lo, pr_hi = row.get("pr_auc_ci_low"), row.get("pr_auc_ci_high")
+            roc_lo, roc_hi = row.get("roc_auc_ci_low"), row.get("roc_auc_ci_high")
             ber_lo, ber_hi = row.get("ber_percent_ci_low"), row.get("ber_percent_ci_high")
             pr_ci = (
                 f" [{pr_lo:.3f}, {pr_hi:.3f}]"
                 if pr_lo is not None and pr_hi is not None
+                else ""
+            )
+            roc_ci = (
+                f" [{roc_lo:.3f}, {roc_hi:.3f}]"
+                if roc_lo is not None and roc_hi is not None
                 else ""
             )
             ber_ci = (
@@ -230,6 +236,7 @@ def run_holdout_benchmark(
             )
             print(
                 f"  {name}: holdout PR AUC {row['pr_auc']:.3f}{pr_ci}, "
+                f"ROC AUC {row['roc_auc']:.3f}{roc_ci}, "
                 f"BER (F2 threshold) {row['ber_percent']:.1f}%{ber_ci}"
             )
 

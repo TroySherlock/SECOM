@@ -10,7 +10,6 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 from sklearn.base import clone
-from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import FixedThresholdClassifier, GridSearchCV, ParameterGrid
 from sklearn.pipeline import Pipeline
 
@@ -46,8 +45,6 @@ from secom.pipelines import (
     KNN_CLASSIFIER_NEIGHBORS,
     KNN_NEIGHBORS_GRID,
     L1_RATIO_GRID,
-    LINEAR_CALIBRATION_CV,
-    LINEAR_CALIBRATION_METHOD,
     N_HUBS_DEFAULT,
     N_HUBS_GRID,
     RF_MAX_DEPTH,
@@ -77,6 +74,13 @@ LEGACY_META_KNN_IN_HUB_PARAM = (
 )
 SMART_CORR_THRESHOLD_PARAM = (
     "preprocess__sensor_branch__cluster__smart_corr__threshold"
+)
+CLASSIFIER_ESTIMATOR_PARAMS = (
+    "C",
+    "l1_ratio",
+    "max_depth",
+    "n_neighbors",
+    "learning_rate",
 )
 
 
@@ -136,19 +140,13 @@ class ModelSpec:
     build_grid_search_best_params: Callable[[dict], dict]
 
 
-def _linear_lr_classifier() -> CalibratedClassifierCV:
-    return CalibratedClassifierCV(
-        estimator=elastic_net_lr(
+def _linear_lr_pipeline() -> Pipeline:
+    return _hub_feature_pipeline(
+        elastic_net_lr(
             C=float(C_GRID[0]),
             l1_ratio=float(L1_RATIO_GRID[0]),
-        ),
-        method=LINEAR_CALIBRATION_METHOD,
-        cv=int(LINEAR_CALIBRATION_CV),
+        )
     )
-
-
-def _linear_lr_pipeline() -> Pipeline:
-    return _hub_feature_pipeline(_linear_lr_classifier())
 
 
 def _linear_lr_grid() -> dict:
@@ -174,14 +172,14 @@ def _topk_rf_pipeline() -> Pipeline:
 def _topk_rf_grid() -> dict:
     return {
         **_hub_preprocess_grid(),
-        "classifier__max_depth": [int(d) for d in RF_MAX_DEPTH_GRID],
+        "classifier__estimator__max_depth": [int(d) for d in RF_MAX_DEPTH_GRID],
     }
 
 
 def _topk_rf_best_params(cv_summary: dict) -> dict:
     return {
         **_hub_best_params(cv_summary),
-        "classifier__max_depth": int(cv_summary["best_max_depth"]),
+        "classifier__estimator__max_depth": int(cv_summary["best_max_depth"]),
     }
 
 
@@ -192,14 +190,14 @@ def _topk_knn_pipeline() -> Pipeline:
 def _topk_knn_grid() -> dict:
     return {
         **_hub_preprocess_grid(),
-        "classifier__n_neighbors": [int(k) for k in KNN_NEIGHBORS_GRID],
+        "classifier__estimator__n_neighbors": [int(k) for k in KNN_NEIGHBORS_GRID],
     }
 
 
 def _topk_knn_best_params(cv_summary: dict) -> dict:
     return {
         **_hub_best_params(cv_summary),
-        "classifier__n_neighbors": int(cv_summary["best_n_neighbors"]),
+        "classifier__estimator__n_neighbors": int(cv_summary["best_n_neighbors"]),
     }
 
 
@@ -210,16 +208,20 @@ def _topk_xgb_pipeline() -> Pipeline:
 def _topk_xgb_grid() -> dict:
     return {
         **_hub_preprocess_grid(),
-        "classifier__max_depth": [int(d) for d in XGB_MAX_DEPTH_GRID],
-        "classifier__learning_rate": [float(x) for x in XGB_LEARNING_RATE_GRID],
+        "classifier__estimator__max_depth": [int(d) for d in XGB_MAX_DEPTH_GRID],
+        "classifier__estimator__learning_rate": [
+            float(x) for x in XGB_LEARNING_RATE_GRID
+        ],
     }
 
 
 def _topk_xgb_best_params(cv_summary: dict) -> dict:
     return {
         **_hub_best_params(cv_summary),
-        "classifier__max_depth": int(cv_summary["best_max_depth"]),
-        "classifier__learning_rate": float(cv_summary["best_learning_rate"]),
+        "classifier__estimator__max_depth": int(cv_summary["best_max_depth"]),
+        "classifier__estimator__learning_rate": float(
+            cv_summary["best_learning_rate"]
+        ),
     }
 
 
@@ -247,7 +249,7 @@ MODEL_SPECS: dict[str, ModelSpec] = {
         make_param_grid=_topk_rf_grid,
         param_renames={
             **_hub_preprocess_param_renames(),
-            "param_classifier__max_depth": "max_depth",
+            "param_classifier__estimator__max_depth": "max_depth",
         },
         groupby_cols=[*_hub_preprocess_groupby_cols(), "max_depth"],
         best_defaults={
@@ -262,7 +264,7 @@ MODEL_SPECS: dict[str, ModelSpec] = {
         make_param_grid=_topk_knn_grid,
         param_renames={
             **_hub_preprocess_param_renames(),
-            "param_classifier__n_neighbors": "n_neighbors",
+            "param_classifier__estimator__n_neighbors": "n_neighbors",
         },
         groupby_cols=[*_hub_preprocess_groupby_cols(), "n_neighbors"],
         best_defaults={
@@ -277,8 +279,8 @@ MODEL_SPECS: dict[str, ModelSpec] = {
         make_param_grid=_topk_xgb_grid,
         param_renames={
             **_hub_preprocess_param_renames(),
-            "param_classifier__max_depth": "max_depth",
-            "param_classifier__learning_rate": "learning_rate",
+            "param_classifier__estimator__max_depth": "max_depth",
+            "param_classifier__estimator__learning_rate": "learning_rate",
         },
         groupby_cols=[*_hub_preprocess_groupby_cols(), "max_depth", "learning_rate"],
         best_defaults={
@@ -298,6 +300,15 @@ def _resolved_classifier_threshold(tuned_payload: dict) -> float:
             return 0.5
         return float(raw)
     return float(raw)
+
+
+def _remap_legacy_classifier_estimator_params(raw: dict) -> None:
+    """Map pre-calibration wrapper keys (classifier__max_depth) to nested paths."""
+    for param in CLASSIFIER_ESTIMATOR_PARAMS:
+        legacy = f"classifier__{param}"
+        nested = f"classifier__estimator__{param}"
+        if legacy in raw and nested not in raw:
+            raw[nested] = raw.pop(legacy)
 
 
 def resolve_grid_search_best_params(model_id: str, tuned_payload: dict) -> dict:
@@ -326,11 +337,7 @@ def resolve_grid_search_best_params(model_id: str, tuned_payload: dict) -> dict:
         else:
             raw[SMART_CORR_THRESHOLD_PARAM] = float(CORRELATED_SELECTION_THRESHOLD)
 
-    if model_id == "linear_lr":
-        if "classifier__C" in raw and "classifier__estimator__C" not in raw:
-            raw["classifier__estimator__C"] = raw.pop("classifier__C")
-        if "classifier__l1_ratio" in raw and "classifier__estimator__l1_ratio" not in raw:
-            raw["classifier__estimator__l1_ratio"] = raw.pop("classifier__l1_ratio")
+    _remap_legacy_classifier_estimator_params(raw)
 
     spec = MODEL_SPECS[model_id]
     valid = spec.build_pipeline().get_params(deep=True)

@@ -11,6 +11,7 @@ from secom.dashboard.data import (
     cv_leaderboard_df,
     holdout_by_profile_df,
     holdout_confusion_by_profile,
+    holdout_auc_summary_df,
     holdout_df,
     list_model_ids,
     load_benchmark_results,
@@ -26,6 +27,7 @@ from secom.dashboard.charts import (
     fig_benchmark_leaderboard,
     fig_ber_cv_vs_holdout,
     fig_cv_vs_holdout_scatter,
+    fig_cv_vs_holdout_validation,
     fig_holdout_by_profile,
     fig_holdout_confusion,
     fig_threshold_objective_curves,
@@ -33,6 +35,10 @@ from secom.dashboard.charts import (
 from secom.costs import PROFILE_IDS, THRESHOLD_PROFILES
 from secom.pipelines import N_REPEATS, N_SPLITS, PRIMARY_TUNING_METRIC
 
+_CV_METRIC_SPECS: dict[str, tuple[str, str, str]] = {
+    "PR-AUC": ("mean_pr_auc", "std_pr_auc", "Mean PR AUC (5×5 repeated stratified CV)"),
+    "ROC-AUC": ("mean_roc_auc", "std_roc_auc", "Mean ROC AUC (5×5 repeated stratified CV)"),
+}
 
 
 def _metric_with_ci(
@@ -90,13 +96,12 @@ def main() -> None:
         "not used to select hyperparameters."
     )
 
-    tab_cv, tab_holdout, tab_cost, tab_model, tab_compare = st.tabs(
+    tab_cv, tab_holdout, tab_cost, tab_model = st.tabs(
         [
             "CV leaderboard (5×5)",
             "Holdout reporting",
             "Threshold profiles (F1/F2/F3)",
-            "Model deep-dive",
-            "CV vs holdout",
+            "Model deep-dive"
         ]
     )
 
@@ -105,70 +110,74 @@ def main() -> None:
         if cv_df.empty:
             st.warning("No CV leaderboard rows in benchmark JSON.")
         else:
+            cv_metric = st.selectbox(
+                "Evaluation Metric",
+                list(_CV_METRIC_SPECS),
+                key="p3_cv_metric_select",
+            )
+            mean_col, std_col, chart_title = _CV_METRIC_SPECS[cv_metric]
             st.plotly_chart(
                 fig_benchmark_leaderboard(
                     cv_df,
-                    metric_col="mean_pr_auc",
-                    error_col="std_pr_auc",
-                    title="Mean PR AUC (5×5 repeated stratified CV)",
+                    metric_col=mean_col,
+                    error_col=std_col,
+                    title=chart_title,
                     marker_color=C_PURPLE,
                 ),
                 width="stretch",
                 theme="streamlit",
                 key="p3_cv_leaderboard",
             )
-            display_cv = cv_df.copy()
+            cols_to_show = ["pipeline", mean_col, std_col]
+            display_cv = cv_df[[c for c in cols_to_show if c in cv_df.columns]].copy()
             for col in display_cv.columns:
                 if col.startswith("mean_") or col.startswith("std_"):
                     if display_cv[col].dtype.kind == "f":
                         display_cv[col] = display_cv[col].round(3)
             st.dataframe(display_cv, width="stretch", hide_index=True)
-            st.caption("Rankings use mean PR AUC across all CV folds.")
+            st.caption(
+                f"Rankings use mean {cv_metric} across all CV folds; error bars show ±1 SD."
+            )
 
     with tab_holdout:
         st.subheader("Holdout evaluation (reporting only)")
         if ho_df.empty:
             st.warning("No holdout rows in benchmark JSON.")
         else:
+            ctrl_col1, ctrl_col2 = st.columns([1, 1])
+            with ctrl_col1:
+                selected_metric = st.selectbox(
+                    "Evaluation Metric",
+                    ["PR-AUC", "ROC-AUC"],
+                    key="p3_ho_metric_select",
+                )
+            with ctrl_col2:
+                st.markdown("<div style='padding-top: 28px;'></div>", unsafe_allow_html=True)
+                toggle_ci = st.checkbox(
+                    "Show Holdout 95% Bootstrap CIs",
+                    value=True,
+                    key="p3_ho_ci_toggle",
+                )
+
             st.plotly_chart(
-                fig_benchmark_leaderboard(
-                    ho_df,
-                    metric_col="pr_auc",
-                    title="Holdout PR AUC (20% test split)",
+                fig_cv_vs_holdout_validation(
+                    cv_df=cv_df,
+                    ho_df=ho_df,
+                    metric_type=selected_metric,
+                    show_ci=toggle_ci,
                 ),
                 width="stretch",
                 theme="streamlit",
-                key="p3_holdout_leaderboard",
+                key="p3_validation_leaderboard",
             )
-            cm_cols = [c for c in ho_df.columns if c.endswith("_confusion_matrix") or c == "confusion_matrix"]
-            ho_display = ho_df.drop(columns=cm_cols, errors="ignore").copy()
-            for col in ho_display.select_dtypes(include="float").columns:
-                ho_display[col] = ho_display[col].round(3)
-            st.dataframe(ho_display, width="stretch", hide_index=True)
-            if "pr_auc_ci_low" in ho_df.columns:
-                st.caption(
-                    "Holdout PR AUC / BER include stratified bootstrap 95% CIs "
-                    "(median + ci_low/ci_high columns; no refit per draw)."
-                )
+            st.caption(
+                "Purple markers show CV mean ± 1 SD across 5×5 folds; yellow diamonds are "
+                "holdout point estimates; pale yellow bands are stratified bootstrap 95% CIs "
+                "for PR-AUC and ROC-AUC."
+            )
 
-            if "confusion_matrix" in ho_df.columns:
-                st.markdown("---")
-                st.subheader("Confusion matrix")
-                selected = st.selectbox(
-                    "Pipeline",
-                    ho_df["pipeline"].tolist(),
-                    key="p3_holdout_cm_select",
-                )
-                row = ho_df.loc[ho_df["pipeline"] == selected].iloc[0]
-                cm = row["confusion_matrix"]
-                if isinstance(cm, str):
-                    cm = json.loads(cm)
-                st.plotly_chart(
-                    fig_holdout_confusion(cm, selected),
-                    width="stretch",
-                    theme="streamlit",
-                    key="p3_holdout_confusion",
-                )
+            st.dataframe(holdout_auc_summary_df(ho_df), width="stretch", hide_index=True)
+
 
     with tab_cost:
         st.subheader("Threshold profiles (F-beta)")
@@ -287,14 +296,6 @@ def main() -> None:
                     key="p3_holdout_by_profile",
                 )
 
-        summary = profile_threshold_summary_table(payload)
-        if not summary.empty:
-            st.markdown("**CV vs holdout by profile**")
-            display_summary = summary.copy()
-            for col in display_summary.select_dtypes(include="float").columns:
-                display_summary[col] = display_summary[col].round(4)
-            st.dataframe(display_summary, width="stretch", hide_index=True)
-
         render_blue_note(
             "**F1 (conservative) thresholds** often hurt **Linear LR** and **k-NN**: "
             "their scores are less well-calibrated than tree models, so a stricter fail-class "
@@ -347,43 +348,6 @@ def main() -> None:
                 width="stretch",
                 theme="streamlit",
                 key="p3_model_ber_compare",
-            )
-
-    with tab_compare:
-        st.subheader("CV vs holdout comparison")
-        if merged.empty:
-            st.warning("Need both CV and holdout sections in benchmark JSON.")
-        else:
-            st.plotly_chart(
-                fig_cv_vs_holdout_scatter(merged),
-                width="stretch",
-                theme="streamlit",
-                key="p3_cv_holdout_scatter",
-            )
-            compare_cols = [
-                "pipeline",
-                "pr_auc_cv",
-                "pr_auc_holdout",
-                "cv_rank",
-                "holdout_rank",
-                "ber_cv",
-                "ber_holdout",
-            ]
-            for extra in (
-                "pr_auc_holdout_ci_low",
-                "pr_auc_holdout_ci_high",
-                "ber_holdout_ci_low",
-                "ber_holdout_ci_high",
-            ):
-                if extra in merged.columns:
-                    compare_cols.append(extra)
-            compare_display = merged[[c for c in compare_cols if c in merged.columns]].copy()
-            for col in compare_display.select_dtypes(include="float").columns:
-                compare_display[col] = compare_display[col].round(3)
-            st.dataframe(compare_display, width="stretch", hide_index=True)
-            st.caption(
-                "Points above the dashed line outperform on holdout relative to CV mean; "
-                "rank shifts highlight generalization gaps."
             )
 
 

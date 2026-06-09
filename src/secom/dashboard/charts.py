@@ -21,6 +21,10 @@ C_PURPLE = "#d3869b"
 
 C = [C_RED, C_ORANGE, C_YELLOW, C_GREEN, C_AQUA, C_BLUE, C_PURPLE]
 
+# Validation chart overlays (Gruvbox yellow holdout, purple CV)
+CI_YELLOW_RGBA = "rgba(216, 166, 87, 0.35)"
+CV_ERROR_PURPLE_RGBA = "rgba(211, 134, 155, 0.6)"
+
 CHART_BG = "#3c3836"
 
 PROFILE_TRACE_COLORS: dict[ProfileId, str] = {
@@ -653,37 +657,150 @@ def fig_benchmark_leaderboard(
     ascending: bool = False,
     marker_color: str | None = None,
 ) -> go.Figure:
-    """Horizontal ranked bar chart for a benchmark metric column."""
+    """Horizontal leaderboard: mean point estimates with ±1 SD error bars."""
     if df.empty:
         return _sized(go.Figure(), height=360)
 
-    plot_df = df.sort_values(metric_col, ascending=ascending).copy()
+    plot_df = df.sort_values(metric_col, ascending=ascending).copy().reset_index(drop=True)
+    color = marker_color or C_PURPLE
+    error_rgba = CV_ERROR_PURPLE_RGBA if color == C_PURPLE else "rgba(200, 200, 200, 0.6)"
+
     error_x = None
     if error_col and error_col in plot_df.columns:
-        err_vals = plot_df[error_col].astype(float).tolist()
-        error_x = dict(type="data", array=err_vals, visible=True)
+        error_x = dict(
+            type="data",
+            array=plot_df[error_col].astype(float),
+            visible=True,
+            color=error_rgba,
+            width=5,
+            thickness=1.5,
+        )
 
-    fig = go.Figure(
-        data=[
-            go.Bar(
-                x=plot_df[metric_col],
-                y=plot_df[label_col],
-                orientation="h",
-                marker_color=marker_color or C[2],
-                error_x=error_x,
-                text=[f"{v:.3f}" for v in plot_df[metric_col]],
-                textposition="outside",
-                hovertemplate="%{y}<br>%{x:.3f}<extra></extra>",
-            )
-        ]
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=plot_df[metric_col],
+            y=plot_df[label_col],
+            mode="markers",
+            marker=dict(color=color, size=10, symbol="circle"),
+            error_x=error_x,
+            name="CV Fold Spread (Mean ± 1 SD)",
+            hovertemplate="%{y}<br>mean=%{x:.3f}<extra></extra>",
+        )
     )
+
+    xaxis_title = metric_col.replace("_", " ").replace("mean ", "Mean ")
+    xaxis_kwargs: dict = dict(
+        gridcolor="rgba(200, 200, 200, 0.15)",
+        zeroline=False,
+    )
+    if "auc" in metric_col.lower():
+        xaxis_kwargs["range"] = [0, 1.0]
+
     fig.update_layout(
         title=dict(text=title),
-        xaxis_title=metric_col.replace("_", " "),
-        yaxis_title="Pipeline",
-        showlegend=False,
+        xaxis_title=xaxis_title,
+        xaxis=xaxis_kwargs,
+        yaxis=dict(autorange="reversed", gridcolor="rgba(200, 200, 200, 0.1)"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5),
+        showlegend=error_x is not None,
     )
-    fig.update_yaxes(autorange="reversed")
+    return _sized(fig, height=380, margin=dict(l=100, r=48, t=72, b=48))
+
+
+def fig_cv_vs_holdout_validation(
+    cv_df: pd.DataFrame,
+    ho_df: pd.DataFrame,
+    *,
+    metric_type: str = "PR-AUC",
+    show_ci: bool = True,
+) -> go.Figure:
+    """Overlay CV fold spread, holdout point estimates, and bootstrap CIs per pipeline."""
+    if cv_df.empty or ho_df.empty:
+        return _sized(go.Figure(), height=360)
+
+    df = pd.merge(cv_df, ho_df, on="pipeline", suffixes=("_cv", "_ho"))
+
+    if metric_type == "PR-AUC":
+        cv_mean, cv_std, ho_val = "mean_pr_auc", "std_pr_auc", "pr_auc"
+        ci_low, ci_high = "pr_auc_ci_low", "pr_auc_ci_high"
+    else:
+        cv_mean, cv_std, ho_val = "mean_roc_auc", "std_roc_auc", "roc_auc"
+        ci_low = "roc_auc_ci_low" if "roc_auc_ci_low" in df.columns else None
+        ci_high = "roc_auc_ci_high" if "roc_auc_ci_high" in df.columns else None
+
+    df = df.sort_values(ho_val, ascending=False).reset_index(drop=True)
+
+    fig = go.Figure()
+    ci_available = (
+        show_ci
+        and ci_low
+        and ci_high
+        and ci_low in df.columns
+        and ci_high in df.columns
+    )
+
+    if ci_available:
+        for idx, row in df.iterrows():
+            low_val = row.get(ci_low)
+            high_val = row.get(ci_high)
+            if pd.notna(low_val) and pd.notna(high_val):
+                fig.add_trace(
+                    go.Scatter(
+                        x=[low_val, high_val],
+                        y=[row["pipeline"], row["pipeline"]],
+                        mode="lines",
+                        line=dict(color=CI_YELLOW_RGBA, width=10),
+                        name="Holdout 95% Bootstrap CI",
+                        showlegend=idx == 0,
+                        hoverinfo="skip",
+                    )
+                )
+
+    fig.add_trace(
+        go.Scatter(
+            x=df[cv_mean],
+            y=df["pipeline"],
+            mode="markers",
+            marker=dict(color=C_PURPLE, size=10, symbol="circle"),
+            error_x=dict(
+                type="data",
+                array=df[cv_std],
+                visible=True,
+                color=CV_ERROR_PURPLE_RGBA,
+                width=5,
+                thickness=1.5,
+            ),
+            name="CV Fold Spread (Mean ± 1 SD)",
+            hovertemplate=(
+                "%{y}<br>CV mean=%{x:.3f}<extra></extra>"
+            ),
+        )
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=df[ho_val],
+            y=df["pipeline"],
+            mode="markers",
+            marker=dict(
+                color=C_YELLOW,
+                size=12,
+                symbol="diamond",
+                line=dict(color=C_ORANGE, width=1),
+            ),
+            name="Final Holdout Score",
+            hovertemplate="%{y}<br>Holdout=%{x:.3f}<extra></extra>",
+        )
+    )
+
+    fig.update_layout(
+        title=dict(text=f"CV vs Holdout Validation ({metric_type})"),
+        xaxis_title=f"Metric Value ({metric_type})",
+        xaxis=dict(range=[0, 1.0], gridcolor="rgba(200, 200, 200, 0.15)", zeroline=False),
+        yaxis=dict(autorange="reversed", gridcolor="rgba(200, 200, 200, 0.1)"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5),
+    )
     return _sized(fig, height=380, margin=dict(l=100, r=48, t=72, b=48))
 
 

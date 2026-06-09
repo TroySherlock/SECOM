@@ -12,6 +12,7 @@ from feature_engine.selection import (
     DropDuplicateFeatures,
     SmartCorrelatedSelection,
 )
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import KNNImputer, SimpleImputer
@@ -58,38 +59,38 @@ N_SPLITS = 5
 N_REPEATS = 5
 GRID_SEARCH_VERBOSE = 1
 
-C_GRID = [0.005, 0.0075]
-L1_RATIO_GRID = [0.3, 0.4, 0.5]
+C_GRID = [0.0075]
+L1_RATIO_GRID = [0.3]
 
 MODEL_NAME = "secom_linear_elastic_net"
 
 N_MISSING_SENSORS_COL = "n_missing_sensors"
 CHAMPION_IMPUTATION_METHOD = "median"
 KNN_IMPUTE_NEIGHBORS = 5
-ELASTIC_NET_MAX_ITER = 20000
+ELASTIC_NET_MAX_ITER = 50000
 
 KNN_CLASSIFIER_NEIGHBORS = 10
 KNN_CLASSIFIER_WEIGHTS = "uniform"
-KNN_NEIGHBORS_GRID = [30, 35, 40]
+KNN_NEIGHBORS_GRID = [40]
 
 RF_N_ESTIMATORS = 1500
 RF_MAX_DEPTH = 8
-RF_MAX_DEPTH_GRID = [8, 10, 12, 16]
+RF_MAX_DEPTH_GRID = [12, 16, 20]
 RF_MIN_SAMPLES_LEAF = 10
 RF_SELECT_TOP_K = 35
-RF_SELECT_TOP_K_GRID = [30, 35, 40, 50, 60]
+RF_SELECT_TOP_K_GRID = [35]
 
 N_HUBS_DEFAULT = 5
-N_HUBS_GRID = [5]
+N_HUBS_GRID = [0,5]
 
 CORRELATED_SELECTION_THRESHOLD = 0.7
-CORRELATED_SELECTION_THRESHOLD_GRID = [0.75, 0.8, 0.85]
+CORRELATED_SELECTION_THRESHOLD_GRID = [0.85, 0.9]
 CORRELATED_SELECTION_METHOD = "spearman"
 CORRELATED_SELECTION_CRITERION = "corr_with_target"
 
 XGB_N_ESTIMATORS = 2000
 XGB_MAX_DEPTH = 10
-XGB_MAX_DEPTH_GRID = [8, 10, 12, 16]
+XGB_MAX_DEPTH_GRID = [12, 16, 20]
 XGB_LEARNING_RATE = 0.05
 XGB_LEARNING_RATE_GRID = [0.001,0.005]
 XGB_SCALE_POS_WEIGHT = 14.151515
@@ -100,8 +101,8 @@ ESTIMATOR_N_JOBS = 1
 PRIMARY_TUNING_METRIC = "pr_auc"
 THRESHOLD_GRID = np.linspace(0.001, 0.999, num=2000)
 
-LINEAR_CALIBRATION_METHOD = "isotonic"
-LINEAR_CALIBRATION_CV = 3
+CLASSIFIER_CALIBRATION_METHOD = "sigmoid"
+CLASSIFIER_CALIBRATION_CV = 3
 
 HOLDOUT_BOOTSTRAP_N = 1000
 HOLDOUT_BOOTSTRAP_CI = 0.95
@@ -192,8 +193,8 @@ def frozen_config() -> dict:
         "primary_tuning_metric": PRIMARY_TUNING_METRIC,
         "threshold_tuning_profiles": ["f1", "f2", "f3"],
         "threshold_grid": [float(t) for t in THRESHOLD_GRID],
-        "linear_calibration_method": str(LINEAR_CALIBRATION_METHOD),
-        "linear_calibration_cv": int(LINEAR_CALIBRATION_CV),
+        "classifier_calibration_method": str(CLASSIFIER_CALIBRATION_METHOD),
+        "classifier_calibration_cv": int(CLASSIFIER_CALIBRATION_CV),
         "elastic_net_max_iter": int(ELASTIC_NET_MAX_ITER),
         "knn_classifier_neighbors": int(KNN_CLASSIFIER_NEIGHBORS),
         "knn_neighbors_grid": [int(k) for k in KNN_NEIGHBORS_GRID],
@@ -332,16 +333,25 @@ def linear_preprocess(
     return _sensor_preprocess_column(sensor_steps)
 
 
+def calibrated_classifier(estimator) -> CalibratedClassifierCV:
+    """Wrap the base estimator with probability calibration (shared by all models)."""
+    return CalibratedClassifierCV(
+        estimator=estimator,
+        method=CLASSIFIER_CALIBRATION_METHOD,
+        cv=int(CLASSIFIER_CALIBRATION_CV),
+    )
+
+
 def feature_pipeline(
     classifier,
     preprocess: ColumnTransformer,
 ) -> Pipeline:
-    """Preprocess → RobustScaler → classifier."""
+    """Preprocess → RobustScaler → calibrated classifier."""
     return Pipeline(
         [
             ("preprocess", preprocess),
             ("scale", RobustScaler()),
-            ("classifier", classifier),
+            ("classifier", calibrated_classifier(classifier)),
         ]
     ).set_output(transform="pandas")
 

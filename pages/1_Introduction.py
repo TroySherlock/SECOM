@@ -121,7 +121,8 @@ def main() -> None:
         st.markdown("---")
         st.subheader("Missingness and redundancy")
         render_blue_note(
-            "Missing values cluster by sensor and time—not as independent random gaps."
+            "We can see that missing values are structured in our dataset and not completely random."
+            "We can also see that there are some sensors that are highly correlated with each other."
         )
         miss_col, corr_col = st.columns(2, gap="large")
         with miss_col:
@@ -154,6 +155,10 @@ def main() -> None:
             theme="streamlit",
             key="p1_missing_rate",
         )
+        render_blue_note(
+            "I chose to drop sensors with >10% missing rate and zero variance."
+        )
+        
 
     with tab_sensor:
         st.subheader("Individual channel distributions")

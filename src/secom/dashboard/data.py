@@ -114,6 +114,28 @@ def holdout_df(payload: dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+HOLDOUT_AUC_DISPLAY_COLS = [
+    "pipeline",
+    "pr_auc",
+    "pr_auc_ci_low",
+    "pr_auc_ci_high",
+    "roc_auc",
+    "roc_auc_ci_low",
+    "roc_auc_ci_high",
+]
+
+
+def holdout_auc_summary_df(ho_df: pd.DataFrame) -> pd.DataFrame:
+    """Holdout point estimates + bootstrap CIs for PR-AUC and ROC-AUC only."""
+    cols = [c for c in HOLDOUT_AUC_DISPLAY_COLS if c in ho_df.columns]
+    if not cols:
+        return pd.DataFrame()
+    out = ho_df[cols].copy()
+    for col in out.select_dtypes(include="float").columns:
+        out[col] = out[col].round(3)
+    return out
+
+
 def merged_comparison_df(payload: dict[str, Any]) -> pd.DataFrame:
     cv = cv_leaderboard_df(payload)
     ho = holdout_df(payload)

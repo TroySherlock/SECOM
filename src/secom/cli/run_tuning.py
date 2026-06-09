@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run sequential PR-AUC hyperparameter + multi-profile threshold tuning for all models.
 
-After changing linear_lr calibration, re-tune at least linear_lr and run benchmark.
+After changing classifier calibration settings, re-tune all models and run benchmark.
 """
 from __future__ import annotations
 

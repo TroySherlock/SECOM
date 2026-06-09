@@ -183,7 +183,7 @@ def global_importance(model_id: str, pipeline) -> tuple[pd.DataFrame, pd.DataFra
             top,
             signed,
             "Global view uses elastic-net coefficients on scaled features "
-            "(underlying logistic inside isotonic calibration).",
+            "(underlying logistic inside shared pipeline calibration).",
         )
     if kind == "tree":
         top = global_importance_shap(pipeline, model_id)
