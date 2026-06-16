@@ -103,15 +103,21 @@ def cv_leaderboard_df(payload: dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def cv_leaderboard_blocked_df(payload: dict[str, Any]) -> pd.DataFrame:
+    rows = payload.get("leaderboard_blocked") or []
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows)
+
+
 HOLDOUT_VIEW_KEYS: dict[str, str] = {
     "temporal": "holdout",
     "random": "holdout_random",
-    "temporal_drift_filtered": "holdout_temporal_drift_filtered",
 }
 
 
 def holdout_df(payload: dict[str, Any], key: str = "holdout") -> pd.DataFrame:
-    """Holdout rows for a given benchmark key (temporal / random / drift-filtered)."""
+    """Holdout rows for a given benchmark key (temporal / random)."""
     rows = payload.get(key) or []
     if not rows:
         return pd.DataFrame()
@@ -119,8 +125,9 @@ def holdout_df(payload: dict[str, Any], key: str = "holdout") -> pd.DataFrame:
 
 
 def holdout_comparison_df(payload: dict[str, Any]) -> pd.DataFrame:
-    """One row per pipeline: CV vs random/temporal/drift-filtered holdout PR/ROC-AUC."""
+    """One row per pipeline: stratified/blocked CV vs random/temporal holdout PR-AUC."""
     cv_df = cv_leaderboard_df(payload)
+    cv_blocked_df = cv_leaderboard_blocked_df(payload)
     if cv_df.empty:
         return pd.DataFrame()
 
@@ -134,8 +141,12 @@ def holdout_comparison_df(payload: dict[str, Any]) -> pd.DataFrame:
 
     random_pr = _metric_map("holdout_random", "pr_auc")
     temporal_pr = _metric_map("holdout", "pr_auc")
-    drift_pr = _metric_map("holdout_temporal_drift_filtered", "pr_auc")
     cv_pr = dict(zip(cv_df.get("pipeline", []), cv_df.get("mean_pr_auc", [])))
+    cv_blocked_pr = (
+        dict(zip(cv_blocked_df.get("pipeline", []), cv_blocked_df.get("mean_pr_auc", [])))
+        if not cv_blocked_df.empty
+        else {}
+    )
 
     out_rows = []
     for pipeline in cv_df["pipeline"]:
@@ -150,9 +161,9 @@ def holdout_comparison_df(payload: dict[str, Any]) -> pd.DataFrame:
             {
                 "pipeline": pipeline,
                 "cv_pr_auc": cv_pr.get(pipeline),
+                "cv_blocked_pr_auc": cv_blocked_pr.get(pipeline),
                 "random_pr_auc": rand,
                 "temporal_pr_auc": temp,
-                "temporal_drift_filtered_pr_auc": drift_pr.get(pipeline),
                 "interpolation_gap": gap,
             }
         )

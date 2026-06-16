@@ -22,7 +22,7 @@ from secom.pipelines import (
     load_mart,
     split_train_test,
 )
-from secom.utils import fitted_base_classifier, load_tuned_params
+from secom.utils import fitted_base_classifier, load_tuned_blocked_params
 from secom.tuning.registry import build_tuned_pipeline
 
 GLOBAL_TOP_N = 15
@@ -78,8 +78,8 @@ def fit_holdout_pipeline(model_id: str):
     if model_id not in BENCHMARK_MODEL_IDS:
         raise ValueError(f"Unknown model_id: {model_id}")
     split = load_holdout_split()
-    tuned = load_tuned_params(model_id)
-    pipeline = build_tuned_pipeline(model_id, tuned)
+    tuned = load_tuned_blocked_params(model_id)
+    pipeline = build_tuned_pipeline(model_id, tuned, extrapolation=True)
     pipeline.fit(split.X_train, split.y_train)
     return pipeline, tuned
 

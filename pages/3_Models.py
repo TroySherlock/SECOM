@@ -6,6 +6,7 @@ import streamlit as st
 from secom.dashboard import render_blue_note
 from secom.dashboard.data import (
     benchmark_has_multi_profile_thresholds,
+    cv_leaderboard_blocked_df,
     cv_leaderboard_df,
     holdout_comparison_df,
     holdout_confusion_by_profile,
@@ -25,18 +26,22 @@ from secom.dashboard.charts import (
 from secom.dashboard.pr_curves import load_pr_curves
 from secom.costs import PROFILE_IDS, THRESHOLD_PROFILES
 
-_CV_METRIC_SPECS: dict[str, tuple[str, str, str]] = {
+_CV_METRIC_SPECS_STRATIFIED: dict[str, tuple[str, str, str]] = {
     "PR-AUC": ("mean_pr_auc", "std_pr_auc", "Mean PR AUC (5×2 repeated stratified CV)"),
     "ROC-AUC": ("mean_roc_auc", "std_roc_auc", "Mean ROC AUC (5×2 repeated stratified CV)"),
 }
 
+_CV_METRIC_SPECS_BLOCKED: dict[str, tuple[str, str, str]] = {
+    "PR-AUC": ("mean_pr_auc", "std_pr_auc", "Mean PR AUC (blocked time CV)"),
+    "ROC-AUC": ("mean_roc_auc", "std_roc_auc", "Mean ROC AUC (blocked time CV)"),
+}
+
 _PROFILE_RADIO_LABELS = {pid: THRESHOLD_PROFILES[pid].display_name for pid in PROFILE_IDS}
 
-# Holdout evaluation views: label -> (benchmark key, split-meta key)
-_HOLDOUT_VIEWS: dict[str, tuple[str, str | None]] = {
-    "Forward (temporal)": ("holdout", "holdout_split"),
-    "In-distribution (random)": ("holdout_random", "holdout_split_random"),
-    "Drift-filtered (temporal)": ("holdout_temporal_drift_filtered", "holdout_split"),
+# Holdout evaluation views: label -> (holdout key, split-meta key, use_blocked_cv)
+_HOLDOUT_VIEWS: dict[str, tuple[str, str | None, bool]] = {
+    "Forward (temporal)": ("holdout", "holdout_split", True),
+    "In-distribution (random)": ("holdout_random", "holdout_split_random", False),
 }
 
 
@@ -75,16 +80,6 @@ def _format_holdout_split_caption(split: dict) -> str | None:
     return " · ".join(parts)
 
 
-def _format_drift_filter_caption(drift: dict) -> str | None:
-    if not drift:
-        return None
-    return (
-        f"Drift filter (train-only KS + BH-FDR, α={drift.get('alpha', 0.05)}): "
-        f"dropped {drift.get('n_dropped', '?')}/{drift.get('n_tested', '?')} sensors "
-        f"at cutpoint {drift.get('cutpoint', '?')}."
-    )
-
-
 def main() -> None:
     st.title("Models & benchmark results")
     st.caption(
@@ -99,19 +94,19 @@ def main() -> None:
         return
 
     cv_df = cv_leaderboard_df(payload)
+    cv_blocked_df = cv_leaderboard_blocked_df(payload)
     ho_df = holdout_df(payload)
     model_ids = list_model_ids(payload)
     tuned = payload.get("tuned_hyperparameters") or {}
+    tuned_blocked = payload.get("tuned_hyperparameters_blocked") or {}
 
     render_blue_note(
-        "**5×2 CV benchmark** ranks models on the **earliest 80%** of wafers by measurement "
-        "time (used for tuning and comparison). The holdout tab reports three views, all "
-        f"reporting-only (`holdout_is_reporting_only={payload.get('holdout_is_reporting_only', True)}`): "
-        "**Forward (temporal)** = latest 20% by time (extrapolation); "
-        "**In-distribution (random)** = stratified 20% across the timeline (interpolation, an "
-        "optimistic upper bound); **Drift-filtered (temporal)** = forward view after dropping "
-        "sensors that already drift inside the training window. The random-minus-temporal gap "
-        "is the cost of extrapolation."
+        "**In-distribution** evaluation uses **5×2 stratified CV** and a **random stratified "
+        "holdout** (interpolation upper bound). **Extrapolation** uses **blocked time CV** with "
+        "local stratification, **per-sensor baseline normalization**, and a **temporal forward "
+        "holdout** (latest 20% by time). All holdout metrics are reporting-only "
+        f"(`holdout_is_reporting_only={payload.get('holdout_is_reporting_only', True)}`). "
+        "The random-minus-temporal gap is the cost of extrapolation."
     )
 
     tab_cv, tab_holdout, tab_model = st.tabs(
@@ -129,10 +124,10 @@ def main() -> None:
         else:
             cv_metric = st.selectbox(
                 "Evaluation Metric",
-                list(_CV_METRIC_SPECS),
+                list(_CV_METRIC_SPECS_STRATIFIED),
                 key="p3_cv_metric_select",
             )
-            mean_col, std_col, chart_title = _CV_METRIC_SPECS[cv_metric]
+            mean_col, std_col, chart_title = _CV_METRIC_SPECS_STRATIFIED[cv_metric]
             st.plotly_chart(
                 fig_benchmark_leaderboard(
                     cv_df,
@@ -164,14 +159,12 @@ def main() -> None:
             st.markdown("**Interpolation vs extrapolation (PR-AUC)**")
             st.dataframe(comparison_df, width="stretch", hide_index=True)
             st.caption(
-                "`random_pr_auc` (interpolation) is an optimistic in-distribution upper bound; "
-                "`temporal_pr_auc` (extrapolation) is the forward test; `interpolation_gap` = "
-                "random − temporal is the cost of extrapolation. "
-                "`temporal_drift_filtered_pr_auc` is the forward test after the train-only drift filter."
+                "`cv_pr_auc` = 5×2 stratified CV (in-distribution protocol); "
+                "`cv_blocked_pr_auc` = blocked time CV (extrapolation protocol); "
+                "`random_pr_auc` is an optimistic interpolation upper bound; "
+                "`temporal_pr_auc` is the forward test with baseline normalization; "
+                "`interpolation_gap` = random − temporal."
             )
-            drift_caption = _format_drift_filter_caption(payload.get("drift_filter") or {})
-            if drift_caption:
-                st.caption(drift_caption)
 
         view_label = st.radio(
             "Evaluation view",
@@ -179,7 +172,8 @@ def main() -> None:
             horizontal=True,
             key="p3_ho_view",
         )
-        view_key, split_key = _HOLDOUT_VIEWS[view_label]
+        view_key, split_key, use_blocked_cv = _HOLDOUT_VIEWS[view_label]
+        view_cv_df = cv_blocked_df if use_blocked_cv else cv_df
         view_ho_df = holdout_df(payload, key=view_key)
         split_meta = payload.get(split_key) if split_key else None
         split_caption = _format_holdout_split_caption(split_meta or {})
@@ -188,6 +182,13 @@ def main() -> None:
 
         if view_ho_df.empty:
             st.warning(f"No `{view_key}` rows in benchmark JSON. Re-run the benchmark.")
+        elif view_cv_df.empty:
+            st.warning(
+                "No blocked CV leaderboard in benchmark JSON. Re-run "
+                "`python -m secom.cli.run_tuning` and `python -m secom.cli.benchmark`."
+                if use_blocked_cv
+                else "No CV leaderboard rows in benchmark JSON."
+            )
         else:
             ctrl_col1, ctrl_col2 = st.columns([1, 1])
             with ctrl_col1:
@@ -206,7 +207,7 @@ def main() -> None:
 
             st.plotly_chart(
                 fig_cv_vs_holdout_validation(
-                    cv_df=cv_df,
+                    cv_df=view_cv_df,
                     ho_df=view_ho_df,
                     metric_type=selected_metric,
                     show_ci=toggle_ci,
@@ -215,11 +216,21 @@ def main() -> None:
                 theme="streamlit",
                 key="p3_validation_leaderboard",
             )
+            cv_label = (
+                "blocked time CV folds"
+                if use_blocked_cv
+                else "5×2 stratified folds"
+            )
             st.caption(
-                "Purple markers show CV mean ± 1 SD across 5×2 folds; yellow diamonds are "
+                f"Purple markers show CV mean ± 1 SD across {cv_label}; yellow diamonds are "
                 "holdout point estimates; pale yellow bands are stratified bootstrap 95% CIs "
                 "for PR-AUC and ROC-AUC."
             )
+            if use_blocked_cv:
+                st.caption(
+                    "Forward view: blocked-tuned hyperparameters with per-sensor baseline "
+                    "normalization (robust z-score vs train-fold IQR)."
+                )
 
             st.dataframe(holdout_auc_summary_df(view_ho_df), width="stretch", hide_index=True)
 
@@ -241,7 +252,9 @@ def main() -> None:
             st.markdown(info.description)
             st.markdown(f"**Tuning notebook:** `{info.tuning_notebook}`")
         with right:
-            st.markdown("**Tuned hyperparameters**")
+            st.markdown("**Tuned hyperparameters (extrapolation / blocked CV)**")
+            st.markdown(_format_params(tuned_blocked.get(selected_id, {})))
+            st.markdown("**Tuned hyperparameters (in-distribution / stratified CV)**")
             st.markdown(_format_params(tuned.get(selected_id, {})))
 
         st.markdown("#### Threshold profiles")
@@ -272,9 +285,11 @@ def main() -> None:
             key=f"p3_pr_curve_{selected_id}",
         )
         st.caption(
-            "Purple: 5-fold out-of-fold CV PR curve. Yellow: holdout PR curve. Blue dashed: "
-            "random baseline (positive-class prevalence). Green diamond: BER-min threshold "
-            "operating point on holdout."
+            "Purple: blocked time CV OOF PR curve on validation blocks only (earliest train "
+            "block has no OOF score under the expanding window). Yellow: temporal holdout PR "
+            "curve with baseline normalization. Blue dashed: random baseline "
+            "(positive-class prevalence). Green diamond: BER-min threshold operating point "
+            "on holdout."
         )
 
         profile_choice = st.radio(

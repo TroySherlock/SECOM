@@ -2,12 +2,14 @@
 """Compare four tuned pipelines via repeated stratified CV.
 
 Models: linear_lr, topk_rf, topk_knn, topk_xgb.
-Each uses frozen hyperparameters from data/processed/tuned/<model_id>.json.
+Each uses frozen hyperparameters from data/processed/tuned/<model_id>.json
+(stratified) and data/processed/tuned_blocked/<model_id>.json (extrapolation).
 Primary objective: maximize PR AUC on CV; F-beta thresholds (F0.5 / F2 / F4) plus BER-min.
 """
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -34,6 +36,7 @@ from secom.artifacts import (
     collect_holdout_artifacts,
     save_pipeline_artifacts,
 )
+from secom.cv import make_blocked_time_cv
 from secom.pipelines import (
     BENCHMARK_MODEL_IDS,
     BENCHMARK_RESULTS_PATH,
@@ -51,6 +54,7 @@ from secom.pipelines import (
     TARGET_COL,
     TEST_SIZE,
     TUNED_PARAMS_DIR,
+    TUNED_BLOCKED_PARAMS_DIR,
     XGB_MAX_DEPTH,
     XGB_N_ESTIMATORS,
     XGB_SCALE_POS_WEIGHT,
@@ -61,9 +65,9 @@ from secom.pipelines import (
     split_train_test,
     split_train_test_random,
 )
-from secom.drift import compute_stable_features
 from secom.utils import (
     json_safe,
+    load_all_tuned_blocked_params,
     load_all_tuned_params,
     score_row_from_cv_result,
 )
@@ -74,14 +78,26 @@ CV_SORT_COL = "mean_pr_auc"
 HOLDOUT_SORT_COL = "pr_auc"
 RANKING = "descending_higher_is_better"
 
+CV_PROTOCOL_IN_DIST = "repeated_stratified_5x2"
+CV_PROTOCOL_EXTRAP = "blocked_time_local_strat"
 
-def build_benchmark_pipelines(tuned: dict[str, dict] | None = None) -> dict[str, Pipeline]:
-    tuned = tuned or load_all_tuned_params()
+
+def build_benchmark_pipelines(
+    tuned: dict[str, dict] | None = None,
+    *,
+    extrapolation: bool = False,
+) -> dict[str, Pipeline]:
+    if extrapolation:
+        tuned = tuned or load_all_tuned_blocked_params()
+    else:
+        tuned = tuned or load_all_tuned_params()
     pipelines: dict[str, Pipeline] = {}
     for model_id in BENCHMARK_MODEL_IDS:
         if model_id not in tuned:
             raise KeyError(f"Missing tuned payload for {model_id}")
-        pipelines[model_id] = build_tuned_pipeline(model_id, tuned[model_id])
+        pipelines[model_id] = build_tuned_pipeline(
+            model_id, tuned[model_id], extrapolation=extrapolation
+        )
     return pipelines
 
 
@@ -172,7 +188,6 @@ def run_holdout_benchmark(
     *,
     show_progress: bool = True,
 ) -> pd.DataFrame:
-    tuned = tuned or load_all_tuned_params()
     rows = []
 
     if show_progress:
@@ -187,7 +202,8 @@ def run_holdout_benchmark(
             "roc_auc": float(roc_auc_score(y_test, y_score)),
         }
 
-        thresholds = resolve_threshold_profiles(tuned[name])
+        model_tuned = (tuned or {}).get(name, {})
+        thresholds = resolve_threshold_profiles(model_tuned) if model_tuned else {}
         for profile_id in PROFILE_IDS:
             if profile_id not in thresholds:
                 continue
@@ -255,17 +271,22 @@ def save_benchmark_results(
     leaderboard: pd.DataFrame,
     holdout: pd.DataFrame | None = None,
     *,
+    tuned_blocked: dict[str, dict] | None = None,
+    leaderboard_blocked: pd.DataFrame | None = None,
     holdout_split: dict | None = None,
     holdout_random: pd.DataFrame | None = None,
     holdout_split_random: dict | None = None,
-    holdout_temporal_drift_filtered: pd.DataFrame | None = None,
-    drift_filter: dict | None = None,
     path: Path = BENCHMARK_RESULTS_PATH,
 ) -> dict:
     payload = {
         "primary_metric": PRIMARY_METRIC,
         "ranking": RANKING,
         "tuned_params_dir": str(TUNED_PARAMS_DIR),
+        "tuned_blocked_params_dir": str(TUNED_BLOCKED_PARAMS_DIR),
+        "cv_protocol": {
+            "in_distribution": CV_PROTOCOL_IN_DIST,
+            "extrapolation": CV_PROTOCOL_EXTRAP,
+        },
         "model_ids": list(BENCHMARK_MODEL_IDS),
         "tuned_hyperparameters": {
             model_id: tuned[model_id].get("grid_search_best_params", {})
@@ -304,44 +325,31 @@ def save_benchmark_results(
         "threshold_profile_ids": list(PROFILE_IDS),
         "threshold_profile_config": threshold_profile_config(),
     }
+    if tuned_blocked is not None:
+        payload["tuned_hyperparameters_blocked"] = {
+            model_id: tuned_blocked[model_id].get("grid_search_best_params", {})
+            for model_id in BENCHMARK_MODEL_IDS
+        }
+    if leaderboard_blocked is not None:
+        payload["leaderboard_blocked"] = leaderboard_blocked.to_dict(orient="records")
     if holdout is not None:
         payload["holdout"] = holdout.to_dict(orient="records")
     if holdout_random is not None:
         payload["holdout_random"] = holdout_random.to_dict(orient="records")
     if holdout_split_random is not None:
         payload["holdout_split_random"] = holdout_split_random
-    if holdout_temporal_drift_filtered is not None:
-        payload["holdout_temporal_drift_filtered"] = (
-            holdout_temporal_drift_filtered.to_dict(orient="records")
-        )
-    if drift_filter is not None:
-        payload["drift_filter"] = drift_filter
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(json_safe(payload), indent=2), encoding="utf-8")
     return payload
 
 
-def build_drift_filtered_pipelines(
-    tuned: dict[str, dict],
-    drop_columns: list[str],
-) -> dict[str, Pipeline]:
-    """Baseline pipelines with the train-only drift drop list injected."""
-    pipelines = build_benchmark_pipelines(tuned)
-    drop = tuple(drop_columns)
-    for pipeline in pipelines.values():
-        pipeline.set_params(
-            preprocess__sensor_branch__drift_filter__drop_columns=drop
-        )
-    return pipelines
-
-
 def main() -> None:
-    """Re-run after tuning: refresh CV + temporal/random/drift-filtered holdouts."""
+    """Re-run after tuning: refresh stratified + blocked CV and dual holdouts."""
     tuned = load_all_tuned_params()
+    tuned_blocked = load_all_tuned_blocked_params()
     df = load_mart()
     cols = feature_columns(df)
 
-    # Temporal (forward / extrapolation) split.
     train_df, test_df = split_train_test(df)
     split_meta = holdout_split_summary(train_df, test_df, split_mode="temporal")
     X_train = train_df[cols]
@@ -349,7 +357,6 @@ def main() -> None:
     X_test = test_df[cols]
     y_test = test_df[TARGET_COL].astype(int)
 
-    # Random (in-distribution / interpolation) split.
     rand_train_df, rand_test_df = split_train_test_random(df)
     split_meta_random = holdout_split_summary(
         rand_train_df, rand_test_df, split_mode="random"
@@ -359,34 +366,41 @@ def main() -> None:
     Xr_test = rand_test_df[cols]
     yr_test = rand_test_df[TARGET_COL].astype(int)
 
-    # Train-only drift screen (computed on the temporal train slice only).
-    drift = compute_stable_features(train_df)
-    print(
-        f"Drift filter: dropped {drift['n_dropped']}/{drift['n_tested']} sensors "
-        f"(cutpoint {drift['cutpoint']})"
-    )
-
-    # CV leaderboard on temporal train slice (baseline pipelines).
+    print("Stratified CV leaderboard (in-distribution protocol):")
     leaderboard = run_pipeline_benchmark(
-        build_benchmark_pipelines(tuned), X_train, y_train, show_progress=True
+        build_benchmark_pipelines(tuned, extrapolation=False),
+        X_train,
+        y_train,
+        cv=make_repeated_stratified_cv(),
+        show_progress=True,
     )
 
-    # Temporal holdout (baseline). Reuse these fitted pipelines for artifacts.
-    temporal_pipelines = build_benchmark_pipelines(tuned)
+    print("\nBlocked time CV leaderboard (extrapolation protocol):")
+    leaderboard_blocked = run_pipeline_benchmark(
+        build_benchmark_pipelines(tuned_blocked, extrapolation=True),
+        X_train,
+        y_train,
+        cv=make_blocked_time_cv(train_df),
+        show_progress=True,
+    )
+
+    extrapolation_pipelines = build_benchmark_pipelines(
+        tuned_blocked, extrapolation=True
+    )
+    print("\nTemporal holdout (blocked-tuned + baseline-normalized):")
     holdout = run_holdout_benchmark(
-        temporal_pipelines,
+        extrapolation_pipelines,
         X_train,
         y_train,
         X_test,
         y_test,
-        tuned,
+        tuned_blocked,
         show_progress=True,
     )
 
-    # Random holdout (interpolation, baseline pipelines refit on random train).
-    print("\nRandom holdout (in-distribution):")
+    print("\nRandom holdout (stratified-tuned, in-distribution):")
     holdout_random = run_holdout_benchmark(
-        build_benchmark_pipelines(tuned),
+        build_benchmark_pipelines(tuned, extrapolation=False),
         Xr_train,
         yr_train,
         Xr_test,
@@ -395,32 +409,18 @@ def main() -> None:
         show_progress=True,
     )
 
-    # Temporal holdout with drift-filtered pipelines (mitigation / before-after).
-    print("\nTemporal holdout (drift-filtered):")
-    holdout_drift = run_holdout_benchmark(
-        build_drift_filtered_pipelines(tuned, drift["dropped_columns"]),
-        X_train,
-        y_train,
-        X_test,
-        y_test,
-        tuned,
-        show_progress=True,
-    )
-
     save_benchmark_results(
         tuned,
         leaderboard,
         holdout,
+        tuned_blocked=tuned_blocked,
+        leaderboard_blocked=leaderboard_blocked,
         holdout_split=split_meta,
         holdout_random=holdout_random,
         holdout_split_random=split_meta_random,
-        holdout_temporal_drift_filtered=holdout_drift,
-        drift_filter=drift,
     )
-    # Deep-dive artifacts stay on the temporal baseline slice (deployment view);
-    # reuse the pipelines already fit during the temporal holdout run.
     artifacts = collect_holdout_artifacts(
-        temporal_pipelines,
+        extrapolation_pipelines,
         X_train,
         y_train,
         holdout_split=split_meta,
@@ -429,14 +429,14 @@ def main() -> None:
 
     print(f"\nWrote {BENCHMARK_RESULTS_PATH}")
     print(f"Wrote {PIPELINE_ARTIFACTS_PATH}\n")
-    print("CV leaderboard:")
+    print("Stratified CV leaderboard:")
     print(leaderboard.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
-    print("\nTemporal holdout (baseline):")
+    print("\nBlocked CV leaderboard:")
+    print(leaderboard_blocked.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
+    print("\nTemporal holdout (extrapolation):")
     print(holdout.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
     print("\nRandom holdout (in-distribution):")
     print(holdout_random.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
-    print("\nTemporal holdout (drift-filtered):")
-    print(holdout_drift.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
 
 
 if __name__ == "__main__":

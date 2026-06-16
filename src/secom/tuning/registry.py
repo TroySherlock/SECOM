@@ -311,11 +311,18 @@ def resolve_grid_search_best_params(model_id: str, tuned_payload: dict) -> dict:
     return {k: v for k, v in raw.items() if k in valid}
 
 
-def build_tuned_pipeline(model_id: str, tuned_payload: dict) -> Pipeline:
+def build_tuned_pipeline(
+    model_id: str,
+    tuned_payload: dict,
+    *,
+    extrapolation: bool = False,
+) -> Pipeline:
     """Clone model pipeline, apply frozen params, and wrap classifier with tuned threshold."""
     spec = MODEL_SPECS[model_id]
     pipeline = clone(spec.build_pipeline())
     pipeline.set_params(**resolve_grid_search_best_params(model_id, tuned_payload))
+    if extrapolation:
+        pipeline.set_params(preprocess__sensor_branch__baseline_norm__enabled=True)
     threshold = _resolved_classifier_threshold(tuned_payload)
     classifier = pipeline.named_steps["classifier"]
     pipeline.steps[-1] = (
@@ -545,12 +552,15 @@ def tune_classifier_threshold_profiles(
     y: pd.Series,
     cv_summary: dict,
     cv=None,
+    extrapolation: bool = False,
 ) -> dict:
     """Stage 2: sweep thresholds on CV validation probs; maximise mean F-beta per profile."""
     cv = cv or make_repeated_stratified_cv()
     best_params = spec.build_grid_search_best_params(cv_summary)
     base_pipeline = clone(spec.build_pipeline())
     base_pipeline.set_params(**best_params)
+    if extrapolation:
+        base_pipeline.set_params(preprocess__sensor_branch__baseline_norm__enabled=True)
 
     threshold_grid = [float(t) for t in THRESHOLD_GRID]
     splits = list(cv.split(X, y))
@@ -665,6 +675,7 @@ def save_tuned_params(
     *,
     threshold_result: dict | None = None,
     path: Path | None = None,
+    cv_protocol: str = "repeated_stratified_5x2",
 ) -> dict:
     path = path or tuned_params_path(spec.model_id)
     best_params = spec.build_grid_search_best_params(cv_summary)
@@ -718,6 +729,7 @@ def save_tuned_params(
     )
     payload = {
         "model_id": spec.model_id,
+        "cv_protocol": cv_protocol,
         "classifier_threshold": best_threshold,
         "grid_search_best_params": best_params,
         "cv_summary": json_safe(summary_out),
@@ -791,13 +803,18 @@ def run_grid_search(
     X: pd.DataFrame,
     y: pd.Series,
     *,
+    cv=None,
+    extrapolation: bool = False,
     verbose: int = GRID_SEARCH_VERBOSE,
 ) -> tuple[GridSearchCV, int, int, int]:
     param_grid = spec.make_param_grid()
-    cv = make_repeated_stratified_cv()
+    cv = cv or make_repeated_stratified_cv()
     n_candidates, n_splits, total_fits = grid_search_workload(param_grid, cv, X, y)
+    pipeline = spec.build_pipeline()
+    if extrapolation:
+        pipeline.set_params(preprocess__sensor_branch__baseline_norm__enabled=True)
     search = GridSearchCV(
-        spec.build_pipeline(),
+        pipeline,
         param_grid=param_grid,
         cv=cv,
         scoring=CV_SCORING,

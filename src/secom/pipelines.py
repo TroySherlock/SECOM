@@ -42,6 +42,7 @@ OUTPUT_DIR = REPO_ROOT / "data" / "processed"
 #   secom_pipeline_artifacts.json   — holdout-fit pipeline reporting (feature counts, RF, clusters)
 #   linear_lr_wafer_narratives.json — pre-generated Gemma summaries (python -m secom.cli.build_narratives)
 TUNED_PARAMS_DIR = OUTPUT_DIR / "tuned"
+TUNED_BLOCKED_PARAMS_DIR = OUTPUT_DIR / "tuned_blocked"
 BENCHMARK_RESULTS_PATH = OUTPUT_DIR / "secom_pipeline_benchmark.json"
 PIPELINE_ARTIFACTS_PATH = OUTPUT_DIR / "secom_pipeline_artifacts.json"
 LINEAR_LR_NARRATIVES_PATH = OUTPUT_DIR / "linear_lr_wafer_narratives.json"
@@ -62,11 +63,14 @@ RANDOM_SEED = 42
 TEST_SIZE = 0.20
 HOLDOUT_SPLIT_MODE = "temporal"
 N_SPLITS = 5
-N_REPEATS = 2
+N_REPEATS = 1
+N_BLOCKED_SPLITS = 3
+BLOCKED_MIN_VAL_FAILS = 4
+BASELINE_NORM_EPS = 1e-6
 GRID_SEARCH_VERBOSE = 1
 
-C_GRID = [0.0075]
-L1_RATIO_GRID = [0.3]
+C_GRID = [0.0075, 0.01, 0.05]
+L1_RATIO_GRID = [0.3, 0.5, 0.7]
 
 MODEL_NAME = "secom_linear_elastic_net"
 
@@ -77,26 +81,26 @@ ELASTIC_NET_MAX_ITER = 50000
 
 KNN_CLASSIFIER_NEIGHBORS = 10
 KNN_CLASSIFIER_WEIGHTS = "uniform"
-KNN_NEIGHBORS_GRID = [40]
+KNN_NEIGHBORS_GRID = [10, 30]
 
 RF_N_ESTIMATORS = 1000
-RF_MAX_DEPTH = 12
-RF_MAX_DEPTH_GRID = [4]
+RF_MAX_DEPTH = 3
+RF_MAX_DEPTH_GRID = [3, 4, 5]
 RF_MIN_SAMPLES_LEAF = 10
 RF_SELECT_TOP_K = 35
-RF_SELECT_TOP_K_GRID = [35]
+RF_SELECT_TOP_K_GRID = [35, 100]
 
 N_HUBS_DEFAULT = 5
 N_HUBS_GRID = [5]
 
 CORRELATED_SELECTION_THRESHOLD = 0.85
-CORRELATED_SELECTION_THRESHOLD_GRID = [0.85]
+CORRELATED_SELECTION_THRESHOLD_GRID = [0.85, 0.9, 0.95]
 CORRELATED_SELECTION_METHOD = "spearman"
 CORRELATED_SELECTION_CRITERION = "corr_with_target"
 
 XGB_N_ESTIMATORS = 1000
-XGB_MAX_DEPTH = 12
-XGB_MAX_DEPTH_GRID = [4]
+XGB_MAX_DEPTH = 3
+XGB_MAX_DEPTH_GRID = [3, 4, 5]
 XGB_LEARNING_RATE = 0.05
 XGB_LEARNING_RATE_GRID = [0.1]
 XGB_SCALE_POS_WEIGHT = 14.151515
@@ -105,9 +109,9 @@ CV_N_JOBS = -1
 ESTIMATOR_N_JOBS = 1
 
 PRIMARY_TUNING_METRIC = "pr_auc"
-THRESHOLD_GRID = np.linspace(0.001, 0.999, num=100)
+THRESHOLD_GRID = np.linspace(0.001, 0.999, num=500)
 
-CLASSIFIER_CALIBRATION_METHOD = "sigmoid"
+CLASSIFIER_CALIBRATION_METHOD = "isotonic"
 CLASSIFIER_CALIBRATION_CV = 3
 
 HOLDOUT_BOOTSTRAP_N = 1000
@@ -191,6 +195,8 @@ def frozen_config() -> dict:
         "holdout_split_mode": HOLDOUT_SPLIT_MODE,
         "n_splits": N_SPLITS,
         "n_repeats": N_REPEATS,
+        "n_blocked_splits": N_BLOCKED_SPLITS,
+        "blocked_min_val_fails": BLOCKED_MIN_VAL_FAILS,
         "c_grid": [float(c) for c in C_GRID],
         "l1_ratio_grid": [float(r) for r in L1_RATIO_GRID],
         "model_name": MODEL_NAME,
@@ -346,32 +352,61 @@ def _auxiliary_transformers() -> list[tuple[str, str, object]]:
     ]
 
 
-class DriftStabilityDropper(BaseEstimator, TransformerMixin):
-    """Drop a fixed set of drifting sensor columns (no-op when empty).
+class SensorBaselineNormalizer(BaseEstimator, TransformerMixin):
+    """Per-sensor robust z-score vs train-fold baseline (IQR scale).
 
-    The drop list is computed train-only (see secom.drift.compute_stable_features)
-    and injected via set_params; this transformer itself learns nothing.
+    When ``enabled=False`` (default), passthrough — used for in-distribution
+  evaluation. Enable for extrapolation / temporal holdout pipelines.
     """
 
     _sklearn_auto_wrap_output_keys = ("transform",)
 
-    def __init__(self, drop_columns: tuple[str, ...] = ()):
-        self.drop_columns = drop_columns
+    def __init__(self, enabled: bool = False, eps: float = BASELINE_NORM_EPS):
+        self.enabled = enabled
+        self.eps = eps
 
     def fit(self, X, y=None):
         cols = list(X.columns) if isinstance(X, pd.DataFrame) else []
         self.feature_names_in_ = np.asarray(cols, dtype=object)
-        self.drop_columns_ = [c for c in self.drop_columns if c in cols]
-        self.kept_columns_ = [c for c in cols if c not in set(self.drop_columns_)]
+        if not self.enabled or not cols:
+            self.median_ = {}
+            self.scale_ = {}
+            return self
+
+        frame = X if isinstance(X, pd.DataFrame) else pd.DataFrame(X, columns=cols)
+        numeric = frame.astype("float64", copy=False)
+        self.median_ = numeric.median(numeric_only=True).to_dict()
+        q75 = numeric.quantile(0.75, numeric_only=True)
+        q25 = numeric.quantile(0.25, numeric_only=True)
+        iqr = (q75 - q25).to_dict()
+        std = numeric.std(numeric_only=True, ddof=0).to_dict()
+        self.scale_ = {}
+        for col in cols:
+            scale = float(iqr.get(col, 0.0))
+            if not np.isfinite(scale) or scale < self.eps:
+                scale = float(std.get(col, 0.0))
+            if not np.isfinite(scale) or scale < self.eps:
+                scale = 1.0
+            self.scale_[col] = scale
         return self
 
     def transform(self, X):
-        if isinstance(X, pd.DataFrame):
-            return X.drop(columns=self.drop_columns_, errors="ignore")
-        return X
+        if not self.enabled:
+            return X
+        if not isinstance(X, pd.DataFrame):
+            return X
+        out = X.copy()
+        for col in out.columns:
+            if col in self.median_:
+                out[col] = (out[col] - self.median_[col]) / (
+                    self.scale_[col] + self.eps
+                )
+        return out
 
     def get_feature_names_out(self, input_features=None):
-        return np.asarray(self.kept_columns_, dtype=object)
+        if input_features is not None:
+            return np.asarray(input_features, dtype=object)
+        return self.feature_names_in_
 
 
 def _cluster_step() -> Pipeline:
@@ -414,9 +449,9 @@ def linear_preprocess(
     top_k: int = RF_SELECT_TOP_K,
     n_hubs: int = N_HUBS_DEFAULT,
 ) -> ColumnTransformer:
-    """Drift filter (no-op default) → impute → cluster → T² + hub pairs; passthrough aux."""
+    """Baseline norm (off default) → impute → cluster → T² + hub pairs; passthrough aux."""
     sensor_steps: list[tuple[str, object]] = [
-        ("drift_filter", DriftStabilityDropper()),
+        #("baseline_norm", SensorBaselineNormalizer()),
         ("impute", median_imputer()),
         ("cluster", _cluster_step()),
         (
