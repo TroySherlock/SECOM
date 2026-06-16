@@ -9,12 +9,15 @@ from secom.dashboard.data import (
     cv_leaderboard_blocked_df,
     cv_leaderboard_df,
     holdout_comparison_df,
+    holdout_conditional_df,
     holdout_confusion_by_profile,
     holdout_auc_summary_df,
     holdout_df,
     list_model_ids,
     load_benchmark_results,
     model_info,
+    process_gate_meta,
+    time_decay_meta,
 )
 from secom.dashboard.charts import (
     C_PURPLE,
@@ -103,8 +106,12 @@ def main() -> None:
     render_blue_note(
         "**In-distribution** evaluation uses **5×2 stratified CV** and a **random stratified "
         "holdout** (interpolation upper bound). **Extrapolation** uses **blocked time CV** with "
-        "local stratification, **per-sensor baseline normalization**, and a **temporal forward "
-        "holdout** (latest 20% by time). All holdout metrics are reporting-only "
+        "local stratification, **exponential time-decay sample weighting** (recent wafers "
+        "weighted more, `decay_lambda` tuned on blocked CV), and a **temporal forward holdout** "
+        "(latest 20% by time). A **process gate** (post-cluster Hotelling T² **OR** "
+        "Isolation Forest on passing train wafers) abstains on out-of-control wafers; "
+        "we report **conditional PR-AUC** and **coverage** on the wafers it scores. "
+        "All holdout metrics are reporting-only "
         f"(`holdout_is_reporting_only={payload.get('holdout_is_reporting_only', True)}`). "
         "The random-minus-temporal gap is the cost of extrapolation."
     )
@@ -162,7 +169,7 @@ def main() -> None:
                 "`cv_pr_auc` = 5×2 stratified CV (in-distribution protocol); "
                 "`cv_blocked_pr_auc` = blocked time CV (extrapolation protocol); "
                 "`random_pr_auc` is an optimistic interpolation upper bound; "
-                "`temporal_pr_auc` is the forward test with baseline normalization; "
+                "`temporal_pr_auc` is the forward test with time-decay weighting; "
                 "`interpolation_gap` = random − temporal."
             )
 
@@ -227,12 +234,69 @@ def main() -> None:
                 "for PR-AUC and ROC-AUC."
             )
             if use_blocked_cv:
+                decay_meta = time_decay_meta(payload)
+                lam_bits = [
+                    f"{mid}={float(m.get('decay_lambda', 0.0)):.2f}"
+                    for mid, m in decay_meta.items()
+                    if m.get("weight_capable")
+                ]
+                lam_txt = ", ".join(lam_bits) if lam_bits else "none"
                 st.caption(
-                    "Forward view: blocked-tuned hyperparameters with per-sensor baseline "
-                    "normalization (robust z-score vs train-fold IQR)."
+                    "Forward view: blocked-tuned hyperparameters with exponential time-decay "
+                    f"sample weighting (tuned `decay_lambda`: {lam_txt}; k-NN unweighted)."
                 )
 
             st.dataframe(holdout_auc_summary_df(view_ho_df), width="stretch", hide_index=True)
+
+            cond_key = "holdout_conditional" if use_blocked_cv else "holdout_random_conditional"
+            cond_df = holdout_conditional_df(payload, key=cond_key)
+            gate_meta = process_gate_meta(payload)
+            if not cond_df.empty and gate_meta:
+                st.markdown("**Process gate (T² OR Isolation Forest) — conditional metrics**")
+                ucl = gate_meta.get("ucl")
+                if_thr = gate_meta.get("if_threshold")
+                ucl_txt = f"{float(ucl):.1f}" if ucl is not None else "?"
+                if_txt = f"{float(if_thr):.3f}" if if_thr is not None else "?"
+                st.caption(
+                    f"Post-cluster features (smart_corr threshold "
+                    f"{gate_meta.get('gate_corr_threshold', '?')}); "
+                    f"fit on {gate_meta.get('n_reference_wafers', '?')} passing train wafers, "
+                    f"{gate_meta.get('n_features', '?')} features. "
+                    f"Abstain when T² > {ucl_txt} (α={gate_meta.get('t2_alpha', '?')}) "
+                    f"**OR** IF score < {if_txt} (α={gate_meta.get('if_alpha', '?')}). "
+                    f"IF n_estimators={gate_meta.get('if_n_estimators', '?')}."
+                )
+                gate_cols = [
+                    c
+                    for c in [
+                        "pipeline",
+                        "coverage",
+                        "conditional_pr_auc",
+                        "conditional_pr_auc_ci_low",
+                        "conditional_pr_auc_ci_high",
+                        "global_pr_auc",
+                        "n_in_control",
+                        "n_flagged_t2",
+                        "n_flagged_if",
+                        "n_flagged_both",
+                        "n_fails_in_control",
+                        "n_fails_flagged_ooc",
+                        "n_fails_flagged_t2",
+                        "n_fails_flagged_if",
+                    ]
+                    if c in cond_df.columns
+                ]
+                gate_display = cond_df[gate_cols].copy()
+                for col in gate_display.select_dtypes(include="float").columns:
+                    gate_display[col] = gate_display[col].round(3)
+                st.dataframe(gate_display, width="stretch", hide_index=True)
+                st.caption(
+                    "`coverage` = fraction of holdout wafers in control (scored by the model). "
+                    "OR logic: flagged if **either** T² or IF trips. "
+                    "`conditional_pr_auc` is on in-control wafers only (None when "
+                    "fewer than 5 in-control fails). Read beside `n_flagged_*` and "
+                    "`n_fails_flagged_*` — gains can come from dropping easy negatives."
+                )
 
     with tab_model:
         st.subheader("Pipeline architecture & tuning")
@@ -254,6 +318,14 @@ def main() -> None:
         with right:
             st.markdown("**Tuned hyperparameters (extrapolation / blocked CV)**")
             st.markdown(_format_params(tuned_blocked.get(selected_id, {})))
+            decay_meta = time_decay_meta(payload).get(selected_id, {})
+            if decay_meta.get("weight_capable"):
+                st.markdown(
+                    f"- `decay_lambda`: `{float(decay_meta.get('decay_lambda', 0.0)):.2f}` "
+                    "(time-decay weighting)"
+                )
+            else:
+                st.markdown("- `decay_lambda`: _unweighted (k-NN)_")
             st.markdown("**Tuned hyperparameters (in-distribution / stratified CV)**")
             st.markdown(_format_params(tuned.get(selected_id, {})))
 
@@ -287,7 +359,7 @@ def main() -> None:
         st.caption(
             "Purple: blocked time CV OOF PR curve on validation blocks only (earliest train "
             "block has no OOF score under the expanding window). Yellow: temporal holdout PR "
-            "curve with baseline normalization. Blue dashed: random baseline "
+            "curve with time-decay weighting. Blue dashed: random baseline "
             "(positive-class prevalence). Green diamond: BER-min threshold operating point "
             "on holdout."
         )

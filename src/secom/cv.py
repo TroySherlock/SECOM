@@ -6,7 +6,6 @@ import pandas as pd
 
 from secom.pipelines import (
     BLOCKED_MIN_VAL_FAILS,
-    ID_COL,
     N_BLOCKED_SPLITS,
     TARGET_COL,
     TIMESTAMP_COL,
@@ -94,11 +93,15 @@ class BlockedTimeSeriesCV:
 
 
 def make_blocked_time_cv(train_df: pd.DataFrame) -> BlockedTimeSeriesCV:
-    """Factory: blocked CV aligned to a temporal train dataframe."""
-    work = train_df.copy()
-    work[TIMESTAMP_COL] = pd.to_datetime(work[TIMESTAMP_COL], errors="coerce")
-    work = work.sort_values([TIMESTAMP_COL, ID_COL], kind="mergesort")
+    """Factory: blocked CV aligned to a temporal train dataframe.
+
+    Timestamps and targets are passed in the dataframe's original row order so
+    the indices yielded by ``split`` align positionally with ``X`` (which shares
+    that order). ``BlockedTimeSeriesCV`` sorts internally by time and maps fold
+    masks back to original positions, so no pre-sorting is needed here.
+    """
+    ts = pd.to_datetime(train_df[TIMESTAMP_COL], errors="coerce").to_numpy()
     return BlockedTimeSeriesCV(
-        work[TIMESTAMP_COL].to_numpy(),
-        work[TARGET_COL].astype(int).to_numpy(),
+        ts,
+        train_df[TARGET_COL].astype(int).to_numpy(),
     )

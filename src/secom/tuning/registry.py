@@ -24,6 +24,7 @@ from secom.metrics import compute_holdout_metrics, predict_with_threshold
 from secom.pipelines import (
     CHAMPION_IMPUTATION_METHOD,
     CV_SCORING,
+    DECAY_LAMBDA_GRID,
     GRID_SEARCH_VERBOSE,
     KNN_IMPUTE_NEIGHBORS,
     PRIMARY_TUNING_METRIC,
@@ -35,8 +36,23 @@ from secom.pipelines import (
     load_mart,
     make_repeated_stratified_cv,
     split_train_test,
+    time_decay_weights,
 )
 from secom.utils import json_safe, tuned_params_path
+
+from sklearn.metrics import average_precision_score
+
+
+def _sample_weight_kwargs(timestamps, train_idx, decay_lambda: float) -> dict:
+    """Fit kwargs for time-decay weighting; empty when timestamps is None.
+
+    Passing no weights (timestamps=None) is required for models whose fit does
+    not accept sample_weight (e.g. k-NN).
+    """
+    if timestamps is None:
+        return {}
+    w = time_decay_weights(timestamps.iloc[train_idx], decay_lambda)
+    return {"classifier__sample_weight": w}
 
 from secom.pipelines import (
     C_GRID,
@@ -314,15 +330,11 @@ def resolve_grid_search_best_params(model_id: str, tuned_payload: dict) -> dict:
 def build_tuned_pipeline(
     model_id: str,
     tuned_payload: dict,
-    *,
-    extrapolation: bool = False,
 ) -> Pipeline:
     """Clone model pipeline, apply frozen params, and wrap classifier with tuned threshold."""
     spec = MODEL_SPECS[model_id]
     pipeline = clone(spec.build_pipeline())
     pipeline.set_params(**resolve_grid_search_best_params(model_id, tuned_payload))
-    if extrapolation:
-        pipeline.set_params(preprocess__sensor_branch__baseline_norm__enabled=True)
     threshold = _resolved_classifier_threshold(tuned_payload)
     classifier = pipeline.named_steps["classifier"]
     pipeline.steps[-1] = (
@@ -546,21 +558,71 @@ def _profile_result_at_best(
     return result
 
 
+def tune_time_decay_lambda(
+    spec: ModelSpec,
+    X: pd.DataFrame,
+    y: pd.Series,
+    timestamps: pd.Series,
+    cv_summary: dict,
+    cv,
+    *,
+    lambda_grid: list[float] | None = None,
+) -> dict:
+    """Select exponential time-decay lambda by mean PR-AUC over blocked CV folds.
+
+    Fits the structurally-tuned pipeline per fold with time-decay sample weights
+    and scores average_precision on each validation block. lambda is tuned only
+    on CV (never the holdout); lambda=0 recovers the unweighted model.
+    """
+    lambda_grid = [float(x) for x in (lambda_grid or DECAY_LAMBDA_GRID)]
+    best_params = spec.build_grid_search_best_params(cv_summary)
+    base_pipeline = clone(spec.build_pipeline())
+    base_pipeline.set_params(**best_params)
+
+    splits = list(cv.split(X, y))
+    per_lambda: dict[float, float] = {}
+    for decay_lambda in lambda_grid:
+        fold_scores: list[float] = []
+        for train_idx, val_idx in splits:
+            fold_pipe = clone(base_pipeline)
+            fold_pipe.fit(
+                X.iloc[train_idx],
+                y.iloc[train_idx],
+                **_sample_weight_kwargs(timestamps, train_idx, decay_lambda),
+            )
+            proba = fold_pipe.predict_proba(X.iloc[val_idx])[:, 1]
+            fold_scores.append(
+                float(average_precision_score(y.iloc[val_idx], proba))
+            )
+        per_lambda[decay_lambda] = float(np.mean(fold_scores)) if fold_scores else 0.0
+
+    best_decay_lambda = max(per_lambda, key=per_lambda.get)
+    return {
+        "best_decay_lambda": float(best_decay_lambda),
+        "best_mean_pr_auc": float(per_lambda[best_decay_lambda]),
+        "per_lambda_pr_auc": {str(k): v for k, v in per_lambda.items()},
+        "lambda_grid": lambda_grid,
+    }
+
+
 def tune_classifier_threshold_profiles(
     spec: ModelSpec,
     X: pd.DataFrame,
     y: pd.Series,
     cv_summary: dict,
     cv=None,
-    extrapolation: bool = False,
+    timestamps: pd.Series | None = None,
+    decay_lambda: float = 0.0,
 ) -> dict:
-    """Stage 2: sweep thresholds on CV validation probs; maximise mean F-beta per profile."""
+    """Stage 2: sweep thresholds on CV validation probs; maximise mean F-beta per profile.
+
+    When ``timestamps`` is provided (extrapolation, weight-capable models), each
+    fold fit is time-decay weighted at ``decay_lambda``.
+    """
     cv = cv or make_repeated_stratified_cv()
     best_params = spec.build_grid_search_best_params(cv_summary)
     base_pipeline = clone(spec.build_pipeline())
     base_pipeline.set_params(**best_params)
-    if extrapolation:
-        base_pipeline.set_params(preprocess__sensor_branch__baseline_norm__enabled=True)
 
     threshold_grid = [float(t) for t in THRESHOLD_GRID]
     splits = list(cv.split(X, y))
@@ -580,7 +642,7 @@ def tune_classifier_threshold_profiles(
         y_tr = y.iloc[train_idx]
         X_val = X.iloc[val_idx]
         y_val = y.iloc[val_idx]
-        fold_pipe.fit(X_tr, y_tr)
+        fold_pipe.fit(X_tr, y_tr, **_sample_weight_kwargs(timestamps, train_idx, decay_lambda))
         fold_probas.append(fold_pipe.predict_proba(X_val)[:, 1])
         fold_y_val.append(y_val)
 
@@ -676,6 +738,8 @@ def save_tuned_params(
     threshold_result: dict | None = None,
     path: Path | None = None,
     cv_protocol: str = "repeated_stratified_5x2",
+    decay_lambda: float = 0.0,
+    decay_lambda_search: dict | None = None,
 ) -> dict:
     path = path or tuned_params_path(spec.model_id)
     best_params = spec.build_grid_search_best_params(cv_summary)
@@ -732,12 +796,15 @@ def save_tuned_params(
         "cv_protocol": cv_protocol,
         "classifier_threshold": best_threshold,
         "grid_search_best_params": best_params,
+        "decay_lambda": float(decay_lambda),
         "cv_summary": json_safe(summary_out),
         "cv_fold_results": fold_results.to_dict(orient="records"),
         "aggregated_top_configs": aggregated.head(10).to_dict(orient="records"),
         "frozen_config": frozen_config(),
         "tuned_at": datetime.now(timezone.utc).isoformat(),
     }
+    if decay_lambda_search is not None:
+        payload["decay_lambda_search"] = json_safe(decay_lambda_search)
     if threshold_result is not None:
         fold_at_best = (
             default_profile["fold_results_at_best_threshold"]
@@ -804,15 +871,12 @@ def run_grid_search(
     y: pd.Series,
     *,
     cv=None,
-    extrapolation: bool = False,
     verbose: int = GRID_SEARCH_VERBOSE,
 ) -> tuple[GridSearchCV, int, int, int]:
     param_grid = spec.make_param_grid()
     cv = cv or make_repeated_stratified_cv()
     n_candidates, n_splits, total_fits = grid_search_workload(param_grid, cv, X, y)
     pipeline = spec.build_pipeline()
-    if extrapolation:
-        pipeline.set_params(preprocess__sensor_branch__baseline_norm__enabled=True)
     search = GridSearchCV(
         pipeline,
         param_grid=param_grid,

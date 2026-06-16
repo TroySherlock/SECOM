@@ -173,6 +173,37 @@ def holdout_comparison_df(payload: dict[str, Any]) -> pd.DataFrame:
     return out
 
 
+def holdout_conditional_df(
+    payload: dict[str, Any], key: str = "holdout_conditional"
+) -> pd.DataFrame:
+    """T2-gate conditional metrics + coverage per pipeline (temporal / random)."""
+    rows = payload.get(key) or []
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows)
+
+
+def process_gate_meta(payload: dict[str, Any]) -> dict[str, Any]:
+    """Process gate config: T² + IF params, UCL, feature count, OR logic."""
+    meta = payload.get("process_gate")
+    if isinstance(meta, dict) and meta:
+        return dict(meta)
+    # Backward compatibility with older benchmark JSON.
+    legacy = payload.get("t2_gate")
+    return dict(legacy) if isinstance(legacy, dict) else {}
+
+
+def t2_gate_meta(payload: dict[str, Any]) -> dict[str, Any]:
+    """Alias for :func:`process_gate_meta`."""
+    return process_gate_meta(payload)
+
+
+def time_decay_meta(payload: dict[str, Any]) -> dict[str, Any]:
+    """Per-model tuned decay lambda + search (extrapolation path)."""
+    meta = payload.get("time_decay")
+    return dict(meta) if isinstance(meta, dict) else {}
+
+
 HOLDOUT_AUC_DISPLAY_COLS = [
     "pipeline",
     "pr_auc",

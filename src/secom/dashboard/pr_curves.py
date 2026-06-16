@@ -10,7 +10,12 @@ from secom.costs import resolve_threshold_profiles
 from secom.cv import make_blocked_time_cv
 from secom.dashboard.explainability import fit_holdout_pipeline, load_holdout_split
 from secom.metrics import PRCurve, pr_curve_points, threshold_pr_point
-from secom.pipelines import BENCHMARK_MODEL_IDS
+from secom.pipelines import (
+    BENCHMARK_MODEL_IDS,
+    TIMESTAMP_COL,
+    WEIGHTING_MODEL_IDS,
+    time_decay_weights,
+)
 from secom.tuning.registry import build_tuned_pipeline
 from secom.utils import load_tuned_blocked_params
 
@@ -21,12 +26,25 @@ def collect_cv_oof_proba(model_id: str) -> tuple[pd.Series, np.ndarray]:
         raise ValueError(f"Unknown model_id: {model_id}")
     split = load_holdout_split()
     tuned = load_tuned_blocked_params(model_id)
-    pipeline = build_tuned_pipeline(model_id, tuned, extrapolation=True)
+    pipeline = build_tuned_pipeline(model_id, tuned)
     cv = make_blocked_time_cv(split.train_df)
+    decay_lambda = (
+        float(tuned.get("decay_lambda", 0.0))
+        if model_id in WEIGHTING_MODEL_IDS
+        else 0.0
+    )
+    train_ts = split.train_df[TIMESTAMP_COL].reset_index(drop=True)
     proba = np.full(len(split.y_train), np.nan)
     for train_idx, val_idx in cv.split(split.X_train, split.y_train):
         fold_pipe = clone(pipeline)
-        fold_pipe.fit(split.X_train.iloc[train_idx], split.y_train.iloc[train_idx])
+        fit_kwargs: dict = {}
+        if decay_lambda:
+            fit_kwargs["classifier__sample_weight"] = time_decay_weights(
+                train_ts.iloc[train_idx], decay_lambda
+            )
+        fold_pipe.fit(
+            split.X_train.iloc[train_idx], split.y_train.iloc[train_idx], **fit_kwargs
+        )
         proba[val_idx] = fold_pipe.predict_proba(split.X_train.iloc[val_idx])[:, 1]
     mask = ~np.isnan(proba)
     y_oof = split.y_train.iloc[mask].reset_index(drop=True)

@@ -12,7 +12,6 @@ from feature_engine.selection import (
     DropDuplicateFeatures,
     SmartCorrelatedSelection,
 )
-from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.ensemble import RandomForestClassifier
@@ -66,10 +65,17 @@ N_SPLITS = 5
 N_REPEATS = 1
 N_BLOCKED_SPLITS = 3
 BLOCKED_MIN_VAL_FAILS = 4
-BASELINE_NORM_EPS = 1e-6
+
+# Time-decay sample weighting (extrapolation path only). lambda=0 -> uniform.
+DECAY_LAMBDA_GRID = [0.0, 0.25, 0.5]
+DECAY_LAMBDA_DEFAULT = 0.0
+WEIGHTING_MODEL_IDS = ("linear_lr", "topk_rf", "topk_xgb")
+
+# Process gate constants defined after CORRELATED_SELECTION_THRESHOLD below.
+
 GRID_SEARCH_VERBOSE = 1
 
-C_GRID = [0.0075, 0.01, 0.05]
+C_GRID = [0.0075]
 L1_RATIO_GRID = [0.3, 0.5, 0.7]
 
 MODEL_NAME = "secom_linear_elastic_net"
@@ -85,7 +91,7 @@ KNN_NEIGHBORS_GRID = [10, 30]
 
 RF_N_ESTIMATORS = 1000
 RF_MAX_DEPTH = 3
-RF_MAX_DEPTH_GRID = [3, 4, 5]
+RF_MAX_DEPTH_GRID = [3, 5]
 RF_MIN_SAMPLES_LEAF = 10
 RF_SELECT_TOP_K = 35
 RF_SELECT_TOP_K_GRID = [35, 100]
@@ -98,9 +104,17 @@ CORRELATED_SELECTION_THRESHOLD_GRID = [0.85, 0.9, 0.95]
 CORRELATED_SELECTION_METHOD = "spearman"
 CORRELATED_SELECTION_CRITERION = "corr_with_target"
 
+# Process gate (post-cluster T² OR Isolation Forest on passing train wafers).
+T2_GATE_ALPHA = 0.08
+IF_GATE_ALPHA = 0.00
+IF_GATE_N_ESTIMATORS = 400
+IF_GATE_MAX_SAMPLES = "auto"
+# smart_corr threshold for gate feature pipe (impute → cluster only).
+GATE_CORR_THRESHOLD = CORRELATED_SELECTION_THRESHOLD
+
 XGB_N_ESTIMATORS = 1000
 XGB_MAX_DEPTH = 3
-XGB_MAX_DEPTH_GRID = [3, 4, 5]
+XGB_MAX_DEPTH_GRID = [3, 5]
 XGB_LEARNING_RATE = 0.05
 XGB_LEARNING_RATE_GRID = [0.1]
 XGB_SCALE_POS_WEIGHT = 14.151515
@@ -230,6 +244,11 @@ def frozen_config() -> dict:
         ],
         "correlated_selection_method": CORRELATED_SELECTION_METHOD,
         "correlated_selection_criterion": CORRELATED_SELECTION_CRITERION,
+        "t2_gate_alpha": float(T2_GATE_ALPHA),
+        "if_gate_alpha": float(IF_GATE_ALPHA),
+        "if_gate_n_estimators": int(IF_GATE_N_ESTIMATORS),
+        "if_gate_max_samples": IF_GATE_MAX_SAMPLES,
+        "gate_corr_threshold": float(GATE_CORR_THRESHOLD),
         "holdout_bootstrap_n": int(HOLDOUT_BOOTSTRAP_N),
         "holdout_bootstrap_ci": float(HOLDOUT_BOOTSTRAP_CI),
         **threshold_profile_config(),
@@ -352,61 +371,30 @@ def _auxiliary_transformers() -> list[tuple[str, str, object]]:
     ]
 
 
-class SensorBaselineNormalizer(BaseEstimator, TransformerMixin):
-    """Per-sensor robust z-score vs train-fold baseline (IQR scale).
+def time_decay_weights(timestamps, decay_lambda: float) -> np.ndarray:
+    """Exponential recency weights from timestamps (recent = heavier).
 
-    When ``enabled=False`` (default), passthrough — used for in-distribution
-  evaluation. Enable for extrapolation / temporal holdout pipelines.
+    Age is normalized to [0, 1] within the rows passed in (0 = newest,
+    1 = oldest), so weights never reference data outside this fit. Weights are
+    rescaled to mean ~1 to keep the effective regularization scale stable.
+    ``decay_lambda=0`` (or a degenerate span) yields uniform weights.
     """
-
-    _sklearn_auto_wrap_output_keys = ("transform",)
-
-    def __init__(self, enabled: bool = False, eps: float = BASELINE_NORM_EPS):
-        self.enabled = enabled
-        self.eps = eps
-
-    def fit(self, X, y=None):
-        cols = list(X.columns) if isinstance(X, pd.DataFrame) else []
-        self.feature_names_in_ = np.asarray(cols, dtype=object)
-        if not self.enabled or not cols:
-            self.median_ = {}
-            self.scale_ = {}
-            return self
-
-        frame = X if isinstance(X, pd.DataFrame) else pd.DataFrame(X, columns=cols)
-        numeric = frame.astype("float64", copy=False)
-        self.median_ = numeric.median(numeric_only=True).to_dict()
-        q75 = numeric.quantile(0.75, numeric_only=True)
-        q25 = numeric.quantile(0.25, numeric_only=True)
-        iqr = (q75 - q25).to_dict()
-        std = numeric.std(numeric_only=True, ddof=0).to_dict()
-        self.scale_ = {}
-        for col in cols:
-            scale = float(iqr.get(col, 0.0))
-            if not np.isfinite(scale) or scale < self.eps:
-                scale = float(std.get(col, 0.0))
-            if not np.isfinite(scale) or scale < self.eps:
-                scale = 1.0
-            self.scale_[col] = scale
-        return self
-
-    def transform(self, X):
-        if not self.enabled:
-            return X
-        if not isinstance(X, pd.DataFrame):
-            return X
-        out = X.copy()
-        for col in out.columns:
-            if col in self.median_:
-                out[col] = (out[col] - self.median_[col]) / (
-                    self.scale_[col] + self.eps
-                )
-        return out
-
-    def get_feature_names_out(self, input_features=None):
-        if input_features is not None:
-            return np.asarray(input_features, dtype=object)
-        return self.feature_names_in_
+    ts = np.asarray(
+        pd.to_datetime(np.asarray(timestamps), errors="coerce").astype("int64"),
+        dtype=float,
+    )
+    n = len(ts)
+    if n == 0:
+        return np.ones(0)
+    span = ts.max() - ts.min()
+    if span <= 0 or not decay_lambda:
+        return np.ones(n)
+    age = (ts.max() - ts) / span
+    w = np.exp(-float(decay_lambda) * age)
+    total = w.sum()
+    if total <= 0:
+        return np.ones(n)
+    return w * (n / total)
 
 
 def _cluster_step() -> Pipeline:
@@ -445,13 +433,25 @@ def _sensor_preprocess_column(
     )
 
 
+def build_gate_feature_pipeline(corr_threshold: float | None = None) -> Pipeline:
+    """Impute → cluster only (sensor branch through SmartCorrelatedSelection)."""
+    cluster = _cluster_step()
+    if corr_threshold is not None:
+        cluster.set_params(smart_corr__threshold=float(corr_threshold))
+    return Pipeline(
+        steps=[
+            ("impute", median_imputer()),
+            ("cluster", cluster),
+        ]
+    ).set_output(transform="pandas")
+
+
 def linear_preprocess(
     top_k: int = RF_SELECT_TOP_K,
     n_hubs: int = N_HUBS_DEFAULT,
 ) -> ColumnTransformer:
-    """Baseline norm (off default) → impute → cluster → T² + hub pairs; passthrough aux."""
+    """Impute → cluster → T² + hub pairs; passthrough aux."""
     sensor_steps: list[tuple[str, object]] = [
-        #("baseline_norm", SensorBaselineNormalizer()),
         ("impute", median_imputer()),
         ("cluster", _cluster_step()),
         (
