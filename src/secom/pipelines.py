@@ -12,6 +12,7 @@ from feature_engine.selection import (
     DropDuplicateFeatures,
     SmartCorrelatedSelection,
 )
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.ensemble import RandomForestClassifier
@@ -19,7 +20,11 @@ from sklearn.impute import KNNImputer, SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import make_scorer, recall_score
 from sklearn.feature_selection import VarianceThreshold
-from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
+from sklearn.model_selection import (
+    RepeatedStratifiedKFold,
+    StratifiedKFold,
+    train_test_split,
+)
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import RobustScaler
@@ -102,7 +107,7 @@ ESTIMATOR_N_JOBS = 1
 PRIMARY_TUNING_METRIC = "pr_auc"
 THRESHOLD_GRID = np.linspace(0.001, 0.999, num=100)
 
-CLASSIFIER_CALIBRATION_METHOD = "isotonic"
+CLASSIFIER_CALIBRATION_METHOD = "sigmoid"
 CLASSIFIER_CALIBRATION_CV = 3
 
 HOLDOUT_BOOTSTRAP_N = 1000
@@ -255,10 +260,28 @@ def split_train_test(
     return train_df.reset_index(drop=True), test_df.reset_index(drop=True)
 
 
+def split_train_test_random(
+    df: pd.DataFrame,
+    target_col: str = TARGET_COL,
+    test_size: float = TEST_SIZE,
+    seed: int = RANDOM_SEED,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Random stratified holdout (in-distribution / interpolation contrast)."""
+    train_df, test_df = train_test_split(
+        df,
+        test_size=test_size,
+        stratify=df[target_col],
+        shuffle=True,
+        random_state=seed,
+    )
+    return train_df.reset_index(drop=True), test_df.reset_index(drop=True)
+
+
 def holdout_split_summary(
     train_df: pd.DataFrame,
     test_df: pd.DataFrame,
     *,
+    split_mode: str = HOLDOUT_SPLIT_MODE,
     target_col: str = TARGET_COL,
     timestamp_col: str = TIMESTAMP_COL,
     test_size: float = TEST_SIZE,
@@ -273,7 +296,7 @@ def holdout_split_summary(
         return float(frame[target_col].astype(int).mean())
 
     return {
-        "split_mode": HOLDOUT_SPLIT_MODE,
+        "split_mode": split_mode,
         "test_size": float(test_size),
         "train_rows": int(len(train_df)),
         "test_rows": int(len(test_df)),
@@ -323,16 +346,40 @@ def _auxiliary_transformers() -> list[tuple[str, str, object]]:
     ]
 
 
+class DriftStabilityDropper(BaseEstimator, TransformerMixin):
+    """Drop a fixed set of drifting sensor columns (no-op when empty).
+
+    The drop list is computed train-only (see secom.drift.compute_stable_features)
+    and injected via set_params; this transformer itself learns nothing.
+    """
+
+    _sklearn_auto_wrap_output_keys = ("transform",)
+
+    def __init__(self, drop_columns: tuple[str, ...] = ()):
+        self.drop_columns = drop_columns
+
+    def fit(self, X, y=None):
+        cols = list(X.columns) if isinstance(X, pd.DataFrame) else []
+        self.feature_names_in_ = np.asarray(cols, dtype=object)
+        self.drop_columns_ = [c for c in self.drop_columns if c in cols]
+        self.kept_columns_ = [c for c in cols if c not in set(self.drop_columns_)]
+        return self
+
+    def transform(self, X):
+        if isinstance(X, pd.DataFrame):
+            return X.drop(columns=self.drop_columns_, errors="ignore")
+        return X
+
+    def get_feature_names_out(self, input_features=None):
+        return np.asarray(self.kept_columns_, dtype=object)
+
+
 def _cluster_step() -> Pipeline:
     return Pipeline(
         steps=[
-            ("drop_constant", DropConstantFeatures(tol=1)),
+            ("drop_constant", DropConstantFeatures(tol=1, missing_values="ignore")),
             ("drop_duplicates", DropDuplicateFeatures()),
             ("drop_low_variance", VarianceThreshold(threshold=0)),
-            (
-                "drop_constant_pre_spearman",
-                DropConstantFeatures(tol=1, missing_values="ignore"),
-            ),
             (
                 "smart_corr",
                 SmartCorrelatedSelection(
@@ -367,8 +414,9 @@ def linear_preprocess(
     top_k: int = RF_SELECT_TOP_K,
     n_hubs: int = N_HUBS_DEFAULT,
 ) -> ColumnTransformer:
-    """Impute → cluster → T² + hub pairs; passthrough aux."""
+    """Drift filter (no-op default) → impute → cluster → T² + hub pairs; passthrough aux."""
     sensor_steps: list[tuple[str, object]] = [
+        ("drift_filter", DriftStabilityDropper()),
         ("impute", median_imputer()),
         ("cluster", _cluster_step()),
         (

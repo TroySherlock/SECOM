@@ -103,11 +103,63 @@ def cv_leaderboard_df(payload: dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def holdout_df(payload: dict[str, Any]) -> pd.DataFrame:
-    rows = payload.get("holdout") or []
+HOLDOUT_VIEW_KEYS: dict[str, str] = {
+    "temporal": "holdout",
+    "random": "holdout_random",
+    "temporal_drift_filtered": "holdout_temporal_drift_filtered",
+}
+
+
+def holdout_df(payload: dict[str, Any], key: str = "holdout") -> pd.DataFrame:
+    """Holdout rows for a given benchmark key (temporal / random / drift-filtered)."""
+    rows = payload.get(key) or []
     if not rows:
         return pd.DataFrame()
     return pd.DataFrame(rows)
+
+
+def holdout_comparison_df(payload: dict[str, Any]) -> pd.DataFrame:
+    """One row per pipeline: CV vs random/temporal/drift-filtered holdout PR/ROC-AUC."""
+    cv_df = cv_leaderboard_df(payload)
+    if cv_df.empty:
+        return pd.DataFrame()
+
+    def _metric_map(key: str, metric: str) -> dict[str, float]:
+        rows = payload.get(key) or []
+        return {
+            r["pipeline"]: r.get(metric)
+            for r in rows
+            if isinstance(r, dict) and "pipeline" in r
+        }
+
+    random_pr = _metric_map("holdout_random", "pr_auc")
+    temporal_pr = _metric_map("holdout", "pr_auc")
+    drift_pr = _metric_map("holdout_temporal_drift_filtered", "pr_auc")
+    cv_pr = dict(zip(cv_df.get("pipeline", []), cv_df.get("mean_pr_auc", [])))
+
+    out_rows = []
+    for pipeline in cv_df["pipeline"]:
+        rand = random_pr.get(pipeline)
+        temp = temporal_pr.get(pipeline)
+        gap = (
+            float(rand) - float(temp)
+            if rand is not None and temp is not None
+            else None
+        )
+        out_rows.append(
+            {
+                "pipeline": pipeline,
+                "cv_pr_auc": cv_pr.get(pipeline),
+                "random_pr_auc": rand,
+                "temporal_pr_auc": temp,
+                "temporal_drift_filtered_pr_auc": drift_pr.get(pipeline),
+                "interpolation_gap": gap,
+            }
+        )
+    out = pd.DataFrame(out_rows)
+    for col in out.select_dtypes(include="float").columns:
+        out[col] = out[col].round(3)
+    return out
 
 
 HOLDOUT_AUC_DISPLAY_COLS = [

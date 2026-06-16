@@ -59,7 +59,9 @@ from secom.pipelines import (
     load_mart,
     make_repeated_stratified_cv,
     split_train_test,
+    split_train_test_random,
 )
+from secom.drift import compute_stable_features
 from secom.utils import (
     json_safe,
     load_all_tuned_params,
@@ -254,6 +256,10 @@ def save_benchmark_results(
     holdout: pd.DataFrame | None = None,
     *,
     holdout_split: dict | None = None,
+    holdout_random: pd.DataFrame | None = None,
+    holdout_split_random: dict | None = None,
+    holdout_temporal_drift_filtered: pd.DataFrame | None = None,
+    drift_filter: dict | None = None,
     path: Path = BENCHMARK_RESULTS_PATH,
 ) -> dict:
     payload = {
@@ -300,27 +306,75 @@ def save_benchmark_results(
     }
     if holdout is not None:
         payload["holdout"] = holdout.to_dict(orient="records")
+    if holdout_random is not None:
+        payload["holdout_random"] = holdout_random.to_dict(orient="records")
+    if holdout_split_random is not None:
+        payload["holdout_split_random"] = holdout_split_random
+    if holdout_temporal_drift_filtered is not None:
+        payload["holdout_temporal_drift_filtered"] = (
+            holdout_temporal_drift_filtered.to_dict(orient="records")
+        )
+    if drift_filter is not None:
+        payload["drift_filter"] = drift_filter
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(json_safe(payload), indent=2), encoding="utf-8")
     return payload
 
 
+def build_drift_filtered_pipelines(
+    tuned: dict[str, dict],
+    drop_columns: list[str],
+) -> dict[str, Pipeline]:
+    """Baseline pipelines with the train-only drift drop list injected."""
+    pipelines = build_benchmark_pipelines(tuned)
+    drop = tuple(drop_columns)
+    for pipeline in pipelines.values():
+        pipeline.set_params(
+            preprocess__sensor_branch__drift_filter__drop_columns=drop
+        )
+    return pipelines
+
+
 def main() -> None:
-    """Re-run after tuning: Stage 2 writes threshold_profiles; this script refreshes holdout x3."""
+    """Re-run after tuning: refresh CV + temporal/random/drift-filtered holdouts."""
     tuned = load_all_tuned_params()
     df = load_mart()
     cols = feature_columns(df)
+
+    # Temporal (forward / extrapolation) split.
     train_df, test_df = split_train_test(df)
-    split_meta = holdout_split_summary(train_df, test_df)
+    split_meta = holdout_split_summary(train_df, test_df, split_mode="temporal")
     X_train = train_df[cols]
     y_train = train_df[TARGET_COL].astype(int)
     X_test = test_df[cols]
     y_test = test_df[TARGET_COL].astype(int)
 
-    pipelines = build_benchmark_pipelines(tuned)
-    leaderboard = run_pipeline_benchmark(pipelines, X_train, y_train, show_progress=True)
+    # Random (in-distribution / interpolation) split.
+    rand_train_df, rand_test_df = split_train_test_random(df)
+    split_meta_random = holdout_split_summary(
+        rand_train_df, rand_test_df, split_mode="random"
+    )
+    Xr_train = rand_train_df[cols]
+    yr_train = rand_train_df[TARGET_COL].astype(int)
+    Xr_test = rand_test_df[cols]
+    yr_test = rand_test_df[TARGET_COL].astype(int)
+
+    # Train-only drift screen (computed on the temporal train slice only).
+    drift = compute_stable_features(train_df)
+    print(
+        f"Drift filter: dropped {drift['n_dropped']}/{drift['n_tested']} sensors "
+        f"(cutpoint {drift['cutpoint']})"
+    )
+
+    # CV leaderboard on temporal train slice (baseline pipelines).
+    leaderboard = run_pipeline_benchmark(
+        build_benchmark_pipelines(tuned), X_train, y_train, show_progress=True
+    )
+
+    # Temporal holdout (baseline). Reuse these fitted pipelines for artifacts.
+    temporal_pipelines = build_benchmark_pipelines(tuned)
     holdout = run_holdout_benchmark(
-        pipelines,
+        temporal_pipelines,
         X_train,
         y_train,
         X_test,
@@ -328,14 +382,45 @@ def main() -> None:
         tuned,
         show_progress=True,
     )
+
+    # Random holdout (interpolation, baseline pipelines refit on random train).
+    print("\nRandom holdout (in-distribution):")
+    holdout_random = run_holdout_benchmark(
+        build_benchmark_pipelines(tuned),
+        Xr_train,
+        yr_train,
+        Xr_test,
+        yr_test,
+        tuned,
+        show_progress=True,
+    )
+
+    # Temporal holdout with drift-filtered pipelines (mitigation / before-after).
+    print("\nTemporal holdout (drift-filtered):")
+    holdout_drift = run_holdout_benchmark(
+        build_drift_filtered_pipelines(tuned, drift["dropped_columns"]),
+        X_train,
+        y_train,
+        X_test,
+        y_test,
+        tuned,
+        show_progress=True,
+    )
+
     save_benchmark_results(
         tuned,
         leaderboard,
         holdout,
         holdout_split=split_meta,
+        holdout_random=holdout_random,
+        holdout_split_random=split_meta_random,
+        holdout_temporal_drift_filtered=holdout_drift,
+        drift_filter=drift,
     )
+    # Deep-dive artifacts stay on the temporal baseline slice (deployment view);
+    # reuse the pipelines already fit during the temporal holdout run.
     artifacts = collect_holdout_artifacts(
-        pipelines,
+        temporal_pipelines,
         X_train,
         y_train,
         holdout_split=split_meta,
@@ -346,8 +431,12 @@ def main() -> None:
     print(f"Wrote {PIPELINE_ARTIFACTS_PATH}\n")
     print("CV leaderboard:")
     print(leaderboard.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
-    print("\nHoldout (reporting only):")
+    print("\nTemporal holdout (baseline):")
     print(holdout.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
+    print("\nRandom holdout (in-distribution):")
+    print(holdout_random.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
+    print("\nTemporal holdout (drift-filtered):")
+    print(holdout_drift.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
 
 
 if __name__ == "__main__":
