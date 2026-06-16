@@ -96,7 +96,7 @@ def scaled_matrix(pipeline, X: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
 
 def _deploy_threshold(tuned: dict) -> float:
     profiles = resolve_threshold_profiles(tuned)
-    return float(profiles.get(DEFAULT_PROFILE_ID, tuned.get("classifier_threshold", 0.5)))
+    return float(profiles[DEFAULT_PROFILE_ID])
 
 
 def global_importance_linear(pipeline) -> tuple[pd.DataFrame, pd.DataFrame]:

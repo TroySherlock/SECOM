@@ -3,7 +3,7 @@
 
 Models: linear_lr, topk_rf, topk_knn, topk_xgb.
 Each uses frozen hyperparameters from data/processed/tuned/<model_id>.json.
-Primary objective: maximize PR AUC on CV; three F-beta thresholds (F1 / F2 / F3).
+Primary objective: maximize PR AUC on CV; F-beta thresholds (F0.5 / F2 / F4) plus BER-min.
 """
 from __future__ import annotations
 
@@ -55,6 +55,7 @@ from secom.pipelines import (
     XGB_N_ESTIMATORS,
     XGB_SCALE_POS_WEIGHT,
     feature_columns,
+    holdout_split_summary,
     load_mart,
     make_repeated_stratified_cv,
     split_train_test,
@@ -152,9 +153,10 @@ def _profile_holdout_columns(
         f"{profile_id}_true_negative_percent": metrics["true_negative_percent"],
         f"{profile_id}_confusion_matrix": metrics["confusion_matrix"],
     }
-    cols[f"{profile_id}_fbeta"] = fbeta_at_threshold(
-        y_test, y_pred, beta=profile.beta
-    )
+    if profile.objective == "fbeta" and profile.beta is not None:
+        cols[f"{profile_id}_fbeta"] = fbeta_at_threshold(
+            y_test, y_pred, beta=profile.beta
+        )
     return cols
 
 
@@ -251,8 +253,7 @@ def save_benchmark_results(
     leaderboard: pd.DataFrame,
     holdout: pd.DataFrame | None = None,
     *,
-    train_rows: int | None = None,
-    test_rows: int | None = None,
+    holdout_split: dict | None = None,
     path: Path = BENCHMARK_RESULTS_PATH,
 ) -> dict:
     payload = {
@@ -289,11 +290,9 @@ def save_benchmark_results(
             "ci_level": float(HOLDOUT_BOOTSTRAP_CI),
             "method": "stratified",
         },
-        "holdout_split": {
+        "holdout_split": holdout_split or {
             "test_size": float(TEST_SIZE),
-            "random_seed": int(RANDOM_SEED),
-            "train_rows": train_rows,
-            "test_rows": test_rows,
+            "split_mode": "temporal",
         },
         "leaderboard": leaderboard.to_dict(orient="records"),
         "threshold_profile_ids": list(PROFILE_IDS),
@@ -312,6 +311,7 @@ def main() -> None:
     df = load_mart()
     cols = feature_columns(df)
     train_df, test_df = split_train_test(df)
+    split_meta = holdout_split_summary(train_df, test_df)
     X_train = train_df[cols]
     y_train = train_df[TARGET_COL].astype(int)
     X_test = test_df[cols]
@@ -332,15 +332,13 @@ def main() -> None:
         tuned,
         leaderboard,
         holdout,
-        train_rows=len(train_df),
-        test_rows=len(test_df),
+        holdout_split=split_meta,
     )
     artifacts = collect_holdout_artifacts(
         pipelines,
         X_train,
         y_train,
-        train_rows=len(train_df),
-        test_rows=len(test_df),
+        holdout_split=split_meta,
     )
     save_pipeline_artifacts(artifacts)
 

@@ -36,12 +36,19 @@ def main() -> int:
             spec, X_train, y_train, cv_summary
         )
         for pid, prof in threshold_result["profiles"].items():
-            print(
-                f"  {pid}: threshold={prof['best_threshold']:.4f}, "
-                f"mean_fbeta={prof['mean_fbeta']:.4f}, "
-                f"mean_ber={prof['mean_ber_percent']:.2f}%",
-                flush=True,
-            )
+            if prof.get("objective") == "ber":
+                print(
+                    f"  {pid}: threshold={prof['best_threshold']:.4f}, "
+                    f"mean_ber={prof['mean_ber_percent']:.2f}%",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"  {pid}: threshold={prof['best_threshold']:.4f}, "
+                    f"mean_fbeta={prof['mean_fbeta']:.4f}, "
+                    f"mean_ber={prof['mean_ber_percent']:.2f}%",
+                    flush=True,
+                )
         save_tuned_params(
             spec,
             cv_summary,

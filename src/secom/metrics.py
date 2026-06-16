@@ -3,11 +3,23 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from dataclasses import dataclass
+
 from sklearn.metrics import (
     average_precision_score,
     confusion_matrix,
+    precision_recall_curve,
+    precision_score,
+    recall_score,
     roc_auc_score,
 )
+
+
+@dataclass(frozen=True)
+class PRCurve:
+    recall: np.ndarray
+    precision: np.ndarray
+    baseline: float
 
 
 def predict_with_threshold(y_score: np.ndarray, threshold: float) -> np.ndarray:
@@ -118,3 +130,33 @@ def stratified_bootstrap_holdout_metrics(
         "ber_percent_ci_low": float(np.percentile(ber_arr, lo_pct)),
         "ber_percent_ci_high": float(np.percentile(ber_arr, hi_pct)),
     }
+
+
+def pr_curve_points(
+    y_true: pd.Series | np.ndarray,
+    y_score: np.ndarray,
+) -> PRCurve:
+    """Precision-recall curve points and positive-class prevalence baseline."""
+    y_true = np.asarray(y_true).astype(int)
+    y_score = np.asarray(y_score, dtype=float)
+    precision, recall, _ = precision_recall_curve(y_true, y_score)
+    order = np.argsort(recall, kind="mergesort")
+    return PRCurve(
+        recall=np.asarray(recall, dtype=float)[order],
+        precision=np.asarray(precision, dtype=float)[order],
+        baseline=float(y_true.mean()),
+    )
+
+
+def threshold_pr_point(
+    y_true: pd.Series | np.ndarray,
+    y_score: np.ndarray,
+    threshold: float,
+) -> tuple[float, float]:
+    """Recall and precision at a fixed probability threshold (fail = positive)."""
+    y_true = np.asarray(y_true).astype(int)
+    y_pred = predict_with_threshold(y_score, threshold)
+    return (
+        float(recall_score(y_true, y_pred, zero_division=0)),
+        float(precision_score(y_true, y_pred, zero_division=0)),
+    )

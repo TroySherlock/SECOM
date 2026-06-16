@@ -8,7 +8,7 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from secom.dashboard.stg import ROW_INDEX_COL, sensor_columns
-from secom.costs import PROFILE_IDS, THRESHOLD_PROFILES, ProfileId
+from secom.metrics import PRCurve
 
 # SECOM chart palette — keep in sync with .streamlit/config.toml chartCategoricalColors
 C_RED = "#ea6962"
@@ -26,12 +26,6 @@ CI_YELLOW_RGBA = "rgba(216, 166, 87, 0.35)"
 CV_ERROR_PURPLE_RGBA = "rgba(211, 134, 155, 0.6)"
 
 CHART_BG = "#3c3836"
-
-PROFILE_TRACE_COLORS: dict[ProfileId, str] = {
-    "f1": C_YELLOW,
-    "f2": C_ORANGE,
-    "f3": C_RED,
-}
 
 # Heatmaps: low → green, high → red (yellow mid-tone)
 COLORSCALE_LOW_GREEN_HIGH_RED = [
@@ -804,44 +798,6 @@ def fig_cv_vs_holdout_validation(
     return _sized(fig, height=380, margin=dict(l=100, r=48, t=72, b=48))
 
 
-def fig_cv_vs_holdout_scatter(merged_df: pd.DataFrame) -> go.Figure:
-    """CV mean PR AUC vs holdout PR AUC per pipeline."""
-    if merged_df.empty:
-        return _sized(go.Figure(), height=360)
-
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=merged_df["pr_auc_cv"],
-            y=merged_df["pr_auc_holdout"],
-            mode="markers+text",
-            text=merged_df["pipeline"],
-            textposition="top center",
-            marker=dict(color=C[0], size=12),
-            hovertemplate="%{text}<br>CV PR AUC=%{x:.3f}<br>Holdout PR AUC=%{y:.3f}<extra></extra>",
-        )
-    )
-    lo = min(merged_df["pr_auc_cv"].min(), merged_df["pr_auc_holdout"].min()) - 0.02
-    hi = max(merged_df["pr_auc_cv"].max(), merged_df["pr_auc_holdout"].max()) + 0.02
-    fig.add_trace(
-        go.Scatter(
-            x=[lo, hi],
-            y=[lo, hi],
-            mode="lines",
-            name="y = x",
-            line=dict(color=C[5], dash="dash"),
-            hoverinfo="skip",
-        )
-    )
-    fig.update_layout(
-        title=dict(text="CV vs holdout PR AUC"),
-        xaxis_title="Mean PR AUC (5×5 CV)",
-        yaxis_title="PR AUC (holdout)",
-        showlegend=False,
-    )
-    return _sized(fig, height=380)
-
-
 def fig_holdout_confusion(
     confusion_matrix: list[list[int]],
     pipeline_name: str,
@@ -874,110 +830,95 @@ def fig_holdout_confusion(
     return _sized(fig, height=height)
 
 
-def fig_ber_cv_vs_holdout(merged_df: pd.DataFrame, pipeline: str) -> go.Figure:
-    """Grouped bar comparing CV mean BER vs holdout BER for one pipeline."""
-    row = merged_df.loc[merged_df["pipeline"] == pipeline]
-    if row.empty:
-        return _sized(go.Figure(), height=280)
-    row = row.iloc[0]
-    labels = ["CV mean BER", "Holdout BER"]
-    values = [float(row["ber_cv"]), float(row["ber_holdout"])]
-    fig = go.Figure(
-        data=[
-            go.Bar(
-                x=labels,
-                y=values,
-                marker_color=[C[6], C[2]],
-                text=[f"{v:.1f}%" for v in values],
-                textposition="outside",
-            )
-        ]
-    )
-    fig.update_layout(
-        title=dict(text=f"BER comparison — {pipeline}"),
-        yaxis_title="BER (%)",
-        showlegend=False,
-    )
-    return _sized(fig, height=300)
+def _pr_axis_limits(
+    cv_curve: PRCurve | None,
+    ho_curve: PRCurve | None,
+    ber_point: tuple[float, float] | None,
+) -> tuple[float, float]:
+    recall_vals: list[float] = []
+    precision_vals: list[float] = []
+    for curve in (cv_curve, ho_curve):
+        if curve is not None and curve.recall.size:
+            recall_vals.append(float(np.max(curve.recall)))
+            precision_vals.append(float(np.max(curve.precision)))
+    if ber_point is not None:
+        recall_vals.append(float(ber_point[0]))
+        precision_vals.append(float(ber_point[1]))
+    recall_hi = min(1.0, (max(recall_vals) if recall_vals else 0.5) * 1.10 + 0.05)
+    precision_hi = min(1.0, (max(precision_vals) if precision_vals else 0.5) * 1.15 + 0.02)
+    return recall_hi, precision_hi
 
 
-def fig_threshold_objective_curves(
-    curves_df: pd.DataFrame,
-    best_thresholds: dict[str, float],
+def fig_pr_curve_cv_holdout(
+    cv_curve: PRCurve | None,
+    ho_curve: PRCurve | None,
     *,
-    title: str = "CV mean F-score vs threshold",
+    ber_point: tuple[float, float] | None = None,
+    title: str = "Precision–recall curve",
 ) -> go.Figure:
-    """F1 / F2 / F3 mean scores vs probability threshold with vertical lines at optima."""
+    """CV (purple) and holdout (yellow) PR curves with BER operating point and baseline."""
     fig = go.Figure()
-    x = curves_df["threshold"]
-
-    for pid in PROFILE_IDS:
-        col = f"mean_fbeta_{pid}"
-        if col not in curves_df.columns:
-            continue
-        prof = THRESHOLD_PROFILES[pid]
-        color = PROFILE_TRACE_COLORS[pid]
+    if cv_curve is not None:
         fig.add_trace(
             go.Scatter(
-                x=x,
-                y=curves_df[col],
+                x=cv_curve.recall,
+                y=cv_curve.precision,
                 mode="lines",
-                name=f"{prof.display_name} (β={prof.beta:g})",
-                line=dict(color=color, width=2),
+                name="CV (5-fold OOF)",
+                line=dict(color=C_PURPLE, width=2.5),
+                hovertemplate="Recall=%{x:.3f}<br>Precision=%{y:.3f}<extra></extra>",
             )
         )
-
-    for pid, thr in best_thresholds.items():
-        fig.add_vline(
-            x=float(thr),
-            line_dash="dash",
-            line_color=PROFILE_TRACE_COLORS.get(pid, C[5]),
-            annotation_text=str(pid),
-            annotation_position="top",
-        )
-
-    fig.update_layout(
-        title=dict(text=title),
-        xaxis_title="Probability threshold (fail)",
-        yaxis=dict(title="Mean F-beta score", range=[0, 1.05]),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-    )
-    return _sized(fig, height=420)
-
-
-def fig_holdout_by_profile(
-    profile_df: pd.DataFrame,
-    *,
-    metric_col: str = "ber_percent",
-    title: str = "Holdout by threshold profile",
-) -> go.Figure:
-    """Grouped bars: one pipeline per group, three profile bars."""
-    pipelines = profile_df["pipeline"].unique().tolist()
-    profiles = profile_df["profile"].unique().tolist()
-    fig = go.Figure()
-    for profile in profiles:
-        sub = profile_df.loc[profile_df["profile"] == profile].set_index("pipeline")
-        y_vals = [
-            float(sub.loc[p, metric_col]) if p in sub.index else float("nan")
-            for p in pipelines
-        ]
+    if ho_curve is not None:
         fig.add_trace(
-            go.Bar(
-                name=profile,
-                x=pipelines,
-                y=y_vals,
-                marker_color=PROFILE_TRACE_COLORS.get(profile, C[2]),
+            go.Scatter(
+                x=ho_curve.recall,
+                y=ho_curve.precision,
+                mode="lines",
+                name="Holdout",
+                line=dict(color=C_YELLOW, width=2.5),
+                hovertemplate="Recall=%{x:.3f}<br>Precision=%{y:.3f}<extra></extra>",
             )
         )
-    y_label = "BER (%)" if "ber" in metric_col else "F-beta score"
+
+    baseline = None
+    if cv_curve is not None:
+        baseline = cv_curve.baseline
+    elif ho_curve is not None:
+        baseline = ho_curve.baseline
+    if baseline is not None:
+        fig.add_hline(
+            y=baseline,
+            line_dash="dash",
+            line_color=C_BLUE,
+            annotation_text="Random baseline",
+            annotation_position="right",
+        )
+
+    if ber_point is not None:
+        fig.add_trace(
+            go.Scatter(
+                x=[ber_point[0]],
+                y=[ber_point[1]],
+                mode="markers",
+                name="BER min (holdout)",
+                marker=dict(color=C_GREEN, size=12, symbol="diamond"),
+                hovertemplate=(
+                    "BER threshold<br>Recall=%{x:.3f}<br>Precision=%{y:.3f}<extra></extra>"
+                ),
+            )
+        )
+
+    recall_hi, precision_hi = _pr_axis_limits(cv_curve, ho_curve, ber_point)
     fig.update_layout(
         title=dict(text=title),
-        barmode="group",
-        xaxis_title="Pipeline",
-        yaxis_title=y_label,
+        xaxis_title="Recall",
+        yaxis_title="Precision",
+        xaxis=dict(range=[0, recall_hi], gridcolor="rgba(200, 200, 200, 0.15)"),
+        yaxis=dict(range=[0, precision_hi], gridcolor="rgba(200, 200, 200, 0.15)"),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
     )
-    return _sized(fig, height=380)
+    return _sized(fig, height=440, margin=dict(l=56, r=48, t=72, b=48))
 
 
 def fig_sensor_histogram(

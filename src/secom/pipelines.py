@@ -19,7 +19,7 @@ from sklearn.impute import KNNImputer, SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import make_scorer, recall_score
 from sklearn.feature_selection import VarianceThreshold
-from sklearn.model_selection import RepeatedStratifiedKFold, train_test_split
+from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import RobustScaler
@@ -55,8 +55,9 @@ N_SENSORS = 591
 
 RANDOM_SEED = 42
 TEST_SIZE = 0.20
+HOLDOUT_SPLIT_MODE = "temporal"
 N_SPLITS = 5
-N_REPEATS = 5
+N_REPEATS = 2
 GRID_SEARCH_VERBOSE = 1
 
 C_GRID = [0.0075]
@@ -73,35 +74,35 @@ KNN_CLASSIFIER_NEIGHBORS = 10
 KNN_CLASSIFIER_WEIGHTS = "uniform"
 KNN_NEIGHBORS_GRID = [40]
 
-RF_N_ESTIMATORS = 1500
-RF_MAX_DEPTH = 8
-RF_MAX_DEPTH_GRID = [12, 16, 20]
+RF_N_ESTIMATORS = 1000
+RF_MAX_DEPTH = 12
+RF_MAX_DEPTH_GRID = [4]
 RF_MIN_SAMPLES_LEAF = 10
 RF_SELECT_TOP_K = 35
 RF_SELECT_TOP_K_GRID = [35]
 
 N_HUBS_DEFAULT = 5
-N_HUBS_GRID = [0,5]
+N_HUBS_GRID = [5]
 
-CORRELATED_SELECTION_THRESHOLD = 0.7
-CORRELATED_SELECTION_THRESHOLD_GRID = [0.85, 0.9]
+CORRELATED_SELECTION_THRESHOLD = 0.85
+CORRELATED_SELECTION_THRESHOLD_GRID = [0.85]
 CORRELATED_SELECTION_METHOD = "spearman"
 CORRELATED_SELECTION_CRITERION = "corr_with_target"
 
-XGB_N_ESTIMATORS = 2000
-XGB_MAX_DEPTH = 10
-XGB_MAX_DEPTH_GRID = [12, 16, 20]
+XGB_N_ESTIMATORS = 1000
+XGB_MAX_DEPTH = 12
+XGB_MAX_DEPTH_GRID = [4]
 XGB_LEARNING_RATE = 0.05
-XGB_LEARNING_RATE_GRID = [0.001,0.005]
+XGB_LEARNING_RATE_GRID = [0.1]
 XGB_SCALE_POS_WEIGHT = 14.151515
 
 CV_N_JOBS = -1
 ESTIMATOR_N_JOBS = 1
 
 PRIMARY_TUNING_METRIC = "pr_auc"
-THRESHOLD_GRID = np.linspace(0.001, 0.999, num=2000)
+THRESHOLD_GRID = np.linspace(0.001, 0.999, num=100)
 
-CLASSIFIER_CALIBRATION_METHOD = "sigmoid"
+CLASSIFIER_CALIBRATION_METHOD = "isotonic"
 CLASSIFIER_CALIBRATION_CV = 3
 
 HOLDOUT_BOOTSTRAP_N = 1000
@@ -182,6 +183,7 @@ def frozen_config() -> dict:
     return {
         "random_seed": RANDOM_SEED,
         "test_size": TEST_SIZE,
+        "holdout_split_mode": HOLDOUT_SPLIT_MODE,
         "n_splits": N_SPLITS,
         "n_repeats": N_REPEATS,
         "c_grid": [float(c) for c in C_GRID],
@@ -191,7 +193,7 @@ def frozen_config() -> dict:
         "knn_impute_neighbors": int(KNN_IMPUTE_NEIGHBORS),
         "tuning_protocol": "sequential_pr_auc_hyperparams_multi_threshold",
         "primary_tuning_metric": PRIMARY_TUNING_METRIC,
-        "threshold_tuning_profiles": ["f1", "f2", "f3"],
+        "threshold_tuning_profiles": ["f0_5", "f2", "f4", "ber"],
         "threshold_grid": [float(t) for t in THRESHOLD_GRID],
         "classifier_calibration_method": str(CLASSIFIER_CALIBRATION_METHOD),
         "classifier_calibration_cv": int(CLASSIFIER_CALIBRATION_CV),
@@ -240,23 +242,63 @@ def feature_columns(df: pd.DataFrame) -> list[str]:
 def split_train_test(
     df: pd.DataFrame,
     target_col: str = TARGET_COL,
+    timestamp_col: str = TIMESTAMP_COL,
     test_size: float = TEST_SIZE,
-    random_seed: int = RANDOM_SEED,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    train_df, test_df = train_test_split(
-        df,
-        test_size=test_size,
-        random_state=random_seed,
-        stratify=df[target_col],
-        shuffle=True,
-    )
-    return train_df.sort_values(ID_COL).copy(), test_df.sort_values(ID_COL).copy()
+    """Temporal holdout: earliest (1 - test_size) for train, latest test_size for test."""
+    work = df.copy()
+    work[timestamp_col] = pd.to_datetime(work[timestamp_col], errors="coerce")
+    work = work.sort_values([timestamp_col, ID_COL], kind="mergesort")
+    n_test = max(1, int(round(len(work) * test_size)))
+    test_df = work.iloc[-n_test:].copy()
+    train_df = work.iloc[:-n_test].copy()
+    return train_df.reset_index(drop=True), test_df.reset_index(drop=True)
+
+
+def holdout_split_summary(
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    *,
+    target_col: str = TARGET_COL,
+    timestamp_col: str = TIMESTAMP_COL,
+    test_size: float = TEST_SIZE,
+) -> dict[str, float | int | str | None]:
+    """Metadata for benchmark JSON: temporal bounds and fail rates."""
+    train_ts = pd.to_datetime(train_df[timestamp_col], errors="coerce")
+    test_ts = pd.to_datetime(test_df[timestamp_col], errors="coerce")
+
+    def _fail_rate(frame: pd.DataFrame) -> float | None:
+        if frame.empty or target_col not in frame.columns:
+            return None
+        return float(frame[target_col].astype(int).mean())
+
+    return {
+        "split_mode": HOLDOUT_SPLIT_MODE,
+        "test_size": float(test_size),
+        "train_rows": int(len(train_df)),
+        "test_rows": int(len(test_df)),
+        "train_fail_rate": _fail_rate(train_df),
+        "holdout_fail_rate": _fail_rate(test_df),
+        "train_ts_min": train_ts.min().isoformat() if not train_ts.empty else None,
+        "train_ts_max": train_ts.max().isoformat() if not train_ts.empty else None,
+        "holdout_ts_min": test_ts.min().isoformat() if not test_ts.empty else None,
+        "holdout_ts_max": test_ts.max().isoformat() if not test_ts.empty else None,
+    }
 
 
 def make_repeated_stratified_cv() -> RepeatedStratifiedKFold:
     return RepeatedStratifiedKFold(
         n_splits=N_SPLITS,
         n_repeats=N_REPEATS,
+        random_state=RANDOM_SEED,
+    )
+
+
+def make_stratified_kfold_for_oof() -> StratifiedKFold:
+    """Partitioning CV for out-of-fold predict_proba (one score per row)."""
+    return StratifiedKFold(
+        n_splits=N_SPLITS,
+        shuffle=True,
         random_state=RANDOM_SEED,
     )
 
@@ -287,6 +329,10 @@ def _cluster_step() -> Pipeline:
             ("drop_constant", DropConstantFeatures(tol=1)),
             ("drop_duplicates", DropDuplicateFeatures()),
             ("drop_low_variance", VarianceThreshold(threshold=0)),
+            (
+                "drop_constant_pre_spearman",
+                DropConstantFeatures(tol=1, missing_values="ignore"),
+            ),
             (
                 "smart_corr",
                 SmartCorrelatedSelection(

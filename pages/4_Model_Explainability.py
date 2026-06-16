@@ -34,7 +34,8 @@ def _load_frozen_narratives() -> dict | None:
 def main() -> None:
     st.title("Model explainability")
     st.caption(
-        "Global drivers (top 15 features) and per-wafer breakdowns on the 20% holdout split. "
+        "Global drivers (top 15 features) and per-wafer breakdowns on the **latest 20%** "
+        "of wafers by measurement time (temporal holdout). "
         "Fit uses tuned hyperparameters from `data/processed/tuned/`."
     )
 

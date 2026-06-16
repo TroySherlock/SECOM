@@ -65,25 +65,9 @@ from secom.pipelines import (
 
 LINEAR_TOP_K_PARAM = "preprocess__sensor_branch__select_t2_hubs__top_k"
 LINEAR_N_HUBS_PARAM = "preprocess__sensor_branch__select_t2_hubs__n_hubs"
-LEGACY_TOP_K_PARAM = "preprocess__sensor_branch__select__max_features"
-LEGACY_META_KNN_N_NEIGHBORS_PARAM = (
-    "preprocess__sensor_branch__neighbor_fail_rate__n_neighbors"
-)
-LEGACY_META_KNN_IN_HUB_PARAM = (
-    "preprocess__sensor_branch__select_t2_hubs__neighbor_n_neighbors"
-)
 SMART_CORR_THRESHOLD_PARAM = (
     "preprocess__sensor_branch__cluster__smart_corr__threshold"
 )
-CLASSIFIER_ESTIMATOR_PARAMS = (
-    "C",
-    "l1_ratio",
-    "max_depth",
-    "n_neighbors",
-    "learning_rate",
-)
-
-
 def _hub_preprocess_grid() -> dict:
     return {
         LINEAR_TOP_K_PARAM: [int(k) for k in RF_SELECT_TOP_K_GRID],
@@ -302,22 +286,10 @@ def _resolved_classifier_threshold(tuned_payload: dict) -> float:
     return float(raw)
 
 
-def _remap_legacy_classifier_estimator_params(raw: dict) -> None:
-    """Map pre-calibration wrapper keys (classifier__max_depth) to nested paths."""
-    for param in CLASSIFIER_ESTIMATOR_PARAMS:
-        legacy = f"classifier__{param}"
-        nested = f"classifier__estimator__{param}"
-        if legacy in raw and nested not in raw:
-            raw[nested] = raw.pop(legacy)
-
-
 def resolve_grid_search_best_params(model_id: str, tuned_payload: dict) -> dict:
-    """Map legacy tuned JSON keys to the current hub preprocess param names."""
+    """Resolve tuned grid-search params for the current pipeline param names."""
     raw = dict(tuned_payload.get("grid_search_best_params") or {})
     cv_summary = tuned_payload.get("cv_summary") or {}
-
-    if LEGACY_TOP_K_PARAM in raw:
-        raw[LINEAR_TOP_K_PARAM] = int(raw.pop(LEGACY_TOP_K_PARAM))
 
     if LINEAR_TOP_K_PARAM not in raw and cv_summary.get("best_top_k") is not None:
         raw[LINEAR_TOP_K_PARAM] = int(cv_summary["best_top_k"])
@@ -328,16 +300,11 @@ def resolve_grid_search_best_params(model_id: str, tuned_payload: dict) -> dict:
         else:
             raw[LINEAR_N_HUBS_PARAM] = int(N_HUBS_DEFAULT)
 
-    for legacy_key in (LEGACY_META_KNN_N_NEIGHBORS_PARAM, LEGACY_META_KNN_IN_HUB_PARAM):
-        raw.pop(legacy_key, None)
-
     if SMART_CORR_THRESHOLD_PARAM not in raw:
         if cv_summary.get("best_corr_threshold") is not None:
             raw[SMART_CORR_THRESHOLD_PARAM] = float(cv_summary["best_corr_threshold"])
         else:
             raw[SMART_CORR_THRESHOLD_PARAM] = float(CORRELATED_SELECTION_THRESHOLD)
-
-    _remap_legacy_classifier_estimator_params(raw)
 
     spec = MODEL_SPECS[model_id]
     valid = spec.build_pipeline().get_params(deep=True)
@@ -531,10 +498,12 @@ def _profile_result_at_best(
     fold_probas: list[np.ndarray],
     fold_y_val: list[pd.Series],
     *,
-    beta: float,
+    beta: float | None,
+    objective: str = "fbeta",
 ) -> dict:
+    fbeta_beta = beta if beta is not None else 1.0
     fold_fbetas, fold_bers, fold_tprs = _fold_metrics_at_threshold(
-        fold_probas, fold_y_val, best_threshold, beta=beta
+        fold_probas, fold_y_val, best_threshold, beta=fbeta_beta
     )
     fold_tnrs: list[float] = []
     fold_results: list[dict] = []
@@ -542,29 +511,32 @@ def _profile_result_at_best(
         pred = predict_with_threshold(proba, best_threshold)
         metrics = compute_holdout_metrics(y_val, pred)
         fold_tnrs.append(metrics["true_negative_percent"])
-        fold_results.append(
-            {
-                "fold": fold_idx + 1,
-                "threshold": float(best_threshold),
-                "fbeta": fbeta_at_threshold(y_val, pred, beta=beta),
-                "ber_percent": metrics["ber_percent"],
-                "true_positive_percent": metrics["true_positive_percent"],
-                "true_negative_percent": metrics["true_negative_percent"],
-            }
-        )
+        fold_entry: dict = {
+            "fold": fold_idx + 1,
+            "threshold": float(best_threshold),
+            "ber_percent": metrics["ber_percent"],
+            "true_positive_percent": metrics["true_positive_percent"],
+            "true_negative_percent": metrics["true_negative_percent"],
+        }
+        if objective == "fbeta" and beta is not None:
+            fold_entry["fbeta"] = fbeta_at_threshold(y_val, pred, beta=beta)
+        fold_results.append(fold_entry)
 
-    return {
+    result: dict = {
         "profile_id": profile_id,
-        "beta": float(beta),
+        "objective": objective,
         "best_threshold": float(best_threshold),
-        "mean_fbeta": float(np.mean(fold_fbetas)),
-        "std_fbeta": float(np.std(fold_fbetas, ddof=0)),
         "mean_ber_percent": float(np.mean(fold_bers)),
         "std_ber_percent": float(np.std(fold_bers, ddof=0)),
         "mean_true_positive_percent": float(np.mean(fold_tprs)),
         "mean_true_negative_percent": float(np.mean(fold_tnrs)),
         "fold_results_at_best_threshold": fold_results,
     }
+    if objective == "fbeta" and beta is not None:
+        result["beta"] = float(beta)
+        result["mean_fbeta"] = float(np.mean(fold_fbetas))
+        result["std_fbeta"] = float(np.std(fold_fbetas, ddof=0))
+    return result
 
 
 def tune_classifier_threshold_profiles(
@@ -602,27 +574,39 @@ def tune_classifier_threshold_profiles(
         fold_probas.append(fold_pipe.predict_proba(X_val)[:, 1])
         fold_y_val.append(y_val)
 
+    fbeta_profile_ids = [
+        pid for pid in PROFILE_IDS if THRESHOLD_PROFILES[pid].objective == "fbeta"
+    ]
     mean_fbeta_by_profile: dict[str, dict[float, float]] = {
-        pid: {} for pid in PROFILE_IDS
+        pid: {} for pid in fbeta_profile_ids
     }
     mean_ber_by_threshold: dict[float, float] = {}
+    mean_tpr_by_threshold: dict[float, float] = {}
 
     for threshold in threshold_grid:
-        fold_bers, _, _ = _fold_metrics_at_threshold(
+        _, fold_bers, fold_tprs = _fold_metrics_at_threshold(
             fold_probas, fold_y_val, threshold, beta=1.0
         )
         mean_ber_by_threshold[threshold] = float(np.mean(fold_bers))
-        for pid in PROFILE_IDS:
+        mean_tpr_by_threshold[threshold] = float(np.mean(fold_tprs))
+        for pid in fbeta_profile_ids:
             beta = THRESHOLD_PROFILES[pid].beta
             fold_fbetas, _, _ = _fold_metrics_at_threshold(
                 fold_probas, fold_y_val, threshold, beta=beta
             )
             mean_fbeta_by_profile[pid][threshold] = float(np.mean(fold_fbetas))
 
-    best_thresholds = {
+    best_thresholds: dict[str, float] = {
         pid: max(scores, key=scores.get)
         for pid, scores in mean_fbeta_by_profile.items()
     }
+    ber_eligible = {
+        thr: ber
+        for thr, ber in mean_ber_by_threshold.items()
+        if mean_tpr_by_threshold[thr] > 0.0
+    }
+    ber_pool = ber_eligible if ber_eligible else mean_ber_by_threshold
+    best_thresholds["ber"] = min(ber_pool, key=ber_pool.get)
 
     profiles = {
         pid: _profile_result_at_best(
@@ -631,6 +615,7 @@ def tune_classifier_threshold_profiles(
             fold_probas,
             fold_y_val,
             beta=THRESHOLD_PROFILES[pid].beta,
+            objective=THRESHOLD_PROFILES[pid].objective,
         )
         for pid in PROFILE_IDS
     }
@@ -642,7 +627,7 @@ def tune_classifier_threshold_profiles(
             f"mean_fbeta_{pid}": [
                 mean_fbeta_by_profile[pid][t] for t in threshold_grid
             ]
-            for pid in PROFILE_IDS
+            for pid in fbeta_profile_ids
         },
     }
     objective_curves = pd.DataFrame(curve_cols)
@@ -691,7 +676,7 @@ def save_tuned_params(
         profile_map.get(DEFAULT_PROFILE_ID) if profile_map else None
     )
     if default_profile is None and profile_map:
-        default_profile = profile_map.get("ber") or profile_map.get("f3") or profile_map.get("f2")
+        default_profile = profile_map.get("ber") or profile_map.get("f4") or profile_map.get("f2")
 
     if default_profile is not None:
         summary_out["mean_fbeta_at_threshold"] = default_profile.get("mean_fbeta")
@@ -751,7 +736,7 @@ def save_tuned_params(
             f"per_threshold_mean_fbeta_{DEFAULT_PROFILE_ID}"
         )
         if per_thresh is None:
-            per_thresh = threshold_result.get("per_threshold_mean_fbeta_f3")
+            per_thresh = threshold_result.get("per_threshold_mean_fbeta_f4")
         if per_thresh is None:
             per_thresh = threshold_result.get("per_threshold_mean_ber")
         payload["threshold_tuning"] = json_safe(

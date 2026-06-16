@@ -54,8 +54,8 @@ def main() -> None:
     st.title("Pipeline")
     st.caption(
         "How SECOM features are prepared before model training. "
-        "See the Models page for benchmark results and the **Threshold profiles (F1/F2/F3)** tab "
-        "(F1 conservative / F2 neutral / F3 aggressive threshold trade-offs)."
+        "See the Models page **Model deep-dive** tab for PR curves and the "
+        "F0.5 / F2 / F4 / BER threshold selector (holdout confusion matrices)."
     )
 
     artifacts: dict | None = None

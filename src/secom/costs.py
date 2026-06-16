@@ -1,6 +1,6 @@
 """F-beta threshold profile definitions for Stage 2 tuning.
 
-Edit F1_BETA / F2_BETA / F3_BETA below, then re-run threshold tuning and benchmark.
+Edit F0_5_BETA / F2_BETA / F4_BETA below, then re-run threshold tuning and benchmark.
 """
 from __future__ import annotations
 
@@ -11,35 +11,36 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import fbeta_score
 
-ProfileId = Literal["f1", "f2", "f3"]
+ProfileId = Literal["f0_5", "f2", "f4", "ber"]
 
 # --- Editable F-beta values (sklearn beta parameter) -------------------------
 
-F1_BETA = 1.0  # conservative (balanced precision/recall)
+F0_5_BETA = 0.5  # conservative (precision-weighted)
 F2_BETA = 2.0  # neutral (~4:1 recall emphasis); default deployment threshold
-F3_BETA = 3.0  # aggressive (~9:1)
+F4_BETA = 4.0  # aggressive (~16:1 recall emphasis)
 
 DEFAULT_PROFILE_ID: ProfileId = "f2"
 
-PROFILE_IDS: tuple[ProfileId, ...] = ("f1", "f2", "f3")
+PROFILE_IDS: tuple[ProfileId, ...] = ("f0_5", "f2", "f4", "ber")
+
 
 @dataclass(frozen=True)
 class ThresholdProfile:
     profile_id: ProfileId
-    beta: float
+    beta: float | None
     display_name: str
     description: str
-    objective: Literal["fbeta"] = "fbeta"
+    objective: Literal["fbeta", "ber"] = "fbeta"
 
 
 THRESHOLD_PROFILES: dict[ProfileId, ThresholdProfile] = {
-    "f1": ThresholdProfile(
-        profile_id="f1",
-        beta=F1_BETA,
-        display_name="F1 — conservative",
+    "f0_5": ThresholdProfile(
+        profile_id="f0_5",
+        beta=F0_5_BETA,
+        display_name="F0.5 — conservative",
         description=(
-            "Maximise F1 on CV validation folds; balanced precision and recall "
-            "(fewest false line stops among the three profiles)."
+            "Maximise F0.5 on CV validation folds; precision-weighted scoring "
+            "(fewer false line stops among the F-beta profiles)."
         ),
     ),
     "f2": ThresholdProfile(
@@ -51,14 +52,24 @@ THRESHOLD_PROFILES: dict[ProfileId, ThresholdProfile] = {
             "Used as the default classifier threshold in tuned pipelines."
         ),
     ),
-    "f3": ThresholdProfile(
-        profile_id="f3",
-        beta=F3_BETA,
-        display_name="F3 — aggressive",
+    "f4": ThresholdProfile(
+        profile_id="f4",
+        beta=F4_BETA,
+        display_name="F4 — aggressive",
         description=(
-            "Maximise F3 on CV validation folds; stronger recall emphasis (~9:1), "
+            "Maximise F4 on CV validation folds; stronger recall emphasis (~16:1), "
             "catches more anomalies at the cost of more false stops."
         ),
+    ),
+    "ber": ThresholdProfile(
+        profile_id="ber",
+        beta=None,
+        display_name="BER — minimum balanced error",
+        description=(
+            "Minimise mean CV balanced error rate (BER) on the threshold grid; "
+            "symmetric pass/fail misclassification cost."
+        ),
+        objective="ber",
     ),
 }
 
@@ -66,9 +77,9 @@ THRESHOLD_PROFILES: dict[ProfileId, ThresholdProfile] = {
 def threshold_profile_config() -> dict[str, float | str]:
     """Snapshot for JSON artifacts and the dashboard."""
     return {
-        "f1_beta": float(F1_BETA),
+        "f0_5_beta": float(F0_5_BETA),
         "f2_beta": float(F2_BETA),
-        "f3_beta": float(F3_BETA),
+        "f4_beta": float(F4_BETA),
         "default_profile": DEFAULT_PROFILE_ID,
     }
 
@@ -85,30 +96,17 @@ def fbeta_at_threshold(
     return float(fbeta_score(y_true, y_pred, beta=beta, zero_division=0))
 
 
-def normalize_profile_id(profile_id: str, profile_keys: set[str] | None = None) -> str:
-    pid = str(profile_id)
-    keys = profile_keys or set()
-    if "f4" in keys and "f1" not in keys and pid in _OLD_F234_TO_F123:
-        return _OLD_F234_TO_F123[pid]
-    if pid in PROFILE_IDS:
-        return pid
-    return _LEGACY_NAME_MAP.get(pid, pid)
-
-
 def resolve_threshold_profiles(tuned_payload: dict) -> dict[str, float]:
-    """Map profile_id -> best_threshold from tuned JSON (legacy-safe)."""
+    """Map profile_id -> best_threshold from tuned JSON."""
     profiles = tuned_payload.get("threshold_profiles")
-    if isinstance(profiles, dict) and profiles:
-        keys = {str(k) for k in profiles}
-        out: dict[str, float] = {}
-        for pid, data in profiles.items():
-            norm = normalize_profile_id(pid, keys)
-            if isinstance(data, dict) and "best_threshold" in data:
-                out[norm] = float(data["best_threshold"])
-        if out:
-            return out
-    legacy_thr = float(tuned_payload.get("classifier_threshold", 0.5))
-    return {DEFAULT_PROFILE_ID: legacy_thr}
+    if not isinstance(profiles, dict) or not profiles:
+        raise ValueError("tuned payload missing threshold_profiles")
+    out: dict[str, float] = {}
+    for pid, data in profiles.items():
+        key = str(pid)
+        if key in PROFILE_IDS and isinstance(data, dict) and "best_threshold" in data:
+            out[key] = float(data["best_threshold"])
+    return out
 
 
 def has_multi_profile_thresholds(tuned_payload: dict) -> bool:
@@ -116,5 +114,4 @@ def has_multi_profile_thresholds(tuned_payload: dict) -> bool:
     if not isinstance(profiles, dict):
         return False
     keys = {str(k) for k in profiles}
-    resolved = {normalize_profile_id(k, keys) for k in profiles}
-    return all(pid in resolved for pid in PROFILE_IDS)
+    return all(pid in keys for pid in PROFILE_IDS)

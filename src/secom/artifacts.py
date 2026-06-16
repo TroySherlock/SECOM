@@ -229,8 +229,7 @@ def collect_holdout_artifacts(
     X_train: pd.DataFrame,
     y_train: pd.Series,
     *,
-    train_rows: int | None = None,
-    test_rows: int | None = None,
+    holdout_split: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build full artifacts payload from holdout-fit pipelines."""
     models: dict[str, dict[str, Any]] = {}
@@ -244,11 +243,9 @@ def collect_holdout_artifacts(
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "holdout_split": {
+        "holdout_split": holdout_split or {
             "test_size": float(TEST_SIZE),
-            "random_seed": int(RANDOM_SEED),
-            "train_rows": train_rows,
-            "test_rows": test_rows,
+            "split_mode": "temporal",
         },
         "reference_models": dict(REFERENCE_MODELS),
         "shared": shared,
