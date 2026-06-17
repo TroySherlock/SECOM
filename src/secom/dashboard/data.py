@@ -184,7 +184,7 @@ def holdout_conditional_df(
 
 
 def process_gate_meta(payload: dict[str, Any]) -> dict[str, Any]:
-    """Process gate config: T² + IF params, UCL, feature count, OR logic."""
+    """Process gate config: T² + IF params, UCL, feature count, abstention logic."""
     meta = payload.get("process_gate")
     if isinstance(meta, dict) and meta:
         return dict(meta)

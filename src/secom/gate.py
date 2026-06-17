@@ -1,8 +1,9 @@
-"""Post-cluster process gate: Hotelling T² OR Isolation Forest (passing-train reference).
+"""Post-cluster process gate: Hotelling T² + Isolation Forest (passing-train reference).
 
 Scores wafers in the same feature space as the classifier's cluster stage
-(impute → SmartCorrelatedSelection), fit on passing training wafers only, and
-abstains when **either** detector flags out-of-control (OR logic).
+(impute → SmartCorrelatedSelection), fit on passing training wafers only. The
+abstention rule is configurable via ``logic`` (``secom.pipelines.GATE_LOGIC``):
+``"or"`` flags when either detector trips, ``"and"`` only when both agree.
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ from sklearn.ensemble import IsolationForest
 from secom.hub_interactions import sensor_value_columns
 from secom.pipelines import (
     GATE_CORR_THRESHOLD,
+    GATE_LOGIC,
     IF_GATE_ALPHA,
     IF_GATE_MAX_SAMPLES,
     IF_GATE_N_ESTIMATORS,
@@ -25,13 +27,15 @@ from secom.pipelines import (
 
 
 class ProcessGate:
-    """T² OR Isolation Forest gate on post-cluster sensor features.
+    """Hotelling T² + Isolation Forest gate on post-cluster sensor features.
 
     Parameters
     ----------
     t2_alpha : empirical UCL quantile on passing T² (``1 - alpha``).
     if_alpha : empirical quantile on passing IF ``decision_function``; scores
         below this threshold are flagged anomalous.
+    logic : ``"or"`` abstains when either detector trips; ``"and"`` abstains
+        only when both T² and IF agree a wafer is out of control.
     """
 
     def __init__(
@@ -42,12 +46,17 @@ class ProcessGate:
         if_n_estimators: int = IF_GATE_N_ESTIMATORS,
         if_max_samples: str | int | float = IF_GATE_MAX_SAMPLES,
         gate_corr_threshold: float = GATE_CORR_THRESHOLD,
+        logic: str = GATE_LOGIC,
     ):
         self.t2_alpha = float(t2_alpha)
         self.if_alpha = float(if_alpha)
         self.if_n_estimators = int(if_n_estimators)
         self.if_max_samples = if_max_samples
         self.gate_corr_threshold = float(gate_corr_threshold)
+        logic_norm = str(logic).strip().lower()
+        if logic_norm not in ("or", "and"):
+            raise ValueError(f"gate logic must be 'or' or 'and', got {logic!r}")
+        self.logic = logic_norm
 
     def fit(self, X_train: pd.DataFrame, y_train: pd.Series) -> "ProcessGate":
         sensor_cols = sensor_value_columns(X_train.columns)
@@ -117,9 +126,16 @@ class ProcessGate:
     def if_ooc(self, X: pd.DataFrame) -> np.ndarray:
         return self.if_scores(X) < self.if_threshold_
 
+    def ooc_mask(self, X: pd.DataFrame) -> np.ndarray:
+        """Out-of-control mask under the configured logic ('or' vs 'and')."""
+        return self.flag_masks(X)["both_ooc" if self.logic == "and" else "either_ooc"]
+
     def is_in_control(self, X: pd.DataFrame) -> np.ndarray:
-        """In control when neither T² nor IF flags OOC (OR abstention)."""
-        return ~(self.t2_ooc(X) | self.if_ooc(X))
+        """In control unless the configured logic flags the wafer OOC.
+
+        OR: abstain when either T² or IF trips. AND: abstain only when both agree.
+        """
+        return ~self.ooc_mask(X)
 
     def flag_masks(self, X: pd.DataFrame) -> dict[str, np.ndarray]:
         t2 = np.asarray(self.t2_ooc(X), dtype=bool)
@@ -133,6 +149,7 @@ class ProcessGate:
 
     def flag_breakdown(self, X: pd.DataFrame) -> dict[str, int]:
         masks = self.flag_masks(X)
+        ooc = masks["both_ooc" if self.logic == "and" else "either_ooc"]
         n = len(X)
         return {
             "n_total": n,
@@ -140,12 +157,13 @@ class ProcessGate:
             "n_flagged_if": int(masks["if_ooc"].sum()),
             "n_flagged_both": int(masks["both_ooc"].sum()),
             "n_flagged_either": int(masks["either_ooc"].sum()),
-            "n_in_control": int((~masks["either_ooc"]).sum()),
+            "n_flagged_ooc": int(ooc.sum()),
+            "n_in_control": int((~ooc).sum()),
         }
 
     def config(self) -> dict:
         return {
-            "logic": "or",
+            "logic": self.logic,
             "feature_stage": "post_cluster",
             "t2_alpha": self.t2_alpha,
             "if_alpha": self.if_alpha,

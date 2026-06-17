@@ -63,19 +63,19 @@ TEST_SIZE = 0.20
 HOLDOUT_SPLIT_MODE = "temporal"
 N_SPLITS = 5
 N_REPEATS = 1
-N_BLOCKED_SPLITS = 3
+N_BLOCKED_SPLITS = 5
 BLOCKED_MIN_VAL_FAILS = 4
 
 # Time-decay sample weighting (extrapolation path only). lambda=0 -> uniform.
-DECAY_LAMBDA_GRID = [0.0, 0.25, 0.5]
-DECAY_LAMBDA_DEFAULT = 0.0
+DECAY_LAMBDA_GRID = [0.0, 0.05, 0.1]
+DECAY_LAMBDA_DEFAULT = 0.1
 WEIGHTING_MODEL_IDS = ("linear_lr", "topk_rf", "topk_xgb")
 
 # Process gate constants defined after CORRELATED_SELECTION_THRESHOLD below.
 
 GRID_SEARCH_VERBOSE = 1
 
-C_GRID = [0.0075]
+C_GRID = [0.0075, 0.01]
 L1_RATIO_GRID = [0.3, 0.5, 0.7]
 
 MODEL_NAME = "secom_linear_elastic_net"
@@ -87,26 +87,29 @@ ELASTIC_NET_MAX_ITER = 50000
 
 KNN_CLASSIFIER_NEIGHBORS = 10
 KNN_CLASSIFIER_WEIGHTS = "uniform"
-KNN_NEIGHBORS_GRID = [10, 30]
+KNN_NEIGHBORS_GRID = [30]
 
 RF_N_ESTIMATORS = 1000
-RF_MAX_DEPTH = 3
+RF_MAX_DEPTH = 5
 RF_MAX_DEPTH_GRID = [3, 5]
 RF_MIN_SAMPLES_LEAF = 10
 RF_SELECT_TOP_K = 35
-RF_SELECT_TOP_K_GRID = [35, 100]
+RF_SELECT_TOP_K_GRID = [35, 60, 100]
 
 N_HUBS_DEFAULT = 5
-N_HUBS_GRID = [5]
+N_HUBS_GRID = [0, 5, 10]
 
-CORRELATED_SELECTION_THRESHOLD = 0.85
-CORRELATED_SELECTION_THRESHOLD_GRID = [0.85, 0.9, 0.95]
+CORRELATED_SELECTION_THRESHOLD = 0.9
+CORRELATED_SELECTION_THRESHOLD_GRID = [0.9, 0.95]
 CORRELATED_SELECTION_METHOD = "spearman"
 CORRELATED_SELECTION_CRITERION = "corr_with_target"
 
-# Process gate (post-cluster T² OR Isolation Forest on passing train wafers).
-T2_GATE_ALPHA = 0.08
-IF_GATE_ALPHA = 0.00
+# Process gate (post-cluster Hotelling T² + Isolation Forest on passing train wafers).
+# GATE_LOGIC controls abstention: "or" flags when either detector trips (wider net,
+# higher coverage loss); "and" flags only when both agree (narrower, fewer false stops).
+GATE_LOGIC = "and"
+T2_GATE_ALPHA = 0.1
+IF_GATE_ALPHA = 0.2
 IF_GATE_N_ESTIMATORS = 400
 IF_GATE_MAX_SAMPLES = "auto"
 # smart_corr threshold for gate feature pipe (impute → cluster only).
@@ -123,7 +126,7 @@ CV_N_JOBS = -1
 ESTIMATOR_N_JOBS = 1
 
 PRIMARY_TUNING_METRIC = "pr_auc"
-THRESHOLD_GRID = np.linspace(0.001, 0.999, num=500)
+THRESHOLD_GRID = np.linspace(0.001, 0.999, num=1000)
 
 CLASSIFIER_CALIBRATION_METHOD = "isotonic"
 CLASSIFIER_CALIBRATION_CV = 3
@@ -244,6 +247,7 @@ def frozen_config() -> dict:
         ],
         "correlated_selection_method": CORRELATED_SELECTION_METHOD,
         "correlated_selection_criterion": CORRELATED_SELECTION_CRITERION,
+        "gate_logic": str(GATE_LOGIC),
         "t2_gate_alpha": float(T2_GATE_ALPHA),
         "if_gate_alpha": float(IF_GATE_ALPHA),
         "if_gate_n_estimators": int(IF_GATE_N_ESTIMATORS),

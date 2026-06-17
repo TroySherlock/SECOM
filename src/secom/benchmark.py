@@ -52,6 +52,7 @@ from secom.pipelines import (
     CV_SCORING,
     DECAY_LAMBDA_DEFAULT,
     GATE_CORR_THRESHOLD,
+    GATE_LOGIC,
     IF_GATE_ALPHA,
     IF_GATE_MAX_SAMPLES,
     IF_GATE_N_ESTIMATORS,
@@ -279,12 +280,13 @@ def run_gate_conditional_benchmark(
     train_timestamps: pd.Series | None = None,
     show_progress: bool = True,
 ) -> pd.DataFrame:
-    """Conditional metrics on in-control wafers + coverage (T² OR IF gate).
+    """Conditional metrics on in-control wafers + coverage (T² + IF gate).
 
-    The gate abstains when either post-cluster T² or Isolation Forest flags OOC.
+    The gate abstains under its configured ``logic``: ``"or"`` when either
+    post-cluster T² or Isolation Forest flags OOC, ``"and"`` only when both do.
   """
     masks = gate.flag_masks(X_test)
-    in_control = ~masks["either_ooc"]
+    in_control = gate.is_in_control(X_test)
     y_test_arr = np.asarray(y_test).astype(int)
     n_total = int(len(y_test_arr))
     n_in_control = int(in_control.sum())
@@ -319,7 +321,7 @@ def run_gate_conditional_benchmark(
     if show_progress:
         coverage = n_in_control / n_total if n_total else 0.0
         print(
-            f"Process gate (T² OR IF): coverage {coverage:.1%} "
+            f"Process gate (T² {gate.logic.upper()} IF): coverage {coverage:.1%} "
             f"({n_in_control}/{n_total}); T²={n_flagged_t2} IF={n_flagged_if} "
             f"both={n_flagged_both}; fails in-control "
             f"{n_fails_in_control}/{n_fails_total}"
@@ -662,13 +664,17 @@ def main() -> None:
         show_progress=True,
     )
 
-    print("\nProcess gate (post-cluster T² OR IF, passing-train reference):")
+    print(
+        f"\nProcess gate (post-cluster T² {GATE_LOGIC.upper()} IF, "
+        "passing-train reference):"
+    )
     gate = ProcessGate(
         t2_alpha=T2_GATE_ALPHA,
         if_alpha=IF_GATE_ALPHA,
         if_n_estimators=IF_GATE_N_ESTIMATORS,
         if_max_samples=IF_GATE_MAX_SAMPLES,
         gate_corr_threshold=GATE_CORR_THRESHOLD,
+        logic=GATE_LOGIC,
     ).fit(X_train, y_train)
     holdout_conditional = run_gate_conditional_benchmark(
         build_benchmark_pipelines(tuned_blocked, extrapolation=True),
