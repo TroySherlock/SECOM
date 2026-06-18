@@ -39,6 +39,16 @@ def _sensor_branch_pipeline(preprocess: ColumnTransformer) -> Pipeline:
     raise KeyError("preprocess has no sensor_branch transformer")
 
 
+def _sensor_branch_columns(sensor_pipe: Pipeline) -> list[str]:
+    """Columns the fitted sensor branch consumed (raw, plus rolling-Z for extrap).
+
+    Read from the imputer's ``feature_names_in_`` so it reflects whatever the
+    branch's ``make_column_selector`` resolved at fit time, rather than assuming
+    a raw-only sensor set.
+    """
+    return list(sensor_pipe.named_steps["impute"].feature_names_in_)
+
+
 def _model_family(model_id: str) -> str:
     if "linear" in model_id or model_id.endswith("enet"):
         return "linear"
@@ -139,10 +149,12 @@ def extract_model_artifacts(
     preprocess: ColumnTransformer = pipeline.named_steps["preprocess"]
     scale = pipeline.named_steps["scale"]
     sensor_pipe = _sensor_branch_pipeline(preprocess)
+    branch_cols = _sensor_branch_columns(sensor_pipe)
 
-    sensor_cols = sensor_value_columns(X_train.columns)
-    mart_sensors = len(sensor_cols)
-    auxiliary_features = len(X_train.columns) - mart_sensors
+    # Raw physical sensors (mart) vs. all sensor-derived inputs the branch sees
+    # (raw + rolling-Z for the extrapolation track).
+    mart_sensors = len(sensor_value_columns(X_train.columns))
+    auxiliary_features = len(X_train.columns) - len(branch_cols)
     stg_sensors = int(N_SENSORS)
     stages: dict[str, int] = {
         "stg_sensors": stg_sensors,
@@ -151,11 +163,11 @@ def extract_model_artifacts(
         "auxiliary_features": auxiliary_features,
     }
 
-    X_sensors = X_train[sensor_cols]
+    X_sensors = X_train[branch_cols]
     impute = sensor_pipe.named_steps["impute"]
     X_imp = pd.DataFrame(
         impute.transform(X_sensors),
-        columns=sensor_cols,
+        columns=branch_cols,
         index=X_sensors.index,
     )
     stages["after_impute"] = len(X_imp.columns)
@@ -199,13 +211,13 @@ def extract_shared_artifacts(
     """Cluster config and Spearman example from reference linear pipeline."""
     preprocess: ColumnTransformer = pipeline.named_steps["preprocess"]
     sensor_pipe = _sensor_branch_pipeline(preprocess)
-    sensor_cols = sensor_value_columns(X_train.columns)
-    X_sensors = X_train[sensor_cols]
+    branch_cols = _sensor_branch_columns(sensor_pipe)
+    X_sensors = X_train[branch_cols]
 
     impute = sensor_pipe.named_steps["impute"]
     X_imp = pd.DataFrame(
         impute.transform(X_sensors),
-        columns=sensor_cols,
+        columns=branch_cols,
         index=X_sensors.index,
     )
     cluster = sensor_pipe.named_steps["cluster"]

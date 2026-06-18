@@ -72,6 +72,7 @@ from secom.pipelines import (
     XGB_MAX_DEPTH,
     XGB_MAX_DEPTH_GRID,
     elastic_net_lr,
+    extrap_preprocess,
     feature_pipeline,
     knn_classifier,
     linear_preprocess,
@@ -129,6 +130,16 @@ def _hub_feature_pipeline(classifier, *, top_k: int = RF_SELECT_TOP_K, n_hubs: i
     )
 
 
+def _extrap_hub_feature_pipeline(
+    classifier, *, top_k: int = RF_SELECT_TOP_K, n_hubs: int = N_HUBS_DEFAULT
+):
+    """Extrapolation feature pipeline: raw + rolling-Z sensors through T²/hub selection."""
+    return feature_pipeline(
+        classifier,
+        extrap_preprocess(top_k=top_k, n_hubs=n_hubs),
+    )
+
+
 @dataclass(frozen=True)
 class ModelSpec:
     model_id: str
@@ -164,6 +175,19 @@ def _linear_lr_best_params(cv_summary: dict) -> dict:
         "classifier__estimator__C": float(cv_summary["best_c"]),
         "classifier__estimator__l1_ratio": float(cv_summary["best_l1_ratio"]),
     }
+
+
+def _extrap_enet_pipeline() -> Pipeline:
+    return _extrap_hub_feature_pipeline(
+        elastic_net_lr(
+            C=float(C_GRID[0]),
+            l1_ratio=float(L1_RATIO_GRID[0]),
+        )
+    )
+
+
+def _extrap_rf_pipeline() -> Pipeline:
+    return _extrap_hub_feature_pipeline(random_forest_classifier())
 
 
 def _topk_rf_pipeline() -> Pipeline:
@@ -305,7 +329,7 @@ MODEL_SPECS: dict[str, ModelSpec] = {
     ),
     "extrap_enet": ModelSpec(
         model_id="extrap_enet",
-        build_pipeline=_linear_lr_pipeline,
+        build_pipeline=_extrap_enet_pipeline,
         make_param_grid=_linear_lr_grid,
         param_renames=_LINEAR_LR_RENAMES,
         groupby_cols=_LINEAR_LR_GROUPBY,
@@ -315,7 +339,7 @@ MODEL_SPECS: dict[str, ModelSpec] = {
     ),
     "extrap_rf": ModelSpec(
         model_id="extrap_rf",
-        build_pipeline=_topk_rf_pipeline,
+        build_pipeline=_extrap_rf_pipeline,
         make_param_grid=_topk_rf_grid,
         param_renames=_TOPK_RF_RENAMES,
         groupby_cols=_TOPK_RF_GROUPBY,
@@ -382,6 +406,37 @@ def build_tuned_pipeline(
         FixedThresholdClassifier(classifier, threshold=threshold),
     )
     return pipeline
+
+
+def fit_pipeline_weighted(
+    pipeline: Pipeline,
+    X: pd.DataFrame,
+    y: pd.Series,
+    sample_weight: np.ndarray | None = None,
+) -> tuple[Pipeline, float | None]:
+    """Fit a tuned pipeline, routing ``sample_weight`` to the inner estimator.
+
+    ``build_tuned_pipeline`` wraps the final classifier in
+    ``FixedThresholdClassifier``, which cannot forward ``sample_weight`` to its
+    estimator without sklearn metadata routing. When weights are present we fit
+    the unwrapped estimator and return its tuned decision threshold so callers
+    that need labels can reproduce ``predict`` via ``predict_with_threshold``
+    (``>= threshold`` on the positive class). ``predict_proba`` is unaffected by
+    unwrapping. When ``sample_weight`` is None the wrapped pipeline is fit in
+    place (unchanged behaviour). Returns ``(fitted_pipeline, threshold_or_None)``.
+    """
+    final = pipeline.steps[-1][1]
+    threshold = (
+        float(final.threshold) if isinstance(final, FixedThresholdClassifier) else None
+    )
+    if sample_weight is None:
+        pipeline.fit(X, y)
+        return pipeline, threshold
+    if isinstance(final, FixedThresholdClassifier):
+        pipeline = clone(pipeline)
+        pipeline.steps[-1] = ("classifier", clone(final.estimator))
+    pipeline.fit(X, y, classifier__sample_weight=sample_weight)
+    return pipeline, threshold
 
 
 def grid_search_workload(

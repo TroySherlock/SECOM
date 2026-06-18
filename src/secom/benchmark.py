@@ -95,7 +95,7 @@ from secom.utils import (
     load_all_tuned_params,
     score_row_from_cv_result,
 )
-from secom.tuning.registry import build_tuned_pipeline
+from secom.tuning.registry import build_tuned_pipeline, fit_pipeline_weighted
 
 MIN_CONDITIONAL_POSITIVES = 5
 
@@ -135,23 +135,22 @@ def _model_decay_lambda(name: str, tuned: dict[str, dict] | None) -> float:
     return float((tuned or {}).get(name, {}).get("decay_lambda", DECAY_LAMBDA_DEFAULT))
 
 
-def _holdout_fit_kwargs(
+def _holdout_sample_weights(
     name: str,
     tuned: dict[str, dict] | None,
     train_timestamps: pd.Series | None,
-) -> dict:
-    """Time-decay sample_weight fit kwargs for a full-train fit (empty if unweighted).
+) -> np.ndarray | None:
+    """Time-decay sample weights for a full-train fit (None if unweighted).
 
-    Returns ``{}`` when there is no weighting so lambda=0 reproduces the
+    Returns ``None`` when there is no weighting so lambda=0 reproduces the
     unweighted fit exactly and k-NN (no sample_weight support) is never weighted.
     """
     if train_timestamps is None:
-        return {}
+        return None
     decay_lambda = _model_decay_lambda(name, tuned)
     if not decay_lambda:
-        return {}
-    weights = time_decay_weights(train_timestamps, decay_lambda)
-    return {"classifier__sample_weight": weights}
+        return None
+    return time_decay_weights(train_timestamps, decay_lambda)
 
 
 def run_pipeline_benchmark(
@@ -240,16 +239,21 @@ def run_weighted_blocked_leaderboard(
             "pr_auc": [],
         }
         for train_idx, val_idx in splits:
-            fold_pipe = clone(pipeline)
-            fit_kwargs: dict = {}
+            weights = None
             if decay_lambda and name in WEIGHTING_MODEL_IDS:
-                fit_kwargs["classifier__sample_weight"] = time_decay_weights(
+                weights = time_decay_weights(
                     train_timestamps.iloc[train_idx], decay_lambda
                 )
-            fold_pipe.fit(X.iloc[train_idx], y.iloc[train_idx], **fit_kwargs)
+            fold_pipe, threshold = fit_pipeline_weighted(
+                clone(pipeline), X.iloc[train_idx], y.iloc[train_idx], weights
+            )
             y_val = y.iloc[val_idx]
-            y_pred = fold_pipe.predict(X.iloc[val_idx])
             proba = fold_pipe.predict_proba(X.iloc[val_idx])[:, 1]
+            y_pred = (
+                predict_with_threshold(proba, threshold)
+                if threshold is not None
+                else fold_pipe.predict(X.iloc[val_idx])
+            )
             per_fold["balanced_accuracy"].append(
                 float(balanced_accuracy_score(y_val, y_pred))
             )
@@ -338,10 +342,13 @@ def run_gate_conditional_benchmark(
         )
 
     for name, pipeline in pipelines.items():
-        pipeline.fit(
-            X_train, y_train, **_holdout_fit_kwargs(name, tuned, train_timestamps)
+        fitted, _threshold = fit_pipeline_weighted(
+            pipeline,
+            X_train,
+            y_train,
+            _holdout_sample_weights(name, tuned, train_timestamps),
         )
-        y_score = pipeline.predict_proba(X_test)[:, 1]
+        y_score = fitted.predict_proba(X_test)[:, 1]
 
         row: dict = {
             "pipeline": name,
@@ -432,10 +439,13 @@ def run_holdout_benchmark(
         print(f"Holdout: {len(pipelines)} pipelines (reporting only)")
 
     for name, pipeline in pipelines.items():
-        pipeline.fit(
-            X_train, y_train, **_holdout_fit_kwargs(name, tuned, train_timestamps)
+        fitted, _threshold = fit_pipeline_weighted(
+            pipeline,
+            X_train,
+            y_train,
+            _holdout_sample_weights(name, tuned, train_timestamps),
         )
-        y_score = pipeline.predict_proba(X_test)[:, 1]
+        y_score = fitted.predict_proba(X_test)[:, 1]
         row: dict = {
             "pipeline": name,
             "pr_auc": float(average_precision_score(y_test, y_score)),
@@ -803,6 +813,11 @@ def main(argv=None) -> None:
     )
 
     if extrapolation_pipelines is not None:
+        # Artifacts report pipeline structure (fitted feature stages); fit on the
+        # full temporal train unweighted so the wrapped pipelines are populated
+        # regardless of the weighted-fit path used for scoring.
+        for pipe in extrapolation_pipelines.values():
+            pipe.fit(X_train, y_train)
         artifacts = collect_holdout_artifacts(
             extrapolation_pipelines,
             X_train,

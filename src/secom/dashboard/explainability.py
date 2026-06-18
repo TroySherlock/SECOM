@@ -26,7 +26,7 @@ from secom.pipelines import (
     time_decay_weights,
 )
 from secom.utils import fitted_base_classifier, load_tuned_blocked_params
-from secom.tuning.registry import build_tuned_pipeline
+from secom.tuning.registry import build_tuned_pipeline, fit_pipeline_weighted
 
 GLOBAL_TOP_N = 15
 LOCAL_TOP_N = 5
@@ -83,18 +83,18 @@ def fit_holdout_pipeline(model_id: str):
     split = load_holdout_split()
     tuned = load_tuned_blocked_params(model_id)
     pipeline = build_tuned_pipeline(model_id, tuned)
-    fit_kwargs: dict = {}
     decay_lambda = (
         float(tuned.get("decay_lambda", 0.0))
         if model_id in WEIGHTING_MODEL_IDS
         else 0.0
     )
+    weights = None
     if decay_lambda:
         train_ts = split.train_df[TIMESTAMP_COL].reset_index(drop=True)
-        fit_kwargs["classifier__sample_weight"] = time_decay_weights(
-            train_ts, decay_lambda
-        )
-    pipeline.fit(split.X_train, split.y_train, **fit_kwargs)
+        weights = time_decay_weights(train_ts, decay_lambda)
+    pipeline, _ = fit_pipeline_weighted(
+        pipeline, split.X_train, split.y_train, weights
+    )
     return pipeline, tuned
 
 

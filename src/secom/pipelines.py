@@ -7,18 +7,14 @@ from pathlib import Path
 import duckdb
 import numpy as np
 import pandas as pd
-from feature_engine.selection import (
-    DropConstantFeatures,
-    DropDuplicateFeatures,
-    SmartCorrelatedSelection,
-)
+from feature_engine.selection import SmartCorrelatedSelection
+from sklearn.feature_selection import VarianceThreshold
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import KNNImputer, SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import make_scorer, recall_score
-from sklearn.feature_selection import VarianceThreshold
 from sklearn.model_selection import (
     RepeatedStratifiedKFold,
     StratifiedKFold,
@@ -78,7 +74,7 @@ N_BLOCKED_SPLITS = 5
 BLOCKED_MIN_VAL_FAILS = 4
 
 # Time-decay sample weighting (extrapolation track only). lambda=0 -> uniform.
-DECAY_LAMBDA_GRID = [0.0, 0.05, 0.1]
+DECAY_LAMBDA_GRID = [0.0, 0.05, 0.1, 0.15]
 DECAY_LAMBDA_DEFAULT = 0.1
 WEIGHTING_MODEL_IDS = ("extrap_enet", "extrap_rf")
 
@@ -118,9 +114,9 @@ CORRELATED_SELECTION_CRITERION = "corr_with_target"
 # Process gate (post-cluster Hotelling T² + Isolation Forest on passing train wafers).
 # GATE_LOGIC controls abstention: "or" flags when either detector trips (wider net,
 # higher coverage loss); "and" flags only when both agree (narrower, fewer false stops).
-GATE_LOGIC = "and"
-T2_GATE_ALPHA = 0.1
-IF_GATE_ALPHA = 0.2
+GATE_LOGIC = "or"
+T2_GATE_ALPHA = 0.05
+IF_GATE_ALPHA = 0.05
 IF_GATE_N_ESTIMATORS = 400
 IF_GATE_MAX_SAMPLES = "auto"
 # smart_corr threshold for gate feature pipe (impute → cluster only).
@@ -158,6 +154,10 @@ _CALENDAR_PATTERN = (
 )
 _MISSING_FLAG_PATTERN = r"^c_\d+__missing$"
 _SENSOR_VALUE_PATTERN = r"^c_\d+$"
+# Extrapolation track also consumes causal rolling-Z columns (c_<id>_rz) built
+# in dbt, alongside the raw absolutes; selection inside the branch decides which
+# survive. Interpolation keeps the raw-only pattern above.
+_SENSOR_VALUE_PATTERN_EXTRAP = r"^c_\d+(?:_rz)?$"
 
 
 knn_imputer = partial(
@@ -415,9 +415,9 @@ def time_decay_weights(timestamps, decay_lambda: float) -> np.ndarray:
 def _cluster_step() -> Pipeline:
     return Pipeline(
         steps=[
-            ("drop_constant", DropConstantFeatures(tol=1, missing_values="ignore")),
-            ("drop_duplicates", DropDuplicateFeatures()),
-            ("drop_low_variance", VarianceThreshold(threshold=0)),
+            (
+                "variance_threshold", VarianceThreshold(threshold=0),
+            ),
             (
                 "smart_corr",
                 SmartCorrelatedSelection(
@@ -433,13 +433,14 @@ def _cluster_step() -> Pipeline:
 
 def _sensor_preprocess_column(
     sensor_steps: list[tuple[str, object]],
+    sensor_pattern: str = _SENSOR_VALUE_PATTERN,
 ) -> ColumnTransformer:
     return ColumnTransformer(
         transformers=[
             (
                 "sensor_branch",
                 Pipeline(steps=sensor_steps).set_output(transform="pandas"),
-                make_column_selector(pattern=_SENSOR_VALUE_PATTERN),
+                make_column_selector(pattern=sensor_pattern),
             ),
             *_auxiliary_transformers(),
         ],
@@ -475,6 +476,30 @@ def linear_preprocess(
         ),
     ]
     return _sensor_preprocess_column(sensor_steps)
+
+
+def extrap_preprocess(
+    top_k: int = RF_SELECT_TOP_K,
+    n_hubs: int = N_HUBS_DEFAULT,
+) -> ColumnTransformer:
+    """Extrapolation preprocess: raw + rolling-Z sensors → impute → cluster → T² + hubs.
+
+    Identical to ``linear_preprocess`` but the sensor branch also selects the
+    causal rolling-Z columns (``c_<id>_rz``) so the RF/T²-hub selection chooses
+    among raw absolutes and their locally standardized counterparts.
+    """
+    sensor_steps: list[tuple[str, object]] = [
+        ("impute", median_imputer()),
+        ("cluster", _cluster_step()),
+        (
+            "select_t2_hubs",
+            LinearSelectT2HubBlock(top_k=top_k, n_hubs=n_hubs),
+        ),
+    ]
+    return _sensor_preprocess_column(
+        sensor_steps,
+        sensor_pattern=_SENSOR_VALUE_PATTERN_EXTRAP,
+    )
 
 
 def calibrated_classifier(estimator) -> CalibratedClassifierCV:

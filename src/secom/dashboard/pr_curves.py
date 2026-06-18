@@ -22,7 +22,7 @@ from secom.pipelines import (
     split_train_test_random,
     time_decay_weights,
 )
-from secom.tuning.registry import build_tuned_pipeline
+from secom.tuning.registry import build_tuned_pipeline, fit_pipeline_weighted
 from secom.utils import load_tuned_blocked_params, load_tuned_params
 
 
@@ -57,14 +57,16 @@ def collect_cv_oof_proba(model_id: str) -> tuple[pd.Series, np.ndarray]:
     train_ts = split.train_df[TIMESTAMP_COL].reset_index(drop=True)
     proba = np.full(len(split.y_train), np.nan)
     for train_idx, val_idx in cv.split(split.X_train, split.y_train):
-        fold_pipe = clone(pipeline)
-        fit_kwargs: dict = {}
-        if decay_lambda:
-            fit_kwargs["classifier__sample_weight"] = time_decay_weights(
-                train_ts.iloc[train_idx], decay_lambda
-            )
-        fold_pipe.fit(
-            split.X_train.iloc[train_idx], split.y_train.iloc[train_idx], **fit_kwargs
+        weights = (
+            time_decay_weights(train_ts.iloc[train_idx], decay_lambda)
+            if decay_lambda
+            else None
+        )
+        fold_pipe, _ = fit_pipeline_weighted(
+            clone(pipeline),
+            split.X_train.iloc[train_idx],
+            split.y_train.iloc[train_idx],
+            weights,
         )
         proba[val_idx] = fold_pipe.predict_proba(split.X_train.iloc[val_idx])[:, 1]
     mask = ~np.isnan(proba)

@@ -54,6 +54,29 @@ selected as (
 
 ),
 
+-- Causal rolling-Z (local standardization) for the extrapolation track.
+-- Strictly-past window (excludes the current row) so no future leakage; the
+-- raw absolutes are retained and rz columns are added alongside them.
+{% set rz_window_rows = 50 %}
+rolled as (
+
+    select
+        *
+        {% if kept_sensors | length > 0 %}
+        {% for col in kept_sensors %}
+        ,
+        coalesce(
+            ({{ col }} - avg({{ col }}) over rz_w)
+              / nullif(stddev_samp({{ col }}) over rz_w, 0),
+            0
+        ) as {{ col }}_rz
+        {% endfor %}
+        {% endif %}
+    from selected
+    window rz_w as (order by measurement_ts rows between {{ rz_window_rows }} preceding and 1 preceding)
+
+),
+
 enriched as (
 
     select
@@ -74,7 +97,7 @@ enriched as (
             0
             {% endif %}
         ) as n_missing_sensors
-    from selected
+    from rolled
 
 ),
 
