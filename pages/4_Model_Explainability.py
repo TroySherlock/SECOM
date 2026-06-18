@@ -5,7 +5,7 @@ import streamlit as st
 
 from secom.dashboard import render_blue_note
 from secom.dashboard.data import model_info
-from secom.pipelines import BENCHMARK_MODEL_IDS
+from secom.pipelines import EXTRAP_MODEL_IDS
 from secom.dashboard.charts import (
     fig_coef_signed_bar,
     fig_local_contributions,
@@ -16,8 +16,8 @@ from secom.dashboard.explainability import (
     cached_wafer_explanation,
     holdout_wafer_ids,
 )
-from secom.dashboard.narrator import LINEAR_LR_MODEL_ID, get_wafer_narrative, load_narratives
-from secom.pipelines import TUNED_PARAMS_DIR
+from secom.dashboard.narrator import NARRATIVE_MODEL_ID, get_wafer_narrative, load_narratives
+from secom.pipelines import TUNED_BLOCKED_PARAMS_DIR
 
 
 
@@ -35,8 +35,9 @@ def main() -> None:
     st.title("Model explainability")
     st.caption(
         "Global drivers (top 15 features) and per-wafer breakdowns on the **latest 20%** "
-        "of wafers by measurement time (temporal holdout). "
-        "Fit uses tuned hyperparameters from `data/processed/tuned/`."
+        "of wafers by measurement time (temporal holdout) for the extrapolation track. "
+        "Fit uses blocked-tuned hyperparameters from `data/processed/tuned_blocked/` "
+        "with time-decay weighting."
     )
 
     try:
@@ -45,7 +46,7 @@ def main() -> None:
         st.error(f"{exc}\n\nRun tuning and `python -m secom.cli.benchmark` first.")
         return
 
-    model_ids = list(BENCHMARK_MODEL_IDS)
+    model_ids = list(EXTRAP_MODEL_IDS)
 
     st.subheader("Global view")
     global_model = st.selectbox(
@@ -60,7 +61,7 @@ def main() -> None:
     except FileNotFoundError as exc:
         st.error(
             f"Missing tuned params: {exc}\n\n"
-            f"Expected JSON under `{TUNED_PARAMS_DIR}/`."
+            f"Expected JSON under `{TUNED_BLOCKED_PARAMS_DIR}/`."
         )
         return
     except Exception as exc:
@@ -153,16 +154,16 @@ def main() -> None:
             hide_index=True,
         )
 
-    if inspect_model == "topk_knn":
+    if inspect_model == "intrap_topk_knn":
         render_blue_note(
             "k-NN has no standard SHAP waterfall; local view highlights features that differ "
             "most from the training neighbors' centroid in scaled space, with neighbor fail-rate "
             "as context."
         )
-    elif inspect_model != LINEAR_LR_MODEL_ID:
-        st.caption("Plain-English summary is available for Linear LR only.")
+    elif inspect_model != NARRATIVE_MODEL_ID:
+        st.caption("Plain-English summary is available for the extrapolation elastic net only.")
 
-    if inspect_model == LINEAR_LR_MODEL_ID:
+    if inspect_model == NARRATIVE_MODEL_ID:
         st.divider()
         st.subheader("Plain-English summary")
         render_blue_note(

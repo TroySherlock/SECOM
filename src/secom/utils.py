@@ -6,7 +6,12 @@ from pathlib import Path
 
 import numpy as np
 
-from secom.pipelines import BENCHMARK_MODEL_IDS, TUNED_BLOCKED_PARAMS_DIR, TUNED_PARAMS_DIR
+from secom.pipelines import (
+    EXTRAP_MODEL_IDS,
+    INTERP_MODEL_IDS,
+    TUNED_BLOCKED_PARAMS_DIR,
+    TUNED_PARAMS_DIR,
+)
 
 METRIC_SPECS = [
     ("balanced_accuracy", "ber_percent", True),
@@ -50,10 +55,15 @@ def load_tuned_blocked_params(model_id: str) -> dict:
     return load_tuned_params(model_id, TUNED_BLOCKED_PARAMS_DIR)
 
 
-def load_all_tuned_params(base_dir: Path = TUNED_PARAMS_DIR) -> dict[str, dict]:
+def load_all_tuned_params(
+    base_dir: Path = TUNED_PARAMS_DIR,
+    model_ids=INTERP_MODEL_IDS,
+) -> dict[str, dict]:
+    """Load tuned params for the given model ids (interpolation track by default)."""
+    model_ids = list(model_ids)
     missing = [
         model_id
-        for model_id in BENCHMARK_MODEL_IDS
+        for model_id in model_ids
         if not tuned_params_path(model_id, base_dir).exists()
     ]
     if missing:
@@ -62,11 +72,12 @@ def load_all_tuned_params(base_dir: Path = TUNED_PARAMS_DIR) -> dict[str, dict]:
             + ", ".join(missing)
             + f". Expected JSON files under {base_dir}/"
         )
-    return {model_id: load_tuned_params(model_id, base_dir) for model_id in BENCHMARK_MODEL_IDS}
+    return {model_id: load_tuned_params(model_id, base_dir) for model_id in model_ids}
 
 
-def load_all_tuned_blocked_params() -> dict[str, dict]:
-    return load_all_tuned_params(TUNED_BLOCKED_PARAMS_DIR)
+def load_all_tuned_blocked_params(model_ids=EXTRAP_MODEL_IDS) -> dict[str, dict]:
+    """Load blocked-tuned params for the extrapolation track by default."""
+    return load_all_tuned_params(TUNED_BLOCKED_PARAMS_DIR, model_ids=model_ids)
 
 
 def fitted_base_classifier(pipeline) -> object:

@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
-"""Compare four tuned pipelines via repeated stratified CV.
+"""Benchmark interpolation and extrapolation track pipelines.
 
-Models: linear_lr, topk_rf, topk_knn, topk_xgb.
-Each uses frozen hyperparameters from data/processed/tuned/<model_id>.json
-(stratified) and data/processed/tuned_blocked/<model_id>.json (extrapolation).
+Interpolation track (intrap_*): stratified CV + random holdout, from
+data/processed/tuned/<model_id>.json.
+Extrapolation track (extrap_*): blocked CV + temporal holdout + process gate +
+time-decay, from data/processed/tuned_blocked/<model_id>.json.
+
+Use --model ID or --track {interpolation,extrapolation} to benchmark a subset;
+subset runs merge into the existing benchmark JSON instead of overwriting it.
 Primary objective: maximize PR AUC on CV; F-beta thresholds (F0.5 / F2 / F4) plus BER-min.
 """
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
@@ -47,6 +52,8 @@ from secom.gate import ProcessGate
 from secom.pipelines import (
     BENCHMARK_MODEL_IDS,
     BENCHMARK_RESULTS_PATH,
+    EXTRAP_MODEL_IDS,
+    INTERP_MODEL_IDS,
     PIPELINE_ARTIFACTS_PATH,
     CV_N_JOBS,
     CV_SCORING,
@@ -105,13 +112,16 @@ def build_benchmark_pipelines(
     tuned: dict[str, dict] | None = None,
     *,
     extrapolation: bool = False,
+    model_ids=None,
 ) -> dict[str, Pipeline]:
-    if extrapolation:
-        tuned = tuned or load_all_tuned_blocked_params()
-    else:
-        tuned = tuned or load_all_tuned_params()
+    if tuned is None:
+        tuned = (
+            load_all_tuned_blocked_params() if extrapolation else load_all_tuned_params()
+        )
+    if model_ids is None:
+        model_ids = list(tuned.keys())
     pipelines: dict[str, Pipeline] = {}
-    for model_id in BENCHMARK_MODEL_IDS:
+    for model_id in model_ids:
         if model_id not in tuned:
             raise KeyError(f"Missing tuned payload for {model_id}")
         pipelines[model_id] = build_tuned_pipeline(model_id, tuned[model_id])
@@ -496,108 +506,185 @@ def run_holdout_benchmark(
     return holdout.reset_index(drop=True)
 
 
+def _merge_model_rows(
+    existing: list | None,
+    new_rows: list,
+    model_ids,
+) -> list:
+    """Replace rows for the given pipelines, preserving rows for other models."""
+    touched = set(model_ids)
+    kept = [r for r in (existing or []) if r.get("pipeline") not in touched]
+    return kept + list(new_rows or [])
+
+
 def save_benchmark_results(
-    tuned: dict[str, dict],
-    leaderboard: pd.DataFrame,
-    holdout: pd.DataFrame | None = None,
     *,
+    interp_ids,
+    extrap_ids,
+    tuned: dict[str, dict] | None = None,
     tuned_blocked: dict[str, dict] | None = None,
+    leaderboard: pd.DataFrame | None = None,
     leaderboard_blocked: pd.DataFrame | None = None,
-    holdout_split: dict | None = None,
+    holdout: pd.DataFrame | None = None,
     holdout_random: pd.DataFrame | None = None,
-    holdout_split_random: dict | None = None,
     holdout_conditional: pd.DataFrame | None = None,
-    holdout_random_conditional: pd.DataFrame | None = None,
+    holdout_split: dict | None = None,
+    holdout_split_random: dict | None = None,
     process_gate: dict | None = None,
+    merge: bool = False,
     path: Path = BENCHMARK_RESULTS_PATH,
 ) -> dict:
-    payload = {
-        "primary_metric": PRIMARY_METRIC,
-        "ranking": RANKING,
-        "tuned_params_dir": str(TUNED_PARAMS_DIR),
-        "tuned_blocked_params_dir": str(TUNED_BLOCKED_PARAMS_DIR),
-        "cv_protocol": {
-            "in_distribution": CV_PROTOCOL_IN_DIST,
-            "extrapolation": CV_PROTOCOL_EXTRAP,
-        },
-        "model_ids": list(BENCHMARK_MODEL_IDS),
-        "tuned_hyperparameters": {
-            model_id: tuned[model_id].get("grid_search_best_params", {})
-            for model_id in BENCHMARK_MODEL_IDS
-        },
-        "correlated_selection": {
-            "library": "feature_engine",
-            "steps": [
-                "DropConstantFeatures",
-                "DropDuplicateFeatures",
-                "VarianceThreshold",
-                "SmartCorrelatedSelection",
-            ],
-            "drop_constant_tol": 1,
-            "method": CORRELATED_SELECTION_METHOD,
-            "threshold": float(CORRELATED_SELECTION_THRESHOLD),
-            "selection_method": CORRELATED_SELECTION_CRITERION,
-            "missing_values": "ignore",
-        },
-        "benchmark_rf_n_estimators": int(RF_N_ESTIMATORS),
-        "benchmark_rf_max_depth": int(RF_MAX_DEPTH),
-        "benchmark_xgb_n_estimators": int(XGB_N_ESTIMATORS),
-        "benchmark_xgb_max_depth": int(XGB_MAX_DEPTH),
-        "benchmark_xgb_scale_pos_weight": float(XGB_SCALE_POS_WEIGHT),
-        "holdout_is_reporting_only": True,
-        "holdout_bootstrap": {
-            "n": int(HOLDOUT_BOOTSTRAP_N),
-            "ci_level": float(HOLDOUT_BOOTSTRAP_CI),
-            "method": "stratified",
-        },
-        "holdout_split": holdout_split or {
+    """Write benchmark JSON. When merge=True, update only the touched models'
+    sections in the existing file (used for single-model / single-track runs)."""
+    payload: dict = {}
+    if merge and path.exists():
+        payload = json.loads(path.read_text(encoding="utf-8"))
+
+    payload.update(
+        {
+            "primary_metric": PRIMARY_METRIC,
+            "ranking": RANKING,
+            "tuned_params_dir": str(TUNED_PARAMS_DIR),
+            "tuned_blocked_params_dir": str(TUNED_BLOCKED_PARAMS_DIR),
+            "cv_protocol": {
+                "in_distribution": CV_PROTOCOL_IN_DIST,
+                "extrapolation": CV_PROTOCOL_EXTRAP,
+            },
+            "model_ids": list(BENCHMARK_MODEL_IDS),
+            "interpolation_model_ids": list(INTERP_MODEL_IDS),
+            "extrapolation_model_ids": list(EXTRAP_MODEL_IDS),
+            "correlated_selection": {
+                "library": "feature_engine",
+                "steps": [
+                    "DropConstantFeatures",
+                    "DropDuplicateFeatures",
+                    "VarianceThreshold",
+                    "SmartCorrelatedSelection",
+                ],
+                "drop_constant_tol": 1,
+                "method": CORRELATED_SELECTION_METHOD,
+                "threshold": float(CORRELATED_SELECTION_THRESHOLD),
+                "selection_method": CORRELATED_SELECTION_CRITERION,
+                "missing_values": "ignore",
+            },
+            "benchmark_rf_n_estimators": int(RF_N_ESTIMATORS),
+            "benchmark_rf_max_depth": int(RF_MAX_DEPTH),
+            "benchmark_xgb_n_estimators": int(XGB_N_ESTIMATORS),
+            "benchmark_xgb_max_depth": int(XGB_MAX_DEPTH),
+            "benchmark_xgb_scale_pos_weight": float(XGB_SCALE_POS_WEIGHT),
+            "holdout_is_reporting_only": True,
+            "holdout_bootstrap": {
+                "n": int(HOLDOUT_BOOTSTRAP_N),
+                "ci_level": float(HOLDOUT_BOOTSTRAP_CI),
+                "method": "stratified",
+            },
+            "threshold_profile_ids": list(PROFILE_IDS),
+            "threshold_profile_config": threshold_profile_config(),
+        }
+    )
+
+    if holdout_split is not None:
+        payload["holdout_split"] = holdout_split
+    elif "holdout_split" not in payload:
+        payload["holdout_split"] = {
             "test_size": float(TEST_SIZE),
             "split_mode": "temporal",
-        },
-        "leaderboard": leaderboard.to_dict(orient="records"),
-        "threshold_profile_ids": list(PROFILE_IDS),
-        "threshold_profile_config": threshold_profile_config(),
-    }
-    if tuned_blocked is not None:
-        payload["tuned_hyperparameters_blocked"] = {
-            model_id: tuned_blocked[model_id].get("grid_search_best_params", {})
-            for model_id in BENCHMARK_MODEL_IDS
         }
-        payload["time_decay"] = {
-            model_id: {
-                "decay_lambda": float(
-                    tuned_blocked[model_id].get("decay_lambda", 0.0)
-                ),
-                "weight_capable": model_id in WEIGHTING_MODEL_IDS,
-                "search": tuned_blocked[model_id].get("decay_lambda_search"),
-            }
-            for model_id in BENCHMARK_MODEL_IDS
-        }
-    if leaderboard_blocked is not None:
-        payload["leaderboard_blocked"] = leaderboard_blocked.to_dict(orient="records")
-    if holdout is not None:
-        payload["holdout"] = holdout.to_dict(orient="records")
-    if holdout_random is not None:
-        payload["holdout_random"] = holdout_random.to_dict(orient="records")
     if holdout_split_random is not None:
         payload["holdout_split_random"] = holdout_split_random
+
+    if tuned is not None:
+        hp = dict(payload.get("tuned_hyperparameters") or {})
+        for mid in interp_ids:
+            hp[mid] = tuned[mid].get("grid_search_best_params", {})
+        payload["tuned_hyperparameters"] = hp
+
+    if tuned_blocked is not None:
+        hp_b = dict(payload.get("tuned_hyperparameters_blocked") or {})
+        time_decay = dict(payload.get("time_decay") or {})
+        for mid in extrap_ids:
+            hp_b[mid] = tuned_blocked[mid].get("grid_search_best_params", {})
+            time_decay[mid] = {
+                "decay_lambda": float(tuned_blocked[mid].get("decay_lambda", 0.0)),
+                "weight_capable": mid in WEIGHTING_MODEL_IDS,
+                "search": tuned_blocked[mid].get("decay_lambda_search"),
+            }
+        payload["tuned_hyperparameters_blocked"] = hp_b
+        payload["time_decay"] = time_decay
+
+    if leaderboard is not None:
+        payload["leaderboard"] = _merge_model_rows(
+            payload.get("leaderboard"), leaderboard.to_dict(orient="records"), interp_ids
+        )
+    if leaderboard_blocked is not None:
+        payload["leaderboard_blocked"] = _merge_model_rows(
+            payload.get("leaderboard_blocked"),
+            leaderboard_blocked.to_dict(orient="records"),
+            extrap_ids,
+        )
+    if holdout is not None:
+        payload["holdout"] = _merge_model_rows(
+            payload.get("holdout"), holdout.to_dict(orient="records"), extrap_ids
+        )
+    if holdout_random is not None:
+        payload["holdout_random"] = _merge_model_rows(
+            payload.get("holdout_random"),
+            holdout_random.to_dict(orient="records"),
+            interp_ids,
+        )
+    if holdout_conditional is not None:
+        payload["holdout_conditional"] = _merge_model_rows(
+            payload.get("holdout_conditional"),
+            holdout_conditional.to_dict(orient="records"),
+            extrap_ids,
+        )
     if process_gate is not None:
         payload["process_gate"] = process_gate
-    if holdout_conditional is not None:
-        payload["holdout_conditional"] = holdout_conditional.to_dict(orient="records")
-    if holdout_random_conditional is not None:
-        payload["holdout_random_conditional"] = holdout_random_conditional.to_dict(
-            orient="records"
-        )
+
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(json_safe(payload), indent=2), encoding="utf-8")
     return payload
 
 
-def main() -> None:
-    """Re-run after tuning: refresh stratified + blocked CV and dual holdouts."""
-    tuned = load_all_tuned_params()
-    tuned_blocked = load_all_tuned_blocked_params()
+def _select_model_ids(model: str | None, track: str | None) -> list[str]:
+    if model is not None:
+        if model not in BENCHMARK_MODEL_IDS:
+            raise SystemExit(
+                f"Unknown --model {model!r}; choose from {list(BENCHMARK_MODEL_IDS)}"
+            )
+        return [model]
+    if track == "interpolation":
+        return list(INTERP_MODEL_IDS)
+    if track == "extrapolation":
+        return list(EXTRAP_MODEL_IDS)
+    return list(BENCHMARK_MODEL_IDS)
+
+
+def _parse_args(argv=None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--model",
+        choices=list(BENCHMARK_MODEL_IDS),
+        help="Benchmark a single pipeline by model id (merges into existing JSON).",
+    )
+    parser.add_argument(
+        "--track",
+        choices=["interpolation", "extrapolation"],
+        help="Benchmark only one track (ignored if --model is given).",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv=None) -> None:
+    """Re-run after tuning. Interpolation track = stratified CV + random holdout;
+    extrapolation track = blocked CV + temporal holdout + process gate + decay.
+    A --model/--track subset merges into the existing benchmark JSON."""
+    args = _parse_args(argv)
+    selected = _select_model_ids(args.model, args.track)
+    interp_ids = [m for m in INTERP_MODEL_IDS if m in selected]
+    extrap_ids = [m for m in EXTRAP_MODEL_IDS if m in selected]
+    merge = set(selected) != set(BENCHMARK_MODEL_IDS)
+
     df = load_mart()
     cols = feature_columns(df)
 
@@ -609,129 +696,138 @@ def main() -> None:
     y_test = test_df[TARGET_COL].astype(int)
     train_ts = train_df[TIMESTAMP_COL].reset_index(drop=True)
 
-    rand_train_df, rand_test_df = split_train_test_random(df)
-    split_meta_random = holdout_split_summary(
-        rand_train_df, rand_test_df, split_mode="random"
-    )
-    Xr_train = rand_train_df[cols]
-    yr_train = rand_train_df[TARGET_COL].astype(int)
-    Xr_test = rand_test_df[cols]
-    yr_test = rand_test_df[TARGET_COL].astype(int)
+    tuned = leaderboard = holdout_random = split_meta_random = None
+    tuned_blocked = leaderboard_blocked = holdout = holdout_conditional = None
+    gate = extrapolation_pipelines = None
 
-    print("Stratified CV leaderboard (in-distribution protocol):")
-    leaderboard = run_pipeline_benchmark(
-        build_benchmark_pipelines(tuned, extrapolation=False),
-        X_train,
-        y_train,
-        cv=make_repeated_stratified_cv(),
-        show_progress=True,
-    )
+    if interp_ids:
+        tuned = load_all_tuned_params(model_ids=interp_ids)
+        print("Stratified CV leaderboard (in-distribution protocol):")
+        leaderboard = run_pipeline_benchmark(
+            build_benchmark_pipelines(tuned, model_ids=interp_ids),
+            X_train,
+            y_train,
+            cv=make_repeated_stratified_cv(),
+            show_progress=True,
+        )
 
-    print("\nBlocked time CV leaderboard (extrapolation, time-weighted):")
-    leaderboard_blocked = run_weighted_blocked_leaderboard(
-        build_benchmark_pipelines(tuned_blocked, extrapolation=True),
-        X_train,
-        y_train,
-        train_ts,
-        make_blocked_time_cv(train_df),
-        tuned_blocked,
-        show_progress=True,
-    )
+        rand_train_df, rand_test_df = split_train_test_random(df)
+        split_meta_random = holdout_split_summary(
+            rand_train_df, rand_test_df, split_mode="random"
+        )
+        Xr_train = rand_train_df[cols]
+        yr_train = rand_train_df[TARGET_COL].astype(int)
+        Xr_test = rand_test_df[cols]
+        yr_test = rand_test_df[TARGET_COL].astype(int)
+        print("\nRandom holdout (stratified-tuned, in-distribution):")
+        holdout_random = run_holdout_benchmark(
+            build_benchmark_pipelines(tuned, model_ids=interp_ids),
+            Xr_train,
+            yr_train,
+            Xr_test,
+            yr_test,
+            tuned,
+            show_progress=True,
+        )
 
-    extrapolation_pipelines = build_benchmark_pipelines(
-        tuned_blocked, extrapolation=True
-    )
-    print("\nTemporal holdout (blocked-tuned, time-weighted):")
-    holdout = run_holdout_benchmark(
-        extrapolation_pipelines,
-        X_train,
-        y_train,
-        X_test,
-        y_test,
-        tuned_blocked,
-        train_timestamps=train_ts,
-        show_progress=True,
-    )
+    if extrap_ids:
+        tuned_blocked = load_all_tuned_blocked_params(model_ids=extrap_ids)
+        print("\nBlocked time CV leaderboard (extrapolation, time-weighted):")
+        leaderboard_blocked = run_weighted_blocked_leaderboard(
+            build_benchmark_pipelines(
+                tuned_blocked, model_ids=extrap_ids, extrapolation=True
+            ),
+            X_train,
+            y_train,
+            train_ts,
+            make_blocked_time_cv(train_df),
+            tuned_blocked,
+            show_progress=True,
+        )
 
-    print("\nRandom holdout (stratified-tuned, in-distribution):")
-    holdout_random = run_holdout_benchmark(
-        build_benchmark_pipelines(tuned, extrapolation=False),
-        Xr_train,
-        yr_train,
-        Xr_test,
-        yr_test,
-        tuned,
-        show_progress=True,
-    )
+        extrapolation_pipelines = build_benchmark_pipelines(
+            tuned_blocked, model_ids=extrap_ids, extrapolation=True
+        )
+        print("\nTemporal holdout (blocked-tuned, time-weighted):")
+        holdout = run_holdout_benchmark(
+            extrapolation_pipelines,
+            X_train,
+            y_train,
+            X_test,
+            y_test,
+            tuned_blocked,
+            train_timestamps=train_ts,
+            show_progress=True,
+        )
 
-    print(
-        f"\nProcess gate (post-cluster T² {GATE_LOGIC.upper()} IF, "
-        "passing-train reference):"
-    )
-    gate = ProcessGate(
-        t2_alpha=T2_GATE_ALPHA,
-        if_alpha=IF_GATE_ALPHA,
-        if_n_estimators=IF_GATE_N_ESTIMATORS,
-        if_max_samples=IF_GATE_MAX_SAMPLES,
-        gate_corr_threshold=GATE_CORR_THRESHOLD,
-        logic=GATE_LOGIC,
-    ).fit(X_train, y_train)
-    holdout_conditional = run_gate_conditional_benchmark(
-        build_benchmark_pipelines(tuned_blocked, extrapolation=True),
-        X_train,
-        y_train,
-        X_test,
-        y_test,
-        gate,
-        tuned_blocked,
-        train_timestamps=train_ts,
-        show_progress=True,
-    )
-
-    print("\nProcess gate on random holdout (contrast):")
-    holdout_random_conditional = run_gate_conditional_benchmark(
-        build_benchmark_pipelines(tuned, extrapolation=False),
-        Xr_train,
-        yr_train,
-        Xr_test,
-        yr_test,
-        gate,
-        tuned,
-        train_timestamps=None,
-        show_progress=True,
-    )
+        print(
+            f"\nProcess gate (post-cluster T² {GATE_LOGIC.upper()} IF, "
+            "passing-train reference):"
+        )
+        gate = ProcessGate(
+            t2_alpha=T2_GATE_ALPHA,
+            if_alpha=IF_GATE_ALPHA,
+            if_n_estimators=IF_GATE_N_ESTIMATORS,
+            if_max_samples=IF_GATE_MAX_SAMPLES,
+            gate_corr_threshold=GATE_CORR_THRESHOLD,
+            logic=GATE_LOGIC,
+        ).fit(X_train, y_train)
+        holdout_conditional = run_gate_conditional_benchmark(
+            build_benchmark_pipelines(
+                tuned_blocked, model_ids=extrap_ids, extrapolation=True
+            ),
+            X_train,
+            y_train,
+            X_test,
+            y_test,
+            gate,
+            tuned_blocked,
+            train_timestamps=train_ts,
+            show_progress=True,
+        )
 
     save_benchmark_results(
-        tuned,
-        leaderboard,
-        holdout,
+        interp_ids=interp_ids,
+        extrap_ids=extrap_ids,
+        tuned=tuned,
         tuned_blocked=tuned_blocked,
+        leaderboard=leaderboard,
         leaderboard_blocked=leaderboard_blocked,
-        holdout_split=split_meta,
+        holdout=holdout,
         holdout_random=holdout_random,
-        holdout_split_random=split_meta_random,
         holdout_conditional=holdout_conditional,
-        holdout_random_conditional=holdout_random_conditional,
-        process_gate=gate.config(),
-    )
-    artifacts = collect_holdout_artifacts(
-        extrapolation_pipelines,
-        X_train,
-        y_train,
         holdout_split=split_meta,
+        holdout_split_random=split_meta_random,
+        process_gate=gate.config() if gate is not None else None,
+        merge=merge,
     )
-    save_pipeline_artifacts(artifacts)
+
+    if extrapolation_pipelines is not None:
+        artifacts = collect_holdout_artifacts(
+            extrapolation_pipelines,
+            X_train,
+            y_train,
+            holdout_split=split_meta,
+        )
+        save_pipeline_artifacts(artifacts)
 
     print(f"\nWrote {BENCHMARK_RESULTS_PATH}")
-    print(f"Wrote {PIPELINE_ARTIFACTS_PATH}\n")
-    print("Stratified CV leaderboard:")
-    print(leaderboard.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
-    print("\nBlocked CV leaderboard:")
-    print(leaderboard_blocked.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
-    print("\nTemporal holdout (extrapolation):")
-    print(holdout.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
-    print("\nRandom holdout (in-distribution):")
-    print(holdout_random.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
+    if extrapolation_pipelines is not None:
+        print(f"Wrote {PIPELINE_ARTIFACTS_PATH}")
+    if leaderboard is not None:
+        print("\nStratified CV leaderboard:")
+        print(leaderboard.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
+    if leaderboard_blocked is not None:
+        print("\nBlocked CV leaderboard:")
+        print(
+            leaderboard_blocked.to_string(index=False, float_format=lambda x: f"{x:.3f}")
+        )
+    if holdout is not None:
+        print("\nTemporal holdout (extrapolation):")
+        print(holdout.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
+    if holdout_random is not None:
+        print("\nRandom holdout (in-distribution):")
+        print(holdout_random.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
 
 
 if __name__ == "__main__":

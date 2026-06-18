@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
-"""Run sequential PR-AUC hyperparameter + multi-profile threshold tuning for all models.
+"""Run sequential PR-AUC hyperparameter + multi-profile threshold tuning.
 
-Runs two CV protocols per model:
-  - repeated_stratified_5x2 → data/processed/tuned/
-  - blocked_time_local_strat → data/processed/tuned_blocked/
+Protocol is routed by each model's track:
+  - interpolation track → repeated_stratified_5x2 → data/processed/tuned/
+  - extrapolation track → blocked_time_local_strat → data/processed/tuned_blocked/
+
+Use --model ID to retune a single pipeline, or --track {interpolation,extrapolation}
+to retune one track. With no flag, all models are tuned.
 
 After changing classifier calibration settings, re-tune all models and run benchmark.
 """
 from __future__ import annotations
+
+import argparse
 
 from secom.cv import make_blocked_time_cv
 from secom.pipelines import (
@@ -25,6 +30,7 @@ from secom.pipelines import (
 from secom.tuning.registry import (
     MODEL_SPECS,
     fit_with_progress,
+    model_ids_for_track,
     run_grid_search,
     save_tuned_params,
     summarize_cv_search,
@@ -33,15 +39,21 @@ from secom.tuning.registry import (
 )
 from secom.utils import tuned_blocked_params_path, tuned_params_path
 
-CV_PASSES = (
-    ("repeated_stratified_5x2", make_repeated_stratified_cv, TUNED_PARAMS_DIR, tuned_params_path),
-    (
+# CV pass per track: (protocol name, cv factory, output dir, output path fn).
+CV_PASS_BY_TRACK = {
+    "interpolation": (
+        "repeated_stratified_5x2",
+        make_repeated_stratified_cv,
+        TUNED_PARAMS_DIR,
+        tuned_params_path,
+    ),
+    "extrapolation": (
         "blocked_time_local_strat",
         make_blocked_time_cv,
         TUNED_BLOCKED_PARAMS_DIR,
         tuned_blocked_params_path,
     ),
-)
+}
 
 
 def _tune_pass(
@@ -122,25 +134,52 @@ def _tune_pass(
     print(f"Wrote {out_path_fn(model_id)}", flush=True)
 
 
-def main() -> int:
+def _select_model_ids(model: str | None, track: str | None) -> list[str]:
+    if model is not None:
+        if model not in MODEL_SPECS:
+            raise SystemExit(
+                f"Unknown --model {model!r}; choose from {sorted(MODEL_SPECS)}"
+            )
+        return [model]
+    return model_ids_for_track(track)
+
+
+def _parse_args(argv=None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--model",
+        choices=sorted(MODEL_SPECS),
+        help="Tune a single pipeline by model id.",
+    )
+    parser.add_argument(
+        "--track",
+        choices=sorted({spec.track for spec in MODEL_SPECS.values()}),
+        help="Tune only models in this track (ignored if --model is given).",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv=None) -> int:
+    args = _parse_args(argv)
     df = load_mart()
     feature_cols = feature_columns(df)
     train_df, _ = split_train_test(df)
     X_train = train_df[feature_cols]
     y_train = train_df[TARGET_COL].astype(int)
 
-    for model_id, spec in MODEL_SPECS.items():
-        for cv_protocol, cv_factory, _out_dir, out_path_fn in CV_PASSES:
-            _tune_pass(
-                model_id,
-                spec,
-                train_df,
-                X_train,
-                y_train,
-                cv_protocol,
-                cv_factory,
-                out_path_fn,
-            )
+    for model_id in _select_model_ids(args.model, args.track):
+        spec = MODEL_SPECS[model_id]
+        cv_protocol, cv_factory, _out_dir, out_path_fn = CV_PASS_BY_TRACK[spec.track]
+        _tune_pass(
+            model_id,
+            spec,
+            train_df,
+            X_train,
+            y_train,
+            cv_protocol,
+            cv_factory,
+            out_path_fn,
+        )
     return 0
 
 

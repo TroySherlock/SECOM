@@ -1,4 +1,4 @@
-"""Batch-generate frozen Gemma narratives for all linear_lr holdout wafers."""
+"""Batch-generate frozen Gemma narratives for all extrap_enet holdout wafers."""
 from __future__ import annotations
 
 import argparse
@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from secom.dashboard.explainability import cached_wafer_explanation, holdout_wafer_ids
 from secom.dashboard.narrator import (
-    LINEAR_LR_MODEL_ID,
+    NARRATIVE_MODEL_ID,
     LLMNarrativeError,
     build_narratives_artifact,
     build_wafer_facts,
@@ -20,7 +20,7 @@ from secom.dashboard.narrator import (
     resolve_llm_model,
     write_narratives_artifact,
 )
-from secom.pipelines import LINEAR_LR_NARRATIVES_PATH
+from secom.pipelines import NARRATIVES_PATH
 
 MAX_RETRIES = 3
 RETRY_BACKOFF_SEC = 2.0
@@ -41,7 +41,7 @@ def _generate_with_retries(facts: dict, *, model: str) -> str:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate frozen Gemma wafer narratives for linear_lr holdout wafers."
+        description="Generate frozen Gemma wafer narratives for extrap_enet holdout wafers."
     )
     parser.add_argument(
         "--wafer-id",
@@ -52,8 +52,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=str,
-        default=str(LINEAR_LR_NARRATIVES_PATH),
-        help=f"Output JSON path (default: {LINEAR_LR_NARRATIVES_PATH})",
+        default=str(NARRATIVES_PATH),
+        help=f"Output JSON path (default: {NARRATIVES_PATH})",
     )
     return parser.parse_args()
 
@@ -91,11 +91,11 @@ def main() -> int:
     narratives: dict[str, str] = dict(existing) if args.wafer_id else {}
 
     for wafer_id in tqdm(wafer_ids, desc="Gemma narratives", unit="wafer"):
-        result = cached_wafer_explanation(LINEAR_LR_MODEL_ID, wafer_id)
+        result = cached_wafer_explanation(NARRATIVE_MODEL_ID, wafer_id)
         if result is None:
             print(f"ERROR: wafer {wafer_id!r} not found in holdout split", file=sys.stderr)
             return 1
-        facts = build_wafer_facts(LINEAR_LR_MODEL_ID, result)
+        facts = build_wafer_facts(NARRATIVE_MODEL_ID, result)
         key = str(wafer_id)
         try:
             narratives[key] = _generate_with_retries(facts, model=model)

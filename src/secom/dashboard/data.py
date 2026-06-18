@@ -21,7 +21,7 @@ from secom.pipelines import (
 )
 from secom.utils import load_tuned_params
 
-REFERENCE_MODELS = {"linear": "linear_lr", "topk": "topk_rf"}
+REFERENCE_MODELS = {"linear": "extrap_enet", "topk": "extrap_rf"}
 
 
 @dataclass(frozen=True)
@@ -34,6 +34,7 @@ class ModelInfo:
     description: str
     tuning_notebook: str
     explainability: Literal["linear", "tree", "knn"]
+    track: Literal["interpolation", "extrapolation"] = "interpolation"
 
 
 _SHARED_FEATURE_PATH = (
@@ -41,47 +42,79 @@ _SHARED_FEATURE_PATH = (
 )
 
 MODEL_CATALOG: dict[str, ModelInfo] = {
-    "linear_lr": ModelInfo(
-        model_id="linear_lr",
-        display_name="Linear LR",
-        family="Shared preprocess",
+    "intrap_linear_lr": ModelInfo(
+        model_id="intrap_linear_lr",
+        display_name="Linear LR (interp)",
+        family="Interpolation track",
         classifier="Logistic regression (elastic net, saga)",
         feature_path=f"{_SHARED_FEATURE_PATH} → elastic-net LR",
         description="Elastic-net logistic regression on the shared sensor path.",
-        tuning_notebook="tuning/linear_lr.ipynb",
+        tuning_notebook="tuning/intrap_linear_lr.ipynb",
         explainability="linear",
+        track="interpolation",
     ),
-    "topk_rf": ModelInfo(
-        model_id="topk_rf",
-        display_name="Random Forest",
-        family="Shared preprocess",
+    "intrap_topk_rf": ModelInfo(
+        model_id="intrap_topk_rf",
+        display_name="Random Forest (interp)",
+        family="Interpolation track",
         classifier="Random forest",
         feature_path=f"{_SHARED_FEATURE_PATH} → RF",
         description="Random forest on the shared sensor path.",
-        tuning_notebook="tuning/topk_rf.ipynb",
+        tuning_notebook="tuning/intrap_topk_rf.ipynb",
         explainability="tree",
+        track="interpolation",
     ),
-    "topk_knn": ModelInfo(
-        model_id="topk_knn",
-        display_name="k-NN",
-        family="Shared preprocess",
+    "intrap_topk_knn": ModelInfo(
+        model_id="intrap_topk_knn",
+        display_name="k-NN (interp)",
+        family="Interpolation track",
         classifier="k-nearest neighbors",
         feature_path=f"{_SHARED_FEATURE_PATH} → k-NN",
         description="k-nearest neighbors on the shared sensor path.",
-        tuning_notebook="tuning/topk_knn.ipynb",
+        tuning_notebook="tuning/intrap_topk_knn.ipynb",
         explainability="knn",
+        track="interpolation",
     ),
-    "topk_xgb": ModelInfo(
-        model_id="topk_xgb",
-        display_name="XGBoost",
-        family="Shared preprocess",
+    "intrap_topk_xgb": ModelInfo(
+        model_id="intrap_topk_xgb",
+        display_name="XGBoost (interp)",
+        family="Interpolation track",
         classifier="XGBoost",
         feature_path=f"{_SHARED_FEATURE_PATH} → XGBoost",
         description=(
             "Gradient boosting on the shared sensor path (scale_pos_weight for imbalance)."
         ),
-        tuning_notebook="tuning/topk_xgb.ipynb",
+        tuning_notebook="tuning/intrap_topk_xgb.ipynb",
         explainability="tree",
+        track="interpolation",
+    ),
+    "extrap_enet": ModelInfo(
+        model_id="extrap_enet",
+        display_name="Elastic Net (extrap)",
+        family="Extrapolation track",
+        classifier="Logistic regression (elastic net, saga)",
+        feature_path=f"{_SHARED_FEATURE_PATH} → elastic-net LR",
+        description=(
+            "Elastic-net logistic regression for extrapolation (blocked CV, "
+            "temporal holdout, process gate, time-decay weighting)."
+        ),
+        tuning_notebook="tuning/extrap_enet.ipynb",
+        explainability="linear",
+        track="extrapolation",
+    ),
+    "extrap_rf": ModelInfo(
+        model_id="extrap_rf",
+        display_name="Random Forest (extrap)",
+        family="Extrapolation track",
+        classifier="Random forest",
+        feature_path=f"{_SHARED_FEATURE_PATH} → RF",
+        description=(
+            "Random forest for extrapolation (blocked CV, temporal holdout, "
+            "process gate, time-decay weighting)."
+        ),
+        tuning_notebook="tuning/extrap_rf.ipynb",
+        explainability="tree",
+        track="extrapolation",
     ),
 }
 
@@ -125,11 +158,13 @@ def holdout_df(payload: dict[str, Any], key: str = "holdout") -> pd.DataFrame:
 
 
 def holdout_comparison_df(payload: dict[str, Any]) -> pd.DataFrame:
-    """One row per pipeline: stratified/blocked CV vs random/temporal holdout PR-AUC."""
+    """One row per model under its own track: that track's CV PR-AUC vs its holdout PR-AUC.
+
+    Interpolation models use stratified CV + random holdout; extrapolation models use
+    blocked time CV + temporal holdout. The two tracks have disjoint model ids.
+    """
     cv_df = cv_leaderboard_df(payload)
     cv_blocked_df = cv_leaderboard_blocked_df(payload)
-    if cv_df.empty:
-        return pd.DataFrame()
 
     def _metric_map(key: str, metric: str) -> dict[str, float]:
         rows = payload.get(key) or []
@@ -149,24 +184,26 @@ def holdout_comparison_df(payload: dict[str, Any]) -> pd.DataFrame:
     )
 
     out_rows = []
-    for pipeline in cv_df["pipeline"]:
-        rand = random_pr.get(pipeline)
-        temp = temporal_pr.get(pipeline)
-        gap = (
-            float(rand) - float(temp)
-            if rand is not None and temp is not None
-            else None
-        )
+    for pipeline in cv_pr:
         out_rows.append(
             {
                 "pipeline": pipeline,
+                "track": "interpolation",
                 "cv_pr_auc": cv_pr.get(pipeline),
-                "cv_blocked_pr_auc": cv_blocked_pr.get(pipeline),
-                "random_pr_auc": rand,
-                "temporal_pr_auc": temp,
-                "interpolation_gap": gap,
+                "holdout_pr_auc": random_pr.get(pipeline),
             }
         )
+    for pipeline in cv_blocked_pr:
+        out_rows.append(
+            {
+                "pipeline": pipeline,
+                "track": "extrapolation",
+                "cv_pr_auc": cv_blocked_pr.get(pipeline),
+                "holdout_pr_auc": temporal_pr.get(pipeline),
+            }
+        )
+    if not out_rows:
+        return pd.DataFrame()
     out = pd.DataFrame(out_rows)
     for col in out.select_dtypes(include="float").columns:
         out[col] = out[col].round(3)

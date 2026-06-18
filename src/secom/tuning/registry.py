@@ -138,6 +138,7 @@ class ModelSpec:
     groupby_cols: list[str]
     best_defaults: dict[str, object]
     build_grid_search_best_params: Callable[[dict], dict]
+    track: str = "interpolation"
 
 
 def _linear_lr_pipeline() -> Pipeline:
@@ -225,41 +226,51 @@ def _topk_xgb_best_params(cv_summary: dict) -> dict:
     }
 
 
+_LINEAR_LR_RENAMES = {
+    **_hub_preprocess_param_renames(),
+    "param_classifier__estimator__C": "c",
+    "param_classifier__estimator__l1_ratio": "l1_ratio",
+}
+_LINEAR_LR_GROUPBY = [*_hub_preprocess_groupby_cols(), "c", "l1_ratio"]
+_LINEAR_LR_DEFAULTS = {
+    **_hub_preprocess_best_defaults(),
+    "c": float(C_GRID[0]),
+    "l1_ratio": float(L1_RATIO_GRID[0]),
+}
+
+_TOPK_RF_RENAMES = {
+    **_hub_preprocess_param_renames(),
+    "param_classifier__estimator__max_depth": "max_depth",
+}
+_TOPK_RF_GROUPBY = [*_hub_preprocess_groupby_cols(), "max_depth"]
+_TOPK_RF_DEFAULTS = {
+    **_hub_preprocess_best_defaults(),
+    "max_depth": int(RF_MAX_DEPTH),
+}
+
 MODEL_SPECS: dict[str, ModelSpec] = {
-    "linear_lr": ModelSpec(
-        model_id="linear_lr",
+    "intrap_linear_lr": ModelSpec(
+        model_id="intrap_linear_lr",
         build_pipeline=_linear_lr_pipeline,
         make_param_grid=_linear_lr_grid,
-        param_renames={
-            **_hub_preprocess_param_renames(),
-            "param_classifier__estimator__C": "c",
-            "param_classifier__estimator__l1_ratio": "l1_ratio",
-        },
-        groupby_cols=[*_hub_preprocess_groupby_cols(), "c", "l1_ratio"],
-        best_defaults={
-            **_hub_preprocess_best_defaults(),
-            "c": float(C_GRID[0]),
-            "l1_ratio": float(L1_RATIO_GRID[0]),
-        },
+        param_renames=_LINEAR_LR_RENAMES,
+        groupby_cols=_LINEAR_LR_GROUPBY,
+        best_defaults=_LINEAR_LR_DEFAULTS,
         build_grid_search_best_params=_linear_lr_best_params,
+        track="interpolation",
     ),
-    "topk_rf": ModelSpec(
-        model_id="topk_rf",
+    "intrap_topk_rf": ModelSpec(
+        model_id="intrap_topk_rf",
         build_pipeline=_topk_rf_pipeline,
         make_param_grid=_topk_rf_grid,
-        param_renames={
-            **_hub_preprocess_param_renames(),
-            "param_classifier__estimator__max_depth": "max_depth",
-        },
-        groupby_cols=[*_hub_preprocess_groupby_cols(), "max_depth"],
-        best_defaults={
-            **_hub_preprocess_best_defaults(),
-            "max_depth": int(RF_MAX_DEPTH),
-        },
+        param_renames=_TOPK_RF_RENAMES,
+        groupby_cols=_TOPK_RF_GROUPBY,
+        best_defaults=_TOPK_RF_DEFAULTS,
         build_grid_search_best_params=_topk_rf_best_params,
+        track="interpolation",
     ),
-    "topk_knn": ModelSpec(
-        model_id="topk_knn",
+    "intrap_topk_knn": ModelSpec(
+        model_id="intrap_topk_knn",
         build_pipeline=_topk_knn_pipeline,
         make_param_grid=_topk_knn_grid,
         param_renames={
@@ -272,9 +283,10 @@ MODEL_SPECS: dict[str, ModelSpec] = {
             "n_neighbors": int(KNN_CLASSIFIER_NEIGHBORS),
         },
         build_grid_search_best_params=_topk_knn_best_params,
+        track="interpolation",
     ),
-    "topk_xgb": ModelSpec(
-        model_id="topk_xgb",
+    "intrap_topk_xgb": ModelSpec(
+        model_id="intrap_topk_xgb",
         build_pipeline=_topk_xgb_pipeline,
         make_param_grid=_topk_xgb_grid,
         param_renames={
@@ -289,8 +301,36 @@ MODEL_SPECS: dict[str, ModelSpec] = {
             "learning_rate": float(XGB_LEARNING_RATE),
         },
         build_grid_search_best_params=_topk_xgb_best_params,
+        track="interpolation",
+    ),
+    "extrap_enet": ModelSpec(
+        model_id="extrap_enet",
+        build_pipeline=_linear_lr_pipeline,
+        make_param_grid=_linear_lr_grid,
+        param_renames=_LINEAR_LR_RENAMES,
+        groupby_cols=_LINEAR_LR_GROUPBY,
+        best_defaults=_LINEAR_LR_DEFAULTS,
+        build_grid_search_best_params=_linear_lr_best_params,
+        track="extrapolation",
+    ),
+    "extrap_rf": ModelSpec(
+        model_id="extrap_rf",
+        build_pipeline=_topk_rf_pipeline,
+        make_param_grid=_topk_rf_grid,
+        param_renames=_TOPK_RF_RENAMES,
+        groupby_cols=_TOPK_RF_GROUPBY,
+        best_defaults=_TOPK_RF_DEFAULTS,
+        build_grid_search_best_params=_topk_rf_best_params,
+        track="extrapolation",
     ),
 }
+
+
+def model_ids_for_track(track: str | None = None) -> list[str]:
+    """Model ids filtered by track; all ids when track is None."""
+    if track is None:
+        return list(MODEL_SPECS.keys())
+    return [mid for mid, spec in MODEL_SPECS.items() if spec.track == track]
 
 
 def _resolved_classifier_threshold(tuned_payload: dict) -> float:

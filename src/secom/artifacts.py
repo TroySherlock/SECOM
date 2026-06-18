@@ -28,7 +28,7 @@ from secom.pipelines import (
 )
 from secom.utils import json_safe
 
-REFERENCE_MODELS = {"linear": "linear_lr", "topk": "topk_rf"}
+REFERENCE_MODELS = {"linear": "extrap_enet", "topk": "extrap_rf"}
 
 
 def _sensor_branch_pipeline(preprocess: ColumnTransformer) -> Pipeline:
@@ -40,9 +40,9 @@ def _sensor_branch_pipeline(preprocess: ColumnTransformer) -> Pipeline:
 
 
 def _model_family(model_id: str) -> str:
-    if model_id.startswith("linear_"):
+    if "linear" in model_id or model_id.endswith("enet"):
         return "linear"
-    if model_id.startswith("topk_"):
+    if "topk" in model_id or model_id.endswith("_rf") or model_id.endswith("_xgb"):
         return "topk"
     return "unknown"
 

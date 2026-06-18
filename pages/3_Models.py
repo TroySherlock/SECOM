@@ -28,6 +28,7 @@ from secom.dashboard.charts import (
 )
 from secom.dashboard.pr_curves import load_pr_curves
 from secom.costs import PROFILE_IDS, THRESHOLD_PROFILES
+from secom.pipelines import EXTRAP_MODEL_IDS
 
 _CV_METRIC_SPECS_STRATIFIED: dict[str, tuple[str, str, str]] = {
     "PR-AUC": ("mean_pr_auc", "std_pr_auc", "Mean PR AUC (5×2 repeated stratified CV)"),
@@ -86,7 +87,8 @@ def _format_holdout_split_caption(split: dict) -> str | None:
 def main() -> None:
     st.title("Models & benchmark results")
     st.caption(
-        "Four tuned pipelines compared on repeated CV and a held-out test split, "
+        "Six pipelines across two tracks — interpolation (stratified CV + random holdout) "
+        "and extrapolation (blocked time CV + temporal holdout + process gate) — "
         "with F0.5 / F2 / F4 F-beta thresholds and a BER-minimizing cutoff."
     )
 
@@ -98,22 +100,22 @@ def main() -> None:
 
     cv_df = cv_leaderboard_df(payload)
     cv_blocked_df = cv_leaderboard_blocked_df(payload)
-    ho_df = holdout_df(payload)
     model_ids = list_model_ids(payload)
     tuned = payload.get("tuned_hyperparameters") or {}
     tuned_blocked = payload.get("tuned_hyperparameters_blocked") or {}
 
+    gate_logic_txt = str(process_gate_meta(payload).get("logic", "or")).upper()
     render_blue_note(
-        "**In-distribution** evaluation uses **5×2 stratified CV** and a **random stratified "
-        "holdout** (interpolation upper bound). **Extrapolation** uses **blocked time CV** with "
-        "local stratification, **exponential time-decay sample weighting** (recent wafers "
-        "weighted more, `decay_lambda` tuned on blocked CV), and a **temporal forward holdout** "
-        "(latest 20% by time). A **process gate** (post-cluster Hotelling T² **OR** "
-        "Isolation Forest on passing train wafers) abstains on out-of-control wafers; "
-        "we report **conditional PR-AUC** and **coverage** on the wafers it scores. "
-        "All holdout metrics are reporting-only "
+        "The **interpolation** track (`intrap_*`) uses **5×2 stratified CV** and a **random "
+        "stratified holdout** (interpolation upper bound). The **extrapolation** track "
+        "(`extrap_*`) uses **blocked time CV** with local stratification, **exponential "
+        "time-decay sample weighting** (recent wafers weighted more, `decay_lambda` tuned on "
+        "blocked CV), and a **temporal forward holdout** (latest 20% by time). A **process "
+        f"gate** (post-cluster Hotelling T² **{gate_logic_txt}** Isolation Forest on passing "
+        "train wafers) abstains on out-of-control wafers; we report **conditional PR-AUC** and "
+        "**coverage** on the wafers it scores. All holdout metrics are reporting-only "
         f"(`holdout_is_reporting_only={payload.get('holdout_is_reporting_only', True)}`). "
-        "The random-minus-temporal gap is the cost of extrapolation."
+        "The random-minus-temporal gap across tracks is the cost of extrapolation."
     )
 
     tab_cv, tab_holdout, tab_model = st.tabs(
@@ -126,18 +128,34 @@ def main() -> None:
 
     with tab_cv:
         st.subheader("Cross-validation leaderboard")
-        if cv_df.empty:
-            st.warning("No CV leaderboard rows in benchmark JSON.")
+        protocol_label = st.radio(
+            "CV protocol",
+            options=["Stratified (interpolation)", "Blocked (extrapolation)"],
+            horizontal=True,
+            key="p3_cv_protocol",
+        )
+        use_blocked = protocol_label.startswith("Blocked")
+        protocol_cv_df = cv_blocked_df if use_blocked else cv_df
+        metric_specs = (
+            _CV_METRIC_SPECS_BLOCKED if use_blocked else _CV_METRIC_SPECS_STRATIFIED
+        )
+        if protocol_cv_df.empty:
+            st.warning(
+                "No blocked CV leaderboard rows in benchmark JSON. Re-run "
+                "`python -m secom.cli.benchmark`."
+                if use_blocked
+                else "No stratified CV leaderboard rows in benchmark JSON."
+            )
         else:
             cv_metric = st.selectbox(
                 "Evaluation Metric",
-                list(_CV_METRIC_SPECS_STRATIFIED),
+                list(metric_specs),
                 key="p3_cv_metric_select",
             )
-            mean_col, std_col, chart_title = _CV_METRIC_SPECS_STRATIFIED[cv_metric]
+            mean_col, std_col, chart_title = metric_specs[cv_metric]
             st.plotly_chart(
                 fig_benchmark_leaderboard(
-                    cv_df,
+                    protocol_cv_df,
                     metric_col=mean_col,
                     error_col=std_col,
                     title=chart_title,
@@ -148,7 +166,9 @@ def main() -> None:
                 key="p3_cv_leaderboard",
             )
             cols_to_show = ["pipeline", mean_col, std_col]
-            display_cv = cv_df[[c for c in cols_to_show if c in cv_df.columns]].copy()
+            display_cv = protocol_cv_df[
+                [c for c in cols_to_show if c in protocol_cv_df.columns]
+            ].copy()
             for col in display_cv.columns:
                 if col.startswith("mean_") or col.startswith("std_"):
                     if display_cv[col].dtype.kind == "f":
@@ -163,14 +183,14 @@ def main() -> None:
 
         comparison_df = holdout_comparison_df(payload)
         if not comparison_df.empty:
-            st.markdown("**Interpolation vs extrapolation (PR-AUC)**")
+            st.markdown("**Per-model CV vs holdout PR-AUC (by track)**")
             st.dataframe(comparison_df, width="stretch", hide_index=True)
             st.caption(
-                "`cv_pr_auc` = 5×2 stratified CV (in-distribution protocol); "
-                "`cv_blocked_pr_auc` = blocked time CV (extrapolation protocol); "
-                "`random_pr_auc` is an optimistic interpolation upper bound; "
-                "`temporal_pr_auc` is the forward test with time-decay weighting; "
-                "`interpolation_gap` = random − temporal."
+                "Each model is shown under its own track. `cv_pr_auc` is that track's CV "
+                "(stratified for interpolation, blocked time CV for extrapolation); "
+                "`holdout_pr_auc` is the matching holdout (random for interpolation, "
+                "temporal forward for extrapolation). Compare interpolation rows (optimistic "
+                "upper bound) against extrapolation rows (forward cost)."
             )
 
         view_label = st.radio(
@@ -248,11 +268,18 @@ def main() -> None:
 
             st.dataframe(holdout_auc_summary_df(view_ho_df), width="stretch", hide_index=True)
 
-            cond_key = "holdout_conditional" if use_blocked_cv else "holdout_random_conditional"
-            cond_df = holdout_conditional_df(payload, key=cond_key)
-            gate_meta = process_gate_meta(payload)
-            if not cond_df.empty and gate_meta:
-                st.markdown("**Process gate (T² OR Isolation Forest) — conditional metrics**")
+            # Process gate is extrapolation-only (blocked CV / temporal holdout).
+            cond_df = (
+                holdout_conditional_df(payload, key="holdout_conditional")
+                if use_blocked_cv
+                else None
+            )
+            gate_meta = process_gate_meta(payload) if use_blocked_cv else None
+            if cond_df is not None and not cond_df.empty and gate_meta:
+                logic_txt = str(gate_meta.get("logic", "or")).upper()
+                st.markdown(
+                    f"**Process gate (T² {logic_txt} Isolation Forest) — conditional metrics**"
+                )
                 ucl = gate_meta.get("ucl")
                 if_thr = gate_meta.get("if_threshold")
                 ucl_txt = f"{float(ucl):.1f}" if ucl is not None else "?"
@@ -263,7 +290,7 @@ def main() -> None:
                     f"fit on {gate_meta.get('n_reference_wafers', '?')} passing train wafers, "
                     f"{gate_meta.get('n_features', '?')} features. "
                     f"Abstain when T² > {ucl_txt} (α={gate_meta.get('t2_alpha', '?')}) "
-                    f"**OR** IF score < {if_txt} (α={gate_meta.get('if_alpha', '?')}). "
+                    f"**{logic_txt}** IF score < {if_txt} (α={gate_meta.get('if_alpha', '?')}). "
                     f"IF n_estimators={gate_meta.get('if_n_estimators', '?')}."
                 )
                 gate_cols = [
@@ -292,7 +319,7 @@ def main() -> None:
                 st.dataframe(gate_display, width="stretch", hide_index=True)
                 st.caption(
                     "`coverage` = fraction of holdout wafers in control (scored by the model). "
-                    "OR logic: flagged if **either** T² or IF trips. "
+                    f"{logic_txt} logic: flagged if T² or IF trips per the rule. "
                     "`conditional_pr_auc` is on in-control wafers only (None when "
                     "fewer than 5 in-control fails). Read beside `n_flagged_*` and "
                     "`n_fails_flagged_*` — gains can come from dropping easy negatives."
@@ -307,6 +334,7 @@ def main() -> None:
             key="p3_model_select",
         )
         info = model_info(selected_id)
+        is_extrap = selected_id in EXTRAP_MODEL_IDS
         left, right = st.columns([1.2, 1], gap="large")
         with left:
             st.markdown(f"### {info.display_name}")
@@ -316,18 +344,18 @@ def main() -> None:
             st.markdown(info.description)
             st.markdown(f"**Tuning notebook:** `{info.tuning_notebook}`")
         with right:
-            st.markdown("**Tuned hyperparameters (extrapolation / blocked CV)**")
-            st.markdown(_format_params(tuned_blocked.get(selected_id, {})))
-            decay_meta = time_decay_meta(payload).get(selected_id, {})
-            if decay_meta.get("weight_capable"):
-                st.markdown(
-                    f"- `decay_lambda`: `{float(decay_meta.get('decay_lambda', 0.0)):.2f}` "
-                    "(time-decay weighting)"
-                )
+            if is_extrap:
+                st.markdown("**Tuned hyperparameters (extrapolation / blocked CV)**")
+                st.markdown(_format_params(tuned_blocked.get(selected_id, {})))
+                decay_meta = time_decay_meta(payload).get(selected_id, {})
+                if decay_meta.get("weight_capable"):
+                    st.markdown(
+                        f"- `decay_lambda`: `{float(decay_meta.get('decay_lambda', 0.0)):.2f}` "
+                        "(time-decay weighting)"
+                    )
             else:
-                st.markdown("- `decay_lambda`: _unweighted (k-NN)_")
-            st.markdown("**Tuned hyperparameters (in-distribution / stratified CV)**")
-            st.markdown(_format_params(tuned.get(selected_id, {})))
+                st.markdown("**Tuned hyperparameters (in-distribution / stratified CV)**")
+                st.markdown(_format_params(tuned.get(selected_id, {})))
 
         st.markdown("#### Threshold profiles")
         st.markdown(
@@ -356,13 +384,21 @@ def main() -> None:
             theme="streamlit",
             key=f"p3_pr_curve_{selected_id}",
         )
-        st.caption(
-            "Purple: blocked time CV OOF PR curve on validation blocks only (earliest train "
-            "block has no OOF score under the expanding window). Yellow: temporal holdout PR "
-            "curve with time-decay weighting. Blue dashed: random baseline "
-            "(positive-class prevalence). Green diamond: BER-min threshold operating point "
-            "on holdout."
-        )
+        if is_extrap:
+            st.caption(
+                "Purple: blocked time CV OOF PR curve on validation blocks only (earliest "
+                "train block has no OOF score under the expanding window). Yellow: temporal "
+                "holdout PR curve with time-decay weighting. Blue dashed: random baseline "
+                "(positive-class prevalence). Green diamond: BER-min threshold operating "
+                "point on holdout."
+            )
+        else:
+            st.caption(
+                "Purple: 5×2 stratified CV out-of-fold PR curve (in-distribution). Yellow: "
+                "random stratified holdout PR curve. Blue dashed: random baseline "
+                "(positive-class prevalence). Green diamond: BER-min threshold operating "
+                "point on holdout."
+            )
 
         profile_choice = st.radio(
             "Threshold profile (holdout confusion matrix)",
@@ -372,11 +408,15 @@ def main() -> None:
             key="p3_profile_radio",
         )
 
-        cms = holdout_confusion_by_profile(ho_df, selected_id)
+        deepdive_ho_df = holdout_df(
+            payload, key="holdout" if is_extrap else "holdout_random"
+        )
+        cms = holdout_confusion_by_profile(deepdive_ho_df, selected_id)
         cm = cms.get(profile_choice)
         ho_row = (
-            ho_df.loc[ho_df["pipeline"] == selected_id].iloc[0]
-            if not ho_df.empty and selected_id in ho_df["pipeline"].values
+            deepdive_ho_df.loc[deepdive_ho_df["pipeline"] == selected_id].iloc[0]
+            if not deepdive_ho_df.empty
+            and selected_id in deepdive_ho_df["pipeline"].values
             else None
         )
         thr_val = None

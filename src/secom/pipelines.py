@@ -39,19 +39,30 @@ OUTPUT_DIR = REPO_ROOT / "data" / "processed"
 #   tuned/<model_id>.json           — frozen hyperparameters from tuning notebooks
 #   secom_pipeline_benchmark.json   — CV leaderboard + holdout metrics
 #   secom_pipeline_artifacts.json   — holdout-fit pipeline reporting (feature counts, RF, clusters)
-#   linear_lr_wafer_narratives.json — pre-generated Gemma summaries (python -m secom.cli.build_narratives)
+#   extrap_enet_wafer_narratives.json — pre-generated Gemma summaries (python -m secom.cli.build_narratives)
 TUNED_PARAMS_DIR = OUTPUT_DIR / "tuned"
 TUNED_BLOCKED_PARAMS_DIR = OUTPUT_DIR / "tuned_blocked"
 BENCHMARK_RESULTS_PATH = OUTPUT_DIR / "secom_pipeline_benchmark.json"
 PIPELINE_ARTIFACTS_PATH = OUTPUT_DIR / "secom_pipeline_artifacts.json"
-LINEAR_LR_NARRATIVES_PATH = OUTPUT_DIR / "linear_lr_wafer_narratives.json"
+# Narratives explain the extrapolation elastic net on the temporal holdout
+# (explainability fits with blocked-tuned params + time-decay).
+NARRATIVES_PATH = OUTPUT_DIR / "extrap_enet_wafer_narratives.json"
+# Backward-compatible alias.
+LINEAR_LR_NARRATIVES_PATH = NARRATIVES_PATH
 
-BENCHMARK_MODEL_IDS = (
-    "linear_lr",
-    "topk_rf",
-    "topk_knn",
-    "topk_xgb",
+# Interpolation track: stratified CV + random holdout (no gate, no time-decay).
+INTERP_MODEL_IDS = (
+    "intrap_linear_lr",
+    "intrap_topk_rf",
+    "intrap_topk_knn",
+    "intrap_topk_xgb",
 )
+# Extrapolation track: blocked CV + temporal holdout + process gate + time-decay.
+EXTRAP_MODEL_IDS = (
+    "extrap_enet",
+    "extrap_rf",
+)
+BENCHMARK_MODEL_IDS = INTERP_MODEL_IDS + EXTRAP_MODEL_IDS
 
 TARGET_COL = "target"
 TIMESTAMP_COL = "measurement_ts"
@@ -66,17 +77,17 @@ N_REPEATS = 1
 N_BLOCKED_SPLITS = 5
 BLOCKED_MIN_VAL_FAILS = 4
 
-# Time-decay sample weighting (extrapolation path only). lambda=0 -> uniform.
+# Time-decay sample weighting (extrapolation track only). lambda=0 -> uniform.
 DECAY_LAMBDA_GRID = [0.0, 0.05, 0.1]
 DECAY_LAMBDA_DEFAULT = 0.1
-WEIGHTING_MODEL_IDS = ("linear_lr", "topk_rf", "topk_xgb")
+WEIGHTING_MODEL_IDS = ("extrap_enet", "extrap_rf")
 
 # Process gate constants defined after CORRELATED_SELECTION_THRESHOLD below.
 
 GRID_SEARCH_VERBOSE = 1
 
-C_GRID = [0.0075, 0.01]
-L1_RATIO_GRID = [0.3, 0.5, 0.7]
+C_GRID = [0.0075]
+L1_RATIO_GRID = [0.3]
 
 MODEL_NAME = "secom_linear_elastic_net"
 
@@ -94,7 +105,7 @@ RF_MAX_DEPTH = 5
 RF_MAX_DEPTH_GRID = [3, 5]
 RF_MIN_SAMPLES_LEAF = 10
 RF_SELECT_TOP_K = 35
-RF_SELECT_TOP_K_GRID = [35, 60, 100]
+RF_SELECT_TOP_K_GRID = [35, 60]
 
 N_HUBS_DEFAULT = 5
 N_HUBS_GRID = [0, 5, 10]

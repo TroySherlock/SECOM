@@ -1,4 +1,6 @@
-"""Plain-English wafer summaries for linear_lr (facts + frozen Gemma narratives).
+"""Plain-English wafer summaries for extrap_enet (facts + frozen Gemma narratives).
+
+Narratives explain the extrapolation elastic net on the temporal holdout.
 
 Batch generation (requires local llama-server):
   python -m secom.cli.build_narratives
@@ -28,9 +30,9 @@ from secom.dashboard.explainability import (
     load_holdout_split,
     scaled_matrix,
 )
-from secom.pipelines import ID_COL, LINEAR_LR_NARRATIVES_PATH
+from secom.pipelines import ID_COL, NARRATIVES_PATH
 
-LINEAR_LR_MODEL_ID = "linear_lr"
+NARRATIVE_MODEL_ID = "extrap_enet"
 PROMPT_VERSION = "statistical-interpreter-v1"
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8080/v1"
@@ -92,8 +94,8 @@ def _local_rows(local_df: pd.DataFrame) -> list[dict[str, Any]]:
 
 def build_wafer_facts(model_id: str, result: WaferExplanation) -> dict[str, Any]:
     """Build JSON-serializable facts for linear_lr Gemma narration."""
-    if model_id != LINEAR_LR_MODEL_ID:
-        raise ValueError(f"Narration only supported for {LINEAR_LR_MODEL_ID!r}, got {model_id!r}")
+    if model_id != NARRATIVE_MODEL_ID:
+        raise ValueError(f"Narration only supported for {NARRATIVE_MODEL_ID!r}, got {model_id!r}")
 
     info = model_info(model_id)
     local_rows = _local_rows(result.local_df)
@@ -216,16 +218,16 @@ def generate_narrative_via_llm(
     return str(content).strip()
 
 
-def load_narratives(path: Path | str = LINEAR_LR_NARRATIVES_PATH) -> dict[str, Any]:
+def load_narratives(path: Path | str = NARRATIVES_PATH) -> dict[str, Any]:
     """Load frozen narratives artifact; validate model_id."""
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(f"Missing narratives file: {path}")
     with path.open(encoding="utf-8") as fh:
         payload = json.load(fh)
-    if payload.get("model_id") != LINEAR_LR_MODEL_ID:
+    if payload.get("model_id") != NARRATIVE_MODEL_ID:
         raise ValueError(
-            f"Expected model_id={LINEAR_LR_MODEL_ID!r} in {path}, "
+            f"Expected model_id={NARRATIVE_MODEL_ID!r} in {path}, "
             f"got {payload.get('model_id')!r}"
         )
     if "narratives" not in payload:
@@ -247,7 +249,7 @@ def build_narratives_artifact(
 ) -> dict[str, Any]:
     base_url, _, model = llm_config()
     return {
-        "model_id": LINEAR_LR_MODEL_ID,
+        "model_id": NARRATIVE_MODEL_ID,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "llm_base_url": llm_base_url or base_url,
         "llm_model": llm_model or model,
@@ -258,7 +260,7 @@ def build_narratives_artifact(
 
 def write_narratives_artifact(
     payload: dict[str, Any],
-    path: Path | str = LINEAR_LR_NARRATIVES_PATH,
+    path: Path | str = NARRATIVES_PATH,
 ) -> Path:
     """Write narratives JSON atomically."""
     path = Path(path)
