@@ -25,7 +25,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import RobustScaler
 from xgboost import XGBClassifier
 
-from secom.hub_interactions import LinearSelectT2HubBlock
+from secom.hub_interactions import LinearSelectT2HubBlock, PLSFeatures
 from secom.paths import REPO_ROOT
 
 DB_PATH = REPO_ROOT / "data" / "secom.duckdb"
@@ -46,12 +46,13 @@ NARRATIVES_PATH = OUTPUT_DIR / "extrap_enet_wafer_narratives.json"
 # Backward-compatible alias.
 LINEAR_LR_NARRATIVES_PATH = NARRATIVES_PATH
 
-# Interpolation track: stratified CV + random holdout (no gate, no time-decay).
+# Interpolation track: stratified CV + random holdout + Regularized-EFA gate.
+# 2x2 yield line: {RF-selection, PLS} x {elastic-net LR, RF classifier}.
 INTERP_MODEL_IDS = (
     "intrap_linear_lr",
     "intrap_topk_rf",
-    "intrap_topk_knn",
-    "intrap_topk_xgb",
+    "intrap_pls_enet",
+    "intrap_pls_rf",
 )
 # Extrapolation track: blocked CV + temporal holdout + process gate + time-decay.
 EXTRAP_MODEL_IDS = (
@@ -121,6 +122,22 @@ IF_GATE_N_ESTIMATORS = 400
 IF_GATE_MAX_SAMPLES = "auto"
 # smart_corr threshold for gate feature pipe (impute → cluster only).
 GATE_CORR_THRESHOLD = CORRELATED_SELECTION_THRESHOLD
+
+# Interpolation process gate (post-cluster Regularized EFA → Hotelling T² + Q/SPE).
+# Non-Bayesian: sklearn FactorAnalysis fit on passing train wafers, with
+# Ledoit-Wolf shrinkage on the factor-score covariance used for T². The two
+# statistics are both appended as classifier features and reused (with the UCLs
+# below) by the standalone abstention/coverage report.
+INTERP_EFA_N_FACTORS = 10
+INTERP_T2_GATE_ALPHA = 0.05
+INTERP_Q_GATE_ALPHA = 0.05
+# "or" abstains when either T² or Q trips; "and" only when both agree.
+INTERP_GATE_LOGIC = "or"
+INTERP_GATE_CORR_THRESHOLD = CORRELATED_SELECTION_THRESHOLD
+
+# PLS reduction front-end (interpolation yield line).
+PLS_N_COMPONENTS_DEFAULT = 10
+PLS_N_COMPONENTS_GRID = [5, 10, 15]
 
 XGB_N_ESTIMATORS = 1000
 XGB_MAX_DEPTH = 3
@@ -264,6 +281,13 @@ def frozen_config() -> dict:
         "if_gate_n_estimators": int(IF_GATE_N_ESTIMATORS),
         "if_gate_max_samples": IF_GATE_MAX_SAMPLES,
         "gate_corr_threshold": float(GATE_CORR_THRESHOLD),
+        "interp_efa_n_factors": int(INTERP_EFA_N_FACTORS),
+        "interp_t2_gate_alpha": float(INTERP_T2_GATE_ALPHA),
+        "interp_q_gate_alpha": float(INTERP_Q_GATE_ALPHA),
+        "interp_gate_logic": str(INTERP_GATE_LOGIC),
+        "interp_gate_corr_threshold": float(INTERP_GATE_CORR_THRESHOLD),
+        "pls_n_components_default": int(PLS_N_COMPONENTS_DEFAULT),
+        "pls_n_components_grid": [int(k) for k in PLS_N_COMPONENTS_GRID],
         "holdout_bootstrap_n": int(HOLDOUT_BOOTSTRAP_N),
         "holdout_bootstrap_ci": float(HOLDOUT_BOOTSTRAP_CI),
         **threshold_profile_config(),
@@ -499,6 +523,82 @@ def extrap_preprocess(
     return _sensor_preprocess_column(
         sensor_steps,
         sensor_pattern=_SENSOR_VALUE_PATTERN_EXTRAP,
+    )
+
+
+def _efa_gate_branch() -> Pipeline:
+    """Gate branch: impute → cluster → Regularized-EFA T²/Q monitor features.
+
+    Imported lazily because ``secom.gate`` imports constants from this module
+    (avoids a circular import at module load).
+    """
+    from secom.gate import EFAMonitorFeatures
+
+    return Pipeline(
+        steps=[
+            ("impute", median_imputer()),
+            ("cluster", _cluster_step()),
+            (
+                "efa_monitor",
+                EFAMonitorFeatures(
+                    n_factors=INTERP_EFA_N_FACTORS,
+                    t2_alpha=INTERP_T2_GATE_ALPHA,
+                    q_alpha=INTERP_Q_GATE_ALPHA,
+                ),
+            ),
+        ]
+    ).set_output(transform="pandas")
+
+
+def interp_preprocess(
+    front_end: str = "rf",
+    *,
+    top_k: int = RF_SELECT_TOP_K,
+    n_hubs: int = N_HUBS_DEFAULT,
+    pls_n_components: int = PLS_N_COMPONENTS_DEFAULT,
+    with_gate: bool = True,
+) -> ColumnTransformer:
+    """Interpolation preprocess: a yield front-end + the EFA T²/Q gate branch.
+
+    ``front_end="rf"`` runs the existing RF top-k + T² + hub block; ``"pls"``
+    runs PLS reduction. When ``with_gate`` is true a parallel branch appends the
+    Regularized-EFA ``gate_t2``/``gate_q`` statistics as classifier features.
+    """
+    if front_end == "rf":
+        front_step: tuple[str, object] = (
+            "select_t2_hubs",
+            LinearSelectT2HubBlock(top_k=top_k, n_hubs=n_hubs),
+        )
+    elif front_end == "pls":
+        front_step = ("pls", PLSFeatures(n_components=pls_n_components))
+    else:
+        raise ValueError(f"front_end must be 'rf' or 'pls', got {front_end!r}")
+
+    sensor_steps: list[tuple[str, object]] = [
+        ("impute", median_imputer()),
+        ("cluster", _cluster_step()),
+        front_step,
+    ]
+    transformers: list[tuple[str, object, object]] = [
+        (
+            "sensor_branch",
+            Pipeline(steps=sensor_steps).set_output(transform="pandas"),
+            make_column_selector(pattern=_SENSOR_VALUE_PATTERN),
+        ),
+    ]
+    if with_gate:
+        transformers.append(
+            (
+                "gate_branch",
+                _efa_gate_branch(),
+                make_column_selector(pattern=_SENSOR_VALUE_PATTERN),
+            )
+        )
+    transformers.extend(_auxiliary_transformers())
+    return ColumnTransformer(
+        transformers=transformers,
+        remainder="drop",
+        verbose_feature_names_out=False,
     )
 
 

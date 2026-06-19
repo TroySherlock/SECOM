@@ -154,13 +154,7 @@ def main() -> None:
             hide_index=True,
         )
 
-    if inspect_model == "intrap_topk_knn":
-        render_blue_note(
-            "k-NN has no standard SHAP waterfall; local view highlights features that differ "
-            "most from the training neighbors' centroid in scaled space, with neighbor fail-rate "
-            "as context."
-        )
-    elif inspect_model != NARRATIVE_MODEL_ID:
+    if inspect_model != NARRATIVE_MODEL_ID:
         st.caption("Plain-English summary is available for the extrapolation elastic net only.")
 
     if inspect_model == NARRATIVE_MODEL_ID:

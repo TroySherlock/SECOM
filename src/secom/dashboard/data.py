@@ -40,51 +40,64 @@ class ModelInfo:
 _SHARED_FEATURE_PATH = (
     "Median impute → cluster → RF top-k → T² → hub pairs → scale"
 )
+_PLS_FEATURE_PATH = "Median impute → cluster → PLS components → scale"
+# Interpolation models also carry the Regularized-EFA gate (gate_t2 / gate_q).
+_INTERP_GATE_NOTE = " (+ EFA T²/Q gate features)"
 
 MODEL_CATALOG: dict[str, ModelInfo] = {
     "intrap_linear_lr": ModelInfo(
         model_id="intrap_linear_lr",
-        display_name="Linear LR (interp)",
+        display_name="RF-select → Elastic Net (interp)",
         family="Interpolation track",
         classifier="Logistic regression (elastic net, saga)",
-        feature_path=f"{_SHARED_FEATURE_PATH} → elastic-net LR",
-        description="Elastic-net logistic regression on the shared sensor path.",
+        feature_path=f"{_SHARED_FEATURE_PATH}{_INTERP_GATE_NOTE} → elastic-net LR",
+        description=(
+            "Elastic-net logistic regression on the RF-selection sensor path, "
+            "with Regularized-EFA T²/Q gate features."
+        ),
         tuning_notebook="tuning/intrap_linear_lr.ipynb",
         explainability="linear",
         track="interpolation",
     ),
     "intrap_topk_rf": ModelInfo(
         model_id="intrap_topk_rf",
-        display_name="Random Forest (interp)",
+        display_name="RF-select → Random Forest (interp)",
         family="Interpolation track",
         classifier="Random forest",
-        feature_path=f"{_SHARED_FEATURE_PATH} → RF",
-        description="Random forest on the shared sensor path.",
+        feature_path=f"{_SHARED_FEATURE_PATH}{_INTERP_GATE_NOTE} → RF",
+        description=(
+            "Random forest on the RF-selection sensor path, with "
+            "Regularized-EFA T²/Q gate features."
+        ),
         tuning_notebook="tuning/intrap_topk_rf.ipynb",
         explainability="tree",
         track="interpolation",
     ),
-    "intrap_topk_knn": ModelInfo(
-        model_id="intrap_topk_knn",
-        display_name="k-NN (interp)",
+    "intrap_pls_enet": ModelInfo(
+        model_id="intrap_pls_enet",
+        display_name="PLS → Elastic Net (interp)",
         family="Interpolation track",
-        classifier="k-nearest neighbors",
-        feature_path=f"{_SHARED_FEATURE_PATH} → k-NN",
-        description="k-nearest neighbors on the shared sensor path.",
-        tuning_notebook="tuning/intrap_topk_knn.ipynb",
-        explainability="knn",
+        classifier="Logistic regression (elastic net, saga)",
+        feature_path=f"{_PLS_FEATURE_PATH}{_INTERP_GATE_NOTE} → elastic-net LR",
+        description=(
+            "Elastic-net logistic regression on PLS latent components, with "
+            "Regularized-EFA T²/Q gate features."
+        ),
+        tuning_notebook="tuning/intrap_pls_enet.ipynb",
+        explainability="linear",
         track="interpolation",
     ),
-    "intrap_topk_xgb": ModelInfo(
-        model_id="intrap_topk_xgb",
-        display_name="XGBoost (interp)",
+    "intrap_pls_rf": ModelInfo(
+        model_id="intrap_pls_rf",
+        display_name="PLS → Random Forest (interp)",
         family="Interpolation track",
-        classifier="XGBoost",
-        feature_path=f"{_SHARED_FEATURE_PATH} → XGBoost",
+        classifier="Random forest",
+        feature_path=f"{_PLS_FEATURE_PATH}{_INTERP_GATE_NOTE} → RF",
         description=(
-            "Gradient boosting on the shared sensor path (scale_pos_weight for imbalance)."
+            "Random forest on PLS latent components, with Regularized-EFA "
+            "T²/Q gate features."
         ),
-        tuning_notebook="tuning/intrap_topk_xgb.ipynb",
+        tuning_notebook="tuning/intrap_pls_rf.ipynb",
         explainability="tree",
         track="interpolation",
     ),

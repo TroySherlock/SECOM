@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.covariance import EmpiricalCovariance, LedoitWolf
+from sklearn.cross_decomposition import PLSRegression
 from sklearn.feature_selection import SelectFromModel
 from sklearn.utils.validation import check_is_fitted
 
@@ -92,6 +93,54 @@ class MahalanobisT2Features(BaseEstimator, TransformerMixin):
             return EmpiricalCovariance().fit(X_arr)
         except np.linalg.LinAlgError:
             return LedoitWolf().fit(X_arr)
+
+    @staticmethod
+    def _as_dataframe(X) -> pd.DataFrame:
+        if isinstance(X, pd.DataFrame):
+            df = X.copy()
+        else:
+            df = pd.DataFrame(X)
+        df.columns = df.columns.astype(str)
+        return df
+
+
+class PLSFeatures(BaseEstimator, TransformerMixin):
+    """PLS (PLS-DA) reduction: emit X-scores ``pls_0..pls_{k-1}`` as a frame.
+
+    Wraps ``PLSRegression`` so the latent components flow through the pandas
+    ColumnTransformer with stable names. ``fit`` consumes the binary target
+    (supervised reduction); ``transform`` returns only the X-side scores.
+    """
+
+    def __init__(self, n_components: int = 10):
+        self.n_components = n_components
+
+    def fit(self, X, y=None):
+        if y is None:
+            raise ValueError("PLSFeatures requires y (supervised PLS reduction)")
+        X_df = self._as_dataframe(X)
+        self.feature_names_in_ = list(X_df.columns)
+        n_samples, n_features = X_df.shape
+        k = max(1, min(int(self.n_components), n_features, n_samples - 1))
+        self.n_components_ = int(k)
+        self.pls_ = PLSRegression(n_components=self.n_components_, scale=True)
+        self.pls_.fit(
+            X_df.to_numpy(dtype=float),
+            np.asarray(y, dtype=float),
+        )
+        self.output_names_ = [f"pls_{i}" for i in range(self.n_components_)]
+        return self
+
+    def transform(self, X):
+        check_is_fitted(self, "pls_")
+        X_df = self._as_dataframe(X)
+        scores = self.pls_.transform(X_df.to_numpy(dtype=float))
+        scores = np.asarray(scores, dtype=float).reshape(len(X_df), -1)
+        return pd.DataFrame(scores, index=X_df.index, columns=self.output_names_)
+
+    def get_feature_names_out(self, input_features=None):
+        check_is_fitted(self, "pls_")
+        return np.asarray(self.output_names_, dtype=object)
 
     @staticmethod
     def _as_dataframe(X) -> pd.DataFrame:

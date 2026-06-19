@@ -58,26 +58,20 @@ from secom.pipelines import (
     C_GRID,
     CORRELATED_SELECTION_THRESHOLD,
     CORRELATED_SELECTION_THRESHOLD_GRID,
-    KNN_CLASSIFIER_NEIGHBORS,
-    KNN_NEIGHBORS_GRID,
     L1_RATIO_GRID,
     N_HUBS_DEFAULT,
     N_HUBS_GRID,
+    PLS_N_COMPONENTS_DEFAULT,
+    PLS_N_COMPONENTS_GRID,
     RF_MAX_DEPTH,
     RF_MAX_DEPTH_GRID,
     RF_SELECT_TOP_K,
     RF_SELECT_TOP_K_GRID,
-    XGB_LEARNING_RATE,
-    XGB_LEARNING_RATE_GRID,
-    XGB_MAX_DEPTH,
-    XGB_MAX_DEPTH_GRID,
     elastic_net_lr,
     extrap_preprocess,
     feature_pipeline,
-    knn_classifier,
-    linear_preprocess,
+    interp_preprocess,
     random_forest_classifier,
-    xgboost_classifier,
 )
 
 LINEAR_TOP_K_PARAM = "preprocess__sensor_branch__select_t2_hubs__top_k"
@@ -123,11 +117,59 @@ def _hub_preprocess_best_defaults() -> dict[str, object]:
     }
 
 
+PLS_N_COMPONENTS_PARAM = "preprocess__sensor_branch__pls__n_components"
+
+
 def _hub_feature_pipeline(classifier, *, top_k: int = RF_SELECT_TOP_K, n_hubs: int = N_HUBS_DEFAULT):
+    """Interpolation RF-selection front-end + EFA T²/Q gate features → classifier."""
     return feature_pipeline(
         classifier,
-        linear_preprocess(top_k=top_k, n_hubs=n_hubs),
+        interp_preprocess(front_end="rf", top_k=top_k, n_hubs=n_hubs, with_gate=True),
     )
+
+
+def _pls_feature_pipeline(classifier, *, pls_n_components: int = PLS_N_COMPONENTS_DEFAULT):
+    """Interpolation PLS reduction front-end + EFA T²/Q gate features → classifier."""
+    return feature_pipeline(
+        classifier,
+        interp_preprocess(
+            front_end="pls", pls_n_components=pls_n_components, with_gate=True
+        ),
+    )
+
+
+def _pls_preprocess_grid() -> dict:
+    return {
+        PLS_N_COMPONENTS_PARAM: [int(k) for k in PLS_N_COMPONENTS_GRID],
+        SMART_CORR_THRESHOLD_PARAM: [float(t) for t in CORRELATED_SELECTION_THRESHOLD_GRID],
+    }
+
+
+def _pls_best_params(cv_summary: dict) -> dict:
+    return {
+        PLS_N_COMPONENTS_PARAM: int(cv_summary["best_pls_n_components"]),
+        SMART_CORR_THRESHOLD_PARAM: float(
+            cv_summary.get("best_corr_threshold", CORRELATED_SELECTION_THRESHOLD)
+        ),
+    }
+
+
+def _pls_preprocess_param_renames() -> dict[str, str]:
+    return {
+        f"param_{PLS_N_COMPONENTS_PARAM}": "pls_n_components",
+        f"param_{SMART_CORR_THRESHOLD_PARAM}": "corr_threshold",
+    }
+
+
+def _pls_preprocess_groupby_cols() -> list[str]:
+    return ["pls_n_components", "corr_threshold"]
+
+
+def _pls_preprocess_best_defaults() -> dict[str, object]:
+    return {
+        "pls_n_components": int(PLS_N_COMPONENTS_DEFAULT),
+        "corr_threshold": float(CORRELATED_SELECTION_THRESHOLD),
+    }
 
 
 def _extrap_hub_feature_pipeline(
@@ -208,45 +250,46 @@ def _topk_rf_best_params(cv_summary: dict) -> dict:
     }
 
 
-def _topk_knn_pipeline() -> Pipeline:
-    return _hub_feature_pipeline(knn_classifier())
+def _pls_enet_pipeline() -> Pipeline:
+    return _pls_feature_pipeline(
+        elastic_net_lr(
+            C=float(C_GRID[0]),
+            l1_ratio=float(L1_RATIO_GRID[0]),
+        )
+    )
 
 
-def _topk_knn_grid() -> dict:
+def _pls_enet_grid() -> dict:
     return {
-        **_hub_preprocess_grid(),
-        "classifier__estimator__n_neighbors": [int(k) for k in KNN_NEIGHBORS_GRID],
+        **_pls_preprocess_grid(),
+        "classifier__estimator__C": [float(c) for c in C_GRID],
+        "classifier__estimator__l1_ratio": [float(r) for r in L1_RATIO_GRID],
     }
 
 
-def _topk_knn_best_params(cv_summary: dict) -> dict:
+def _pls_enet_best_params(cv_summary: dict) -> dict:
     return {
-        **_hub_best_params(cv_summary),
-        "classifier__estimator__n_neighbors": int(cv_summary["best_n_neighbors"]),
+        **_pls_best_params(cv_summary),
+        "classifier__estimator__C": float(cv_summary["best_c"]),
+        "classifier__estimator__l1_ratio": float(cv_summary["best_l1_ratio"]),
     }
 
 
-def _topk_xgb_pipeline() -> Pipeline:
-    return _hub_feature_pipeline(xgboost_classifier())
+def _pls_rf_pipeline() -> Pipeline:
+    return _pls_feature_pipeline(random_forest_classifier())
 
 
-def _topk_xgb_grid() -> dict:
+def _pls_rf_grid() -> dict:
     return {
-        **_hub_preprocess_grid(),
-        "classifier__estimator__max_depth": [int(d) for d in XGB_MAX_DEPTH_GRID],
-        "classifier__estimator__learning_rate": [
-            float(x) for x in XGB_LEARNING_RATE_GRID
-        ],
+        **_pls_preprocess_grid(),
+        "classifier__estimator__max_depth": [int(d) for d in RF_MAX_DEPTH_GRID],
     }
 
 
-def _topk_xgb_best_params(cv_summary: dict) -> dict:
+def _pls_rf_best_params(cv_summary: dict) -> dict:
     return {
-        **_hub_best_params(cv_summary),
+        **_pls_best_params(cv_summary),
         "classifier__estimator__max_depth": int(cv_summary["best_max_depth"]),
-        "classifier__estimator__learning_rate": float(
-            cv_summary["best_learning_rate"]
-        ),
     }
 
 
@@ -272,6 +315,28 @@ _TOPK_RF_DEFAULTS = {
     "max_depth": int(RF_MAX_DEPTH),
 }
 
+_PLS_ENET_RENAMES = {
+    **_pls_preprocess_param_renames(),
+    "param_classifier__estimator__C": "c",
+    "param_classifier__estimator__l1_ratio": "l1_ratio",
+}
+_PLS_ENET_GROUPBY = [*_pls_preprocess_groupby_cols(), "c", "l1_ratio"]
+_PLS_ENET_DEFAULTS = {
+    **_pls_preprocess_best_defaults(),
+    "c": float(C_GRID[0]),
+    "l1_ratio": float(L1_RATIO_GRID[0]),
+}
+
+_PLS_RF_RENAMES = {
+    **_pls_preprocess_param_renames(),
+    "param_classifier__estimator__max_depth": "max_depth",
+}
+_PLS_RF_GROUPBY = [*_pls_preprocess_groupby_cols(), "max_depth"]
+_PLS_RF_DEFAULTS = {
+    **_pls_preprocess_best_defaults(),
+    "max_depth": int(RF_MAX_DEPTH),
+}
+
 MODEL_SPECS: dict[str, ModelSpec] = {
     "intrap_linear_lr": ModelSpec(
         model_id="intrap_linear_lr",
@@ -293,38 +358,24 @@ MODEL_SPECS: dict[str, ModelSpec] = {
         build_grid_search_best_params=_topk_rf_best_params,
         track="interpolation",
     ),
-    "intrap_topk_knn": ModelSpec(
-        model_id="intrap_topk_knn",
-        build_pipeline=_topk_knn_pipeline,
-        make_param_grid=_topk_knn_grid,
-        param_renames={
-            **_hub_preprocess_param_renames(),
-            "param_classifier__estimator__n_neighbors": "n_neighbors",
-        },
-        groupby_cols=[*_hub_preprocess_groupby_cols(), "n_neighbors"],
-        best_defaults={
-            **_hub_preprocess_best_defaults(),
-            "n_neighbors": int(KNN_CLASSIFIER_NEIGHBORS),
-        },
-        build_grid_search_best_params=_topk_knn_best_params,
+    "intrap_pls_enet": ModelSpec(
+        model_id="intrap_pls_enet",
+        build_pipeline=_pls_enet_pipeline,
+        make_param_grid=_pls_enet_grid,
+        param_renames=_PLS_ENET_RENAMES,
+        groupby_cols=_PLS_ENET_GROUPBY,
+        best_defaults=_PLS_ENET_DEFAULTS,
+        build_grid_search_best_params=_pls_enet_best_params,
         track="interpolation",
     ),
-    "intrap_topk_xgb": ModelSpec(
-        model_id="intrap_topk_xgb",
-        build_pipeline=_topk_xgb_pipeline,
-        make_param_grid=_topk_xgb_grid,
-        param_renames={
-            **_hub_preprocess_param_renames(),
-            "param_classifier__estimator__max_depth": "max_depth",
-            "param_classifier__estimator__learning_rate": "learning_rate",
-        },
-        groupby_cols=[*_hub_preprocess_groupby_cols(), "max_depth", "learning_rate"],
-        best_defaults={
-            **_hub_preprocess_best_defaults(),
-            "max_depth": int(XGB_MAX_DEPTH),
-            "learning_rate": float(XGB_LEARNING_RATE),
-        },
-        build_grid_search_best_params=_topk_xgb_best_params,
+    "intrap_pls_rf": ModelSpec(
+        model_id="intrap_pls_rf",
+        build_pipeline=_pls_rf_pipeline,
+        make_param_grid=_pls_rf_grid,
+        param_renames=_PLS_RF_RENAMES,
+        groupby_cols=_PLS_RF_GROUPBY,
+        best_defaults=_PLS_RF_DEFAULTS,
+        build_grid_search_best_params=_pls_rf_best_params,
         track="interpolation",
     ),
     "extrap_enet": ModelSpec(
