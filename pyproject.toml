@@ -5,11 +5,15 @@ description = "SECOM semiconductor defect detection — dbt, ML pipelines, Strea
 requires-python = ">=3.11"
 dependencies = [
     "dbt-duckdb",
+    "dcor",
     "duckdb",
     "feature-engine",
     "ipykernel",
+    "numpyro",
     "pandas",
     "plotly",
+    "pyHSICLasso",
+    "pymc",
     "scikit-learn",
     "shap",
     "streamlit>=1.47",

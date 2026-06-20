@@ -921,6 +921,68 @@ def fig_pr_curve_cv_holdout(
     return _sized(fig, height=440, margin=dict(l=56, r=48, t=72, b=48))
 
 
+def fig_risk_coverage(
+    df: pd.DataFrame,
+    *,
+    metric: str = "pr_auc",
+    operating_coverage: float | None = None,
+    title: str = "Gate risk–coverage curve",
+) -> go.Figure:
+    """One line per pipeline of conditional AUC vs gate coverage.
+
+    Coverage runs high→low left→right so abstention (dropping the most suspicious
+    wafers) increases to the right. A dashed vertical line marks the gate's actual
+    operating coverage. ``metric`` is ``"pr_auc"`` or ``"roc_auc"``.
+    """
+    fig = go.Figure()
+    if df is None or df.empty or metric not in df.columns:
+        return _sized(
+            fig.update_layout(title=dict(text=title)),
+            height=440,
+            margin=dict(l=56, r=48, t=72, b=48),
+        )
+
+    metric_label = "PR-AUC" if metric == "pr_auc" else "ROC-AUC"
+    pipelines = sorted(df["pipeline"].unique())
+    for i, name in enumerate(pipelines):
+        sub = df[df["pipeline"] == name].sort_values("coverage", ascending=False)
+        fig.add_trace(
+            go.Scatter(
+                x=sub["coverage"],
+                y=sub[metric],
+                customdata=sub[["n_kept", "n_fails_kept"]].to_numpy(),
+                mode="lines+markers",
+                name=name,
+                line=dict(color=C[i % len(C)], width=2.5),
+                marker=dict(size=6),
+                connectgaps=False,
+                hovertemplate=(
+                    f"{name}<br>Coverage=%{{x:.2f}}<br>{metric_label}=%{{y:.3f}}"
+                    "<br>kept=%{customdata[0]} (fails=%{customdata[1]})<extra></extra>"
+                ),
+            )
+        )
+
+    if operating_coverage is not None:
+        fig.add_vline(
+            x=float(operating_coverage),
+            line_dash="dash",
+            line_color=C_BLUE,
+            annotation_text=f"gate op. coverage {float(operating_coverage):.2f}",
+            annotation_position="top",
+        )
+
+    fig.update_layout(
+        title=dict(text=title),
+        xaxis_title="Coverage (fraction of wafers kept)",
+        yaxis_title=f"Conditional {metric_label}",
+        xaxis=dict(autorange="reversed", gridcolor="rgba(200, 200, 200, 0.15)"),
+        yaxis=dict(gridcolor="rgba(200, 200, 200, 0.15)"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+    )
+    return _sized(fig, height=440, margin=dict(l=56, r=48, t=72, b=48))
+
+
 def fig_sensor_histogram(
     df: pd.DataFrame,
     sensor: str,

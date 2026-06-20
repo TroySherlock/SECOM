@@ -22,7 +22,7 @@ from secom.pipelines import (
     split_train_test_random,
     time_decay_weights,
 )
-from secom.tuning.registry import build_tuned_pipeline, fit_pipeline_weighted
+from secom.tuning.registry import build_tuned_pipeline, fit_pipeline_weighted, is_bayesian
 from secom.utils import load_tuned_blocked_params, load_tuned_params
 
 
@@ -41,6 +41,15 @@ def _tuned_for(model_id: str) -> dict:
 def collect_cv_oof_proba(model_id: str) -> tuple[pd.Series, np.ndarray]:
     if model_id not in BENCHMARK_MODEL_IDS:
         raise ValueError(f"Unknown model_id: {model_id}")
+    if is_bayesian(model_id):
+        from secom.bayes.harness import cv_oof_scores
+
+        split = load_holdout_split()
+        tuned = load_tuned_blocked_params(model_id)
+        y_oof, score_oof = cv_oof_scores(
+            model_id, split.X_train, split.y_train, split.train_df, tuned
+        )
+        return pd.Series(y_oof).reset_index(drop=True), np.asarray(score_oof, dtype=float)
     split = load_holdout_split()
     tuned = _tuned_for(model_id)
     pipeline = build_tuned_pipeline(model_id, tuned)

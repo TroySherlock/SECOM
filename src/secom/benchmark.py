@@ -48,7 +48,7 @@ from secom.artifacts import (
     save_pipeline_artifacts,
 )
 from secom.cv import make_blocked_time_cv
-from secom.gate import InterpProcessGate, ProcessGate
+from secom.gate import InterpProcessGate
 from secom.pipelines import (
     BENCHMARK_MODEL_IDS,
     BENCHMARK_RESULTS_PATH,
@@ -58,11 +58,6 @@ from secom.pipelines import (
     CV_N_JOBS,
     CV_SCORING,
     DECAY_LAMBDA_DEFAULT,
-    GATE_CORR_THRESHOLD,
-    GATE_LOGIC,
-    IF_GATE_ALPHA,
-    IF_GATE_MAX_SAMPLES,
-    IF_GATE_N_ESTIMATORS,
     INTERP_GATE_CORR_THRESHOLD,
     INTERP_GATE_LOGIC,
     INTERP_Q_GATE_ALPHA,
@@ -75,7 +70,6 @@ from secom.pipelines import (
     CORRELATED_SELECTION_THRESHOLD,
     HOLDOUT_BOOTSTRAP_CI,
     HOLDOUT_BOOTSTRAP_N,
-    T2_GATE_ALPHA,
     TARGET_COL,
     TEST_SIZE,
     TIMESTAMP_COL,
@@ -284,117 +278,6 @@ def run_weighted_blocked_leaderboard(
         CV_SORT_COL, ascending=False, kind="mergesort"
     )
     return leaderboard.reset_index(drop=True)
-
-
-def run_gate_conditional_benchmark(
-    pipelines: dict,
-    X_train: pd.DataFrame,
-    y_train: pd.Series,
-    X_test: pd.DataFrame,
-    y_test: pd.Series,
-    gate: ProcessGate,
-    tuned: dict[str, dict] | None = None,
-    *,
-    train_timestamps: pd.Series | None = None,
-    show_progress: bool = True,
-) -> pd.DataFrame:
-    """Conditional metrics on in-control wafers + coverage (T² + IF gate).
-
-    The gate abstains under its configured ``logic``: ``"or"`` when either
-    post-cluster T² or Isolation Forest flags OOC, ``"and"`` only when both do.
-  """
-    masks = gate.flag_masks(X_test)
-    in_control = gate.is_in_control(X_test)
-    y_test_arr = np.asarray(y_test).astype(int)
-    n_total = int(len(y_test_arr))
-    n_in_control = int(in_control.sum())
-    n_fails_total = int(y_test_arr.sum())
-    n_fails_in_control = int(y_test_arr[in_control].sum())
-
-    n_flagged_t2 = int(masks["t2_ooc"].sum())
-    n_flagged_if = int(masks["if_ooc"].sum())
-    n_flagged_both = int(masks["both_ooc"].sum())
-    fails = y_test_arr.astype(bool)
-    n_fails_flagged_t2 = int((masks["t2_ooc"] & fails).sum())
-    n_fails_flagged_if = int((masks["if_ooc"] & fails).sum())
-    n_fails_flagged_both = int((masks["both_ooc"] & fails).sum())
-
-    shared = {
-        "coverage": (n_in_control / n_total) if n_total else None,
-        "n_total": n_total,
-        "n_in_control": n_in_control,
-        "n_flagged_ooc": n_total - n_in_control,
-        "n_flagged_t2": n_flagged_t2,
-        "n_flagged_if": n_flagged_if,
-        "n_flagged_both": n_flagged_both,
-        "n_fails_total": n_fails_total,
-        "n_fails_in_control": n_fails_in_control,
-        "n_fails_flagged_ooc": n_fails_total - n_fails_in_control,
-        "n_fails_flagged_t2": n_fails_flagged_t2,
-        "n_fails_flagged_if": n_fails_flagged_if,
-        "n_fails_flagged_both": n_fails_flagged_both,
-    }
-
-    rows = []
-    if show_progress:
-        coverage = n_in_control / n_total if n_total else 0.0
-        print(
-            f"Process gate (T² {gate.logic.upper()} IF): coverage {coverage:.1%} "
-            f"({n_in_control}/{n_total}); T²={n_flagged_t2} IF={n_flagged_if} "
-            f"both={n_flagged_both}; fails in-control "
-            f"{n_fails_in_control}/{n_fails_total}"
-        )
-
-    for name, pipeline in pipelines.items():
-        fitted, _threshold = fit_pipeline_weighted(
-            pipeline,
-            X_train,
-            y_train,
-            _holdout_sample_weights(name, tuned, train_timestamps),
-        )
-        y_score = fitted.predict_proba(X_test)[:, 1]
-
-        row: dict = {
-            "pipeline": name,
-            **shared,
-            "global_pr_auc": float(average_precision_score(y_test_arr, y_score)),
-            "global_roc_auc": float(roc_auc_score(y_test_arr, y_score)),
-        }
-
-        y_ic = y_test_arr[in_control]
-        score_ic = y_score[in_control]
-        enough = (
-            n_fails_in_control >= MIN_CONDITIONAL_POSITIVES
-            and len(np.unique(y_ic)) > 1
-        )
-        if enough:
-            row["conditional_pr_auc"] = float(average_precision_score(y_ic, score_ic))
-            row["conditional_roc_auc"] = float(roc_auc_score(y_ic, score_ic))
-            boot = stratified_bootstrap_holdout_metrics(
-                y_ic,
-                score_ic,
-                threshold=0.5,
-                n_bootstrap=HOLDOUT_BOOTSTRAP_N,
-                ci_level=HOLDOUT_BOOTSTRAP_CI,
-                rng=np.random.default_rng(RANDOM_SEED),
-            )
-            row["conditional_pr_auc_ci_low"] = boot.get("pr_auc_ci_low")
-            row["conditional_pr_auc_ci_high"] = boot.get("pr_auc_ci_high")
-        else:
-            row["conditional_pr_auc"] = None
-            row["conditional_roc_auc"] = None
-            row["conditional_pr_auc_ci_low"] = None
-            row["conditional_pr_auc_ci_high"] = None
-        rows.append(row)
-        if show_progress:
-            cond = row["conditional_pr_auc"]
-            cond_str = f"{cond:.3f}" if cond is not None else "n/a (<5 fails)"
-            print(
-                f"  {name}: conditional PR AUC {cond_str} "
-                f"vs global {row['global_pr_auc']:.3f}"
-            )
-
-    return pd.DataFrame(rows)
 
 
 def run_interp_gate_conditional_benchmark(
@@ -649,6 +532,7 @@ def save_benchmark_results(
     holdout_random: pd.DataFrame | None = None,
     holdout_conditional: pd.DataFrame | None = None,
     holdout_conditional_random: pd.DataFrame | None = None,
+    risk_coverage: pd.DataFrame | None = None,
     holdout_split: dict | None = None,
     holdout_split_random: dict | None = None,
     process_gate: dict | None = None,
@@ -763,6 +647,10 @@ def save_benchmark_results(
             holdout_conditional_random.to_dict(orient="records"),
             interp_ids,
         )
+    if risk_coverage is not None:
+        # Multi-row-per-model (one row per coverage), so replace wholesale rather
+        # than merging by model id like the single-row leaderboard sections.
+        payload["risk_coverage"] = risk_coverage.to_dict(orient="records")
     if process_gate is not None:
         payload["process_gate"] = process_gate
     if interp_process_gate is not None:
@@ -825,8 +713,9 @@ def main(argv=None) -> None:
 
     tuned = leaderboard = holdout_random = split_meta_random = None
     tuned_blocked = leaderboard_blocked = holdout = holdout_conditional = None
-    gate = extrapolation_pipelines = None
+    process_gate_config = None
     interp_gate = holdout_conditional_random = None
+    risk_coverage = None
 
     if interp_ids:
         tuned = load_all_tuned_params(model_ids=interp_ids)
@@ -878,61 +767,27 @@ def main(argv=None) -> None:
             show_progress=True,
         )
 
+    bayes_artifacts = None
     if extrap_ids:
-        tuned_blocked = load_all_tuned_blocked_params(model_ids=extrap_ids)
-        print("\nBlocked time CV leaderboard (extrapolation, time-weighted):")
-        leaderboard_blocked = run_weighted_blocked_leaderboard(
-            build_benchmark_pipelines(
-                tuned_blocked, model_ids=extrap_ids, extrapolation=True
-            ),
+        from secom.benchmark_extrap import run_extrapolation_benchmark
+
+        extrap_out = run_extrapolation_benchmark(
+            extrap_ids,
             X_train,
             y_train,
+            X_test,
+            y_test,
+            train_df,
             train_ts,
-            make_blocked_time_cv(train_df),
-            tuned_blocked,
-            show_progress=True,
+            holdout_split=split_meta,
         )
-
-        extrapolation_pipelines = build_benchmark_pipelines(
-            tuned_blocked, model_ids=extrap_ids, extrapolation=True
-        )
-        print("\nTemporal holdout (blocked-tuned, time-weighted):")
-        holdout = run_holdout_benchmark(
-            extrapolation_pipelines,
-            X_train,
-            y_train,
-            X_test,
-            y_test,
-            tuned_blocked,
-            train_timestamps=train_ts,
-            show_progress=True,
-        )
-
-        print(
-            f"\nProcess gate (post-cluster T² {GATE_LOGIC.upper()} IF, "
-            "passing-train reference):"
-        )
-        gate = ProcessGate(
-            t2_alpha=T2_GATE_ALPHA,
-            if_alpha=IF_GATE_ALPHA,
-            if_n_estimators=IF_GATE_N_ESTIMATORS,
-            if_max_samples=IF_GATE_MAX_SAMPLES,
-            gate_corr_threshold=GATE_CORR_THRESHOLD,
-            logic=GATE_LOGIC,
-        ).fit(X_train, y_train)
-        holdout_conditional = run_gate_conditional_benchmark(
-            build_benchmark_pipelines(
-                tuned_blocked, model_ids=extrap_ids, extrapolation=True
-            ),
-            X_train,
-            y_train,
-            X_test,
-            y_test,
-            gate,
-            tuned_blocked,
-            train_timestamps=train_ts,
-            show_progress=True,
-        )
+        tuned_blocked = extrap_out["tuned_blocked"]
+        leaderboard_blocked = extrap_out["leaderboard_blocked"]
+        holdout = extrap_out["holdout"]
+        holdout_conditional = extrap_out["holdout_conditional"]
+        risk_coverage = extrap_out["risk_coverage"]
+        process_gate_config = extrap_out["process_gate"]
+        bayes_artifacts = extrap_out["artifacts"]
 
     save_benchmark_results(
         interp_ids=interp_ids,
@@ -945,29 +800,20 @@ def main(argv=None) -> None:
         holdout_random=holdout_random,
         holdout_conditional=holdout_conditional,
         holdout_conditional_random=holdout_conditional_random,
+        risk_coverage=risk_coverage,
         holdout_split=split_meta,
         holdout_split_random=split_meta_random,
-        process_gate=gate.config() if gate is not None else None,
+        process_gate=process_gate_config,
         interp_process_gate=interp_gate.config() if interp_gate is not None else None,
         merge=merge,
     )
 
-    if extrapolation_pipelines is not None:
-        # Artifacts report pipeline structure (fitted feature stages); fit on the
-        # full temporal train unweighted so the wrapped pipelines are populated
-        # regardless of the weighted-fit path used for scoring.
-        for pipe in extrapolation_pipelines.values():
-            pipe.fit(X_train, y_train)
-        artifacts = collect_holdout_artifacts(
-            extrapolation_pipelines,
-            X_train,
-            y_train,
-            holdout_split=split_meta,
-        )
-        save_pipeline_artifacts(artifacts)
+    if bayes_artifacts is not None:
+        # Posterior coefficient summaries + representation config per Bayesian model.
+        save_pipeline_artifacts(bayes_artifacts)
 
     print(f"\nWrote {BENCHMARK_RESULTS_PATH}")
-    if extrapolation_pipelines is not None:
+    if bayes_artifacts is not None:
         print(f"Wrote {PIPELINE_ARTIFACTS_PATH}")
     if leaderboard is not None:
         print("\nStratified CV leaderboard:")

@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from secom.pipelines import (
+from secom.core import (
     BLOCKED_MIN_VAL_FAILS,
     N_BLOCKED_SPLITS,
     TARGET_COL,

@@ -17,6 +17,7 @@ from secom.dashboard.data import (
     load_benchmark_results,
     model_info,
     process_gate_meta,
+    risk_coverage_df,
     time_decay_meta,
 )
 from secom.dashboard.charts import (
@@ -25,6 +26,7 @@ from secom.dashboard.charts import (
     fig_cv_vs_holdout_validation,
     fig_holdout_confusion,
     fig_pr_curve_cv_holdout,
+    fig_risk_coverage,
 )
 from secom.dashboard.pr_curves import load_pr_curves
 from secom.costs import PROFILE_IDS, THRESHOLD_PROFILES
@@ -108,13 +110,13 @@ def main() -> None:
     render_blue_note(
         "The **interpolation** track (`intrap_*`) uses **5×2 stratified CV** and a **random "
         "stratified holdout** (interpolation upper bound). The **extrapolation** track "
-        "(`extrap_*`) uses **blocked time CV** with local stratification, **exponential "
-        "time-decay sample weighting** (recent wafers weighted more, `decay_lambda` tuned on "
-        "blocked CV), and a **temporal forward holdout** (latest 20% by time). A **process "
-        f"gate** (post-cluster Hotelling T² **{gate_logic_txt}** Isolation Forest on passing "
-        "train wafers) abstains on out-of-control wafers; we report **conditional PR-AUC** and "
-        "**coverage** on the wafers it scores. All holdout metrics are reporting-only "
-        f"(`holdout_is_reporting_only={payload.get('holdout_is_reporting_only', True)}`). "
+        "(`extrap_*`) uses **blocked time CV** with local stratification, **Bayesian models "
+        "with a random-walk intercept** that tracks base-rate drift, and a **temporal forward "
+        "holdout** (latest 20% by time). A **process gate** (extrapolation: sparse Bayesian "
+        f"factor analysis → BGM density **{gate_logic_txt}** Q/SPE on passing-train wafers) "
+        "abstains on out-of-control wafers; we report **conditional PR-AUC** and **coverage** "
+        "on the wafers it scores, plus a **risk–coverage curve**. All holdout metrics are "
+        f"reporting-only (`holdout_is_reporting_only={payload.get('holdout_is_reporting_only', True)}`). "
         "The random-minus-temporal gap across tracks is the cost of extrapolation."
     )
 
@@ -278,20 +280,23 @@ def main() -> None:
             if cond_df is not None and not cond_df.empty and gate_meta:
                 logic_txt = str(gate_meta.get("logic", "or")).upper()
                 st.markdown(
-                    f"**Process gate (T² {logic_txt} Isolation Forest) — conditional metrics**"
+                    f"**Process gate (sBFA → BGM density {logic_txt} Q/SPE) — "
+                    "conditional metrics**"
                 )
-                ucl = gate_meta.get("ucl")
-                if_thr = gate_meta.get("if_threshold")
-                ucl_txt = f"{float(ucl):.1f}" if ucl is not None else "?"
-                if_txt = f"{float(if_thr):.3f}" if if_thr is not None else "?"
+                d_lcl = gate_meta.get("density_lcl")
+                q_ucl = gate_meta.get("q_ucl")
+                d_txt = f"{float(d_lcl):.2f}" if d_lcl is not None else "?"
+                q_txt = f"{float(q_ucl):.1f}" if q_ucl is not None else "?"
                 st.caption(
-                    f"Post-cluster features (smart_corr threshold "
+                    f"Raw post-cluster sensors (smart_corr threshold "
                     f"{gate_meta.get('gate_corr_threshold', '?')}); "
                     f"fit on {gate_meta.get('n_reference_wafers', '?')} passing train wafers, "
-                    f"{gate_meta.get('n_features', '?')} features. "
-                    f"Abstain when T² > {ucl_txt} (α={gate_meta.get('t2_alpha', '?')}) "
-                    f"**{logic_txt}** IF score < {if_txt} (α={gate_meta.get('if_alpha', '?')}). "
-                    f"IF n_estimators={gate_meta.get('if_n_estimators', '?')}."
+                    f"{gate_meta.get('n_features', '?')} features → "
+                    f"{gate_meta.get('n_factors', '?')} sBFA factors → "
+                    f"{gate_meta.get('n_mixture_components', '?')}-component BGM "
+                    f"(seed-ensemble n={gate_meta.get('n_seeds', '?')}). "
+                    f"Abstain when BGM log-density < {d_txt} (α={gate_meta.get('density_alpha', '?')}) "
+                    f"**{logic_txt}** Q/SPE > {q_txt} (α={gate_meta.get('q_alpha', '?')})."
                 )
                 gate_cols = [
                     c
@@ -303,13 +308,13 @@ def main() -> None:
                         "conditional_pr_auc_ci_high",
                         "global_pr_auc",
                         "n_in_control",
-                        "n_flagged_t2",
-                        "n_flagged_if",
+                        "n_flagged_density",
+                        "n_flagged_q",
                         "n_flagged_both",
                         "n_fails_in_control",
                         "n_fails_flagged_ooc",
-                        "n_fails_flagged_t2",
-                        "n_fails_flagged_if",
+                        "n_fails_flagged_density",
+                        "n_fails_flagged_q",
                     ]
                     if c in cond_df.columns
                 ]
@@ -319,11 +324,36 @@ def main() -> None:
                 st.dataframe(gate_display, width="stretch", hide_index=True)
                 st.caption(
                     "`coverage` = fraction of holdout wafers in control (scored by the model). "
-                    f"{logic_txt} logic: flagged if T² or IF trips per the rule. "
+                    f"{logic_txt} logic: flagged if density or Q/SPE trips per the rule. "
                     "`conditional_pr_auc` is on in-control wafers only (None when "
                     "fewer than 5 in-control fails). Read beside `n_flagged_*` and "
                     "`n_fails_flagged_*` — gains can come from dropping easy negatives."
                 )
+
+                rc_df = risk_coverage_df(payload)
+                if not rc_df.empty:
+                    st.markdown("**Risk–coverage curve**")
+                    st.caption(
+                        "Rank holdout wafers by the gate's OOC severity, then keep the "
+                        "least-suspicious fraction (coverage) and rescore. Coverage=1.0 is "
+                        "the global metric; abstention increases to the right. The dashed "
+                        "line marks the gate's actual operating coverage."
+                    )
+                    rc_metric = st.radio(
+                        "Metric",
+                        ["PR-AUC", "ROC-AUC"],
+                        horizontal=True,
+                        key="p3_rc_metric",
+                    )
+                    rc_key = "pr_auc" if rc_metric == "PR-AUC" else "roc_auc"
+                    # Gate's operating coverage on the holdout (shared across models).
+                    op_cov = None
+                    if "coverage" in cond_df.columns and not cond_df["coverage"].dropna().empty:
+                        op_cov = float(cond_df["coverage"].dropna().iloc[0])
+                    st.plotly_chart(
+                        fig_risk_coverage(rc_df, metric=rc_key, operating_coverage=op_cov),
+                        width="stretch",
+                    )
 
     with tab_model:
         st.subheader("Pipeline architecture & tuning")

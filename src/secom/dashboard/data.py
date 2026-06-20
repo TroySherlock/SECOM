@@ -21,7 +21,7 @@ from secom.pipelines import (
 )
 from secom.utils import load_tuned_params
 
-REFERENCE_MODELS = {"linear": "extrap_enet", "topk": "extrap_rf"}
+REFERENCE_MODELS = {"linear": "extrap_hsic_rw", "topk": "extrap_rf_static"}
 
 
 @dataclass(frozen=True)
@@ -33,7 +33,7 @@ class ModelInfo:
     feature_path: str
     description: str
     tuning_notebook: str
-    explainability: Literal["linear", "tree", "knn"]
+    explainability: Literal["linear", "tree", "knn", "bayesian"]
     track: Literal["interpolation", "extrapolation"] = "interpolation"
 
 
@@ -43,6 +43,9 @@ _SHARED_FEATURE_PATH = (
 _PLS_FEATURE_PATH = "Median impute → cluster → PLS components → scale"
 # Interpolation models also carry the Regularized-EFA gate (gate_t2 / gate_q).
 _INTERP_GATE_NOTE = " (+ EFA T²/Q gate features)"
+# Extrapolation (Bayesian) feature paths: rolling-Z screening → interaction frame.
+_BAYES_HSIC_PATH = "Rolling-Z sensors → HSIC-Lasso select K → interaction frame (mains+pairs+squares)"
+_BAYES_RF_PATH = "Rolling-Z sensors → random-forest importance select K → interaction frame (mains+pairs+squares)"
 
 MODEL_CATALOG: dict[str, ModelInfo] = {
     "intrap_linear_lr": ModelInfo(
@@ -101,32 +104,74 @@ MODEL_CATALOG: dict[str, ModelInfo] = {
         explainability="tree",
         track="interpolation",
     ),
-    "extrap_enet": ModelInfo(
-        model_id="extrap_enet",
-        display_name="Elastic Net (extrap)",
+    "extrap_hsic_static": ModelInfo(
+        model_id="extrap_hsic_static",
+        display_name="HSIC → Bayesian enet (static)",
         family="Extrapolation track",
-        classifier="Logistic regression (elastic net, saga)",
-        feature_path=f"{_SHARED_FEATURE_PATH} → elastic-net LR",
+        classifier="Bayesian elastic-net logistic (static intercept)",
+        feature_path=f"{_BAYES_HSIC_PATH} → static Bayesian enet",
         description=(
-            "Elastic-net logistic regression for extrapolation (blocked CV, "
-            "temporal holdout, process gate, time-decay weighting)."
+            "HSIC-Lasso nonlinear screening + physical interaction frame, then a "
+            "static Bayesian elastic-net logistic head (blocked CV, temporal holdout)."
         ),
-        tuning_notebook="tuning/extrap_enet.ipynb",
-        explainability="linear",
+        tuning_notebook="(harness) python -m secom.cli.run_tuning --model extrap_hsic_static",
+        explainability="bayesian",
         track="extrapolation",
     ),
-    "extrap_rf": ModelInfo(
-        model_id="extrap_rf",
-        display_name="Random Forest (extrap)",
+    "extrap_hsic_rw": ModelInfo(
+        model_id="extrap_hsic_rw",
+        display_name="HSIC → Bayesian enet (RW intercept)",
         family="Extrapolation track",
-        classifier="Random forest",
-        feature_path=f"{_SHARED_FEATURE_PATH} → RF",
+        classifier="Bayesian elastic-net logistic (random-walk intercept)",
+        feature_path=f"{_BAYES_HSIC_PATH} → RW-intercept Bayesian enet",
         description=(
-            "Random forest for extrapolation (blocked CV, temporal holdout, "
-            "process gate, time-decay weighting)."
+            "HSIC-Lasso screening + interaction frame with a random-walk intercept "
+            "that tracks base-rate drift across time blocks."
         ),
-        tuning_notebook="tuning/extrap_rf.ipynb",
-        explainability="tree",
+        tuning_notebook="(harness) python -m secom.cli.run_tuning --model extrap_hsic_rw",
+        explainability="bayesian",
+        track="extrapolation",
+    ),
+    "extrap_rf_static": ModelInfo(
+        model_id="extrap_rf_static",
+        display_name="RF select → Bayesian enet (static)",
+        family="Extrapolation track",
+        classifier="Bayesian elastic-net logistic (static intercept)",
+        feature_path=f"{_BAYES_RF_PATH} → static Bayesian enet",
+        description=(
+            "Random-forest importance screening + interaction frame, then a static "
+            "Bayesian elastic-net logistic head."
+        ),
+        tuning_notebook="(harness) python -m secom.cli.run_tuning --model extrap_rf_static",
+        explainability="bayesian",
+        track="extrapolation",
+    ),
+    "extrap_rf_rw": ModelInfo(
+        model_id="extrap_rf_rw",
+        display_name="RF select → Bayesian enet (RW intercept)",
+        family="Extrapolation track",
+        classifier="Bayesian elastic-net logistic (random-walk intercept)",
+        feature_path=f"{_BAYES_RF_PATH} → RW-intercept Bayesian enet",
+        description=(
+            "Random-forest importance screening + interaction frame with a random-walk "
+            "intercept for base-rate drift."
+        ),
+        tuning_notebook="(harness) python -m secom.cli.run_tuning --model extrap_rf_rw",
+        explainability="bayesian",
+        track="extrapolation",
+    ),
+    "extrap_spls_rw": ModelInfo(
+        model_id="extrap_spls_rw",
+        display_name="sPLS → Bayesian enet (RW intercept)",
+        family="Extrapolation track",
+        classifier="Bayesian elastic-net logistic (random-walk intercept)",
+        feature_path="Rolling-Z sensors → sPLS components → RW-intercept Bayesian enet",
+        description=(
+            "Supervised PLS aggregation (distributed-signal comparator) with a "
+            "random-walk-intercept Bayesian elastic-net head."
+        ),
+        tuning_notebook="(harness) python -m secom.cli.run_tuning --model extrap_spls_rw",
+        explainability="bayesian",
         track="extrapolation",
     ),
 }
@@ -233,8 +278,17 @@ def holdout_conditional_df(
     return pd.DataFrame(rows)
 
 
+def risk_coverage_df(payload: dict[str, Any]) -> pd.DataFrame:
+    """Extrapolation gate risk-coverage sweep: one row per (pipeline, coverage)."""
+    rows = payload.get("risk_coverage") or []
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows)
+
+
 def process_gate_meta(payload: dict[str, Any]) -> dict[str, Any]:
-    """Process gate config: T² + IF params, UCL, feature count, abstention logic."""
+    """Process gate config (track-dependent): the interpolation EFA T²+Q or the
+    extrapolation sBFA -> BGM density + Q params, control limits, and logic."""
     meta = payload.get("process_gate")
     if isinstance(meta, dict) and meta:
         return dict(meta)

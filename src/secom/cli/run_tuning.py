@@ -28,8 +28,11 @@ from secom.pipelines import (
     split_train_test,
 )
 from secom.tuning.registry import (
+    ALL_MODEL_IDS,
     MODEL_SPECS,
+    TRACKS,
     fit_with_progress,
+    is_bayesian,
     model_ids_for_track,
     run_grid_search,
     save_tuned_params,
@@ -136,9 +139,9 @@ def _tune_pass(
 
 def _select_model_ids(model: str | None, track: str | None) -> list[str]:
     if model is not None:
-        if model not in MODEL_SPECS:
+        if model not in ALL_MODEL_IDS:
             raise SystemExit(
-                f"Unknown --model {model!r}; choose from {sorted(MODEL_SPECS)}"
+                f"Unknown --model {model!r}; choose from {sorted(ALL_MODEL_IDS)}"
             )
         return [model]
     return model_ids_for_track(track)
@@ -148,12 +151,12 @@ def _parse_args(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--model",
-        choices=sorted(MODEL_SPECS),
+        choices=sorted(ALL_MODEL_IDS),
         help="Tune a single pipeline by model id.",
     )
     parser.add_argument(
         "--track",
-        choices=sorted({spec.track for spec in MODEL_SPECS.values()}),
+        choices=sorted(TRACKS),
         help="Tune only models in this track (ignored if --model is given).",
     )
     return parser.parse_args(argv)
@@ -168,6 +171,12 @@ def main(argv=None) -> int:
     y_train = train_df[TARGET_COL].astype(int)
 
     for model_id in _select_model_ids(args.model, args.track):
+        if is_bayesian(model_id):
+            # Extrapolation track: custom Bayesian harness (blocked CV + threshold sweep).
+            from secom.bayes.harness import tune_bayes_model
+
+            tune_bayes_model(model_id, train_df, feature_cols)
+            continue
         spec = MODEL_SPECS[model_id]
         cv_protocol, cv_factory, _out_dir, out_path_fn = CV_PASS_BY_TRACK[spec.track]
         _tune_pass(

@@ -32,7 +32,7 @@ from secom.dashboard.explainability import (
 )
 from secom.pipelines import ID_COL, NARRATIVES_PATH
 
-NARRATIVE_MODEL_ID = "extrap_enet"
+NARRATIVE_MODEL_ID = "extrap_hsic_rw"
 PROMPT_VERSION = "statistical-interpreter-v1"
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8080/v1"
@@ -114,7 +114,11 @@ def build_wafer_facts(model_id: str, result: WaferExplanation) -> dict[str, Any]
 
     pipeline, _tuned = fit_holdout_pipeline(model_id)
     feature_names = [r["feature"] for r in local_rows]
-    z_scores = _linear_z_scores(pipeline, result.observation_id, feature_names)
+    # z-scores rely on the sklearn scaled feature space; the Bayesian head works
+    # on a named interaction-frame design, so we report coefficient sign only.
+    z_scores: dict[str, float] = {}
+    if hasattr(pipeline, "named_steps"):
+        z_scores = _linear_z_scores(pipeline, result.observation_id, feature_names)
     for row in local_rows:
         feat = row["feature"]
         if feat in z_scores:

@@ -28,7 +28,7 @@ from secom.pipelines import (
 )
 from secom.utils import json_safe
 
-REFERENCE_MODELS = {"linear": "extrap_enet", "topk": "extrap_rf"}
+REFERENCE_MODELS = {"linear": "extrap_hsic_rw", "topk": "extrap_rf_static"}
 
 
 def _sensor_branch_pipeline(preprocess: ColumnTransformer) -> Pipeline:

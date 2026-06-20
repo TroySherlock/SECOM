@@ -8,7 +8,7 @@
     "preprocess__sensor_branch__cluster__smart_corr__threshold": 0.95,
     "classifier__estimator__max_depth": 5
   },
-  "decay_lambda": 0.1,
+  "decay_lambda": 0.0,
   "cv_summary": {
     "model_id": "intrap_topk_rf",
     "primary_selection_metric": "pr_auc",
@@ -273,12 +273,6 @@
     "n_repeats": 1,
     "n_blocked_splits": 5,
     "blocked_min_val_fails": 4,
-    "c_grid": [
-      0.0075
-    ],
-    "l1_ratio_grid": [
-      0.3
-    ],
     "model_name": "secom_linear_elastic_net",
     "champion_imputation_method": "median",
     "knn_impute_neighbors": 5,
@@ -1295,45 +1289,8 @@
     "classifier_calibration_method": "isotonic",
     "classifier_calibration_cv": 3,
     "elastic_net_max_iter": 50000,
-    "knn_classifier_neighbors": 10,
-    "knn_neighbors_grid": [
-      30
-    ],
     "rf_n_estimators": 1000,
     "rf_max_depth": 5,
-    "rf_max_depth_grid": [
-      3,
-      5
-    ],
-    "xgb_n_estimators": 1000,
-    "xgb_max_depth": 3,
-    "xgb_max_depth_grid": [
-      3,
-      5
-    ],
-    "xgb_learning_rate_grid": [
-      0.1
-    ],
-    "xgb_scale_pos_weight": 14.151515,
-    "rf_select_top_k": 35,
-    "rf_select_top_k_grid": [
-      35,
-      60
-    ],
-    "n_hubs_default": 5,
-    "n_hubs_grid": [
-      0,
-      5,
-      10
-    ],
-    "benchmark_model_ids": [
-      "intrap_linear_lr",
-      "intrap_topk_rf",
-      "intrap_pls_enet",
-      "intrap_pls_rf",
-      "extrap_enet",
-      "extrap_rf"
-    ],
     "correlated_selection_threshold": 0.9,
     "correlated_selection_threshold_grid": [
       0.9,
@@ -1347,25 +1304,138 @@
     "if_gate_n_estimators": 400,
     "if_gate_max_samples": "auto",
     "gate_corr_threshold": 0.9,
+    "holdout_bootstrap_n": 1000,
+    "holdout_bootstrap_ci": 0.95,
+    "benchmark_model_ids": [
+      "intrap_linear_lr",
+      "intrap_topk_rf",
+      "intrap_pls_enet",
+      "intrap_pls_rf",
+      "extrap_hsic_static",
+      "extrap_hsic_rw",
+      "extrap_dcor_static",
+      "extrap_dcor_rw",
+      "extrap_spls_rw"
+    ],
+    "interpolation_model_ids": [
+      "intrap_linear_lr",
+      "intrap_topk_rf",
+      "intrap_pls_enet",
+      "intrap_pls_rf"
+    ],
+    "c_grid": [
+      0.0075
+    ],
+    "l1_ratio_grid": [
+      0.3
+    ],
+    "rf_max_depth_grid": [
+      3,
+      5
+    ],
+    "rf_select_top_k": 35,
+    "rf_select_top_k_grid": [
+      35,
+      60
+    ],
+    "n_hubs_default": 5,
+    "n_hubs_grid": [
+      0,
+      5,
+      10
+    ],
+    "knn_neighbors_grid": [
+      30
+    ],
+    "xgb_max_depth_grid": [
+      3,
+      5
+    ],
+    "xgb_learning_rate_grid": [
+      0.1
+    ],
+    "pls_n_components_default": 10,
+    "pls_n_components_grid": [
+      15,
+      25,
+      35,
+      50
+    ],
     "interp_efa_n_factors": 10,
     "interp_t2_gate_alpha": 0.05,
     "interp_q_gate_alpha": 0.05,
     "interp_gate_logic": "or",
     "interp_gate_corr_threshold": 0.9,
-    "pls_n_components_default": 10,
-    "pls_n_components_grid": [
-      5,
-      10,
-      15
+    "extrapolation_model_ids": [
+      "extrap_hsic_static",
+      "extrap_hsic_rw",
+      "extrap_dcor_static",
+      "extrap_dcor_rw",
+      "extrap_spls_rw"
     ],
-    "holdout_bootstrap_n": 1000,
-    "holdout_bootstrap_ci": 0.95,
+    "extrap_track": "bayesian",
+    "extrap_k_grid": [
+      35,
+      50,
+      80
+    ],
+    "extrap_n_hubs_grid": [
+      0,
+      5
+    ],
+    "extrap_spls_components_grid": [
+      20,
+      30,
+      40,
+      50
+    ],
+    "extrap_c_grid": [
+      0.0075,
+      0.01,
+      0.05,
+      0.1
+    ],
+    "extrap_l1_ratio_grid": [
+      0.3,
+      0.5,
+      0.7
+    ],
+    "extrap_rw_blocks": 3,
+    "extrap_bayes_inference": {
+      "search_svi_steps": 1200,
+      "final_draws": 300,
+      "final_tune": 300
+    },
+    "extrap_bayes_model_specs": {
+      "extrap_hsic_static": {
+        "method": "hsic",
+        "rw_intercept": false
+      },
+      "extrap_hsic_rw": {
+        "method": "hsic",
+        "rw_intercept": true
+      },
+      "extrap_dcor_static": {
+        "method": "dcor",
+        "rw_intercept": false
+      },
+      "extrap_dcor_rw": {
+        "method": "dcor",
+        "rw_intercept": true
+      },
+      "extrap_spls_rw": {
+        "method": "spls",
+        "rw_intercept": true
+      }
+    },
+    "weighting_model_ids": [],
+    "decay_lambda_default": 0.0,
     "f0_5_beta": 0.5,
     "f2_beta": 2.0,
     "f4_beta": 4.0,
     "default_profile": "f2"
   },
-  "tuned_at": "2026-06-18T15:34:57.533448+00:00",
+  "tuned_at": "2026-06-19T20:38:28.548277+00:00",
   "threshold_tuning": {
     "metric": "fbeta",
     "default_profile": "f2",

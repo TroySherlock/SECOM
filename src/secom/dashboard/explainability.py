@@ -26,12 +26,23 @@ from secom.pipelines import (
     time_decay_weights,
 )
 from secom.utils import fitted_base_classifier, load_tuned_blocked_params
-from secom.tuning.registry import build_tuned_pipeline, fit_pipeline_weighted
+from secom.tuning.registry import build_tuned_pipeline, fit_pipeline_weighted, is_bayesian
 
 GLOBAL_TOP_N = 15
 LOCAL_TOP_N = 5
 SHAP_BACKGROUND_ROWS = 200
 PERMUTATION_SAMPLE_ROWS = 120
+
+
+@dataclass
+class BayesHoldoutModel:
+    """Lightweight stand-in for the sklearn pipeline on the Bayesian extrap track."""
+
+    rep: Any
+    model: Any
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        return self.model.predict_proba(self.rep.transform(X))
 
 
 @dataclass(frozen=True)
@@ -80,6 +91,16 @@ def load_holdout_split() -> HoldoutSplit:
 def fit_holdout_pipeline(model_id: str):
     if model_id not in BENCHMARK_MODEL_IDS:
         raise ValueError(f"Unknown model_id: {model_id}")
+    if is_bayesian(model_id):
+        from secom.bayes.harness import _fit_final
+
+        split = load_holdout_split()
+        tuned = load_tuned_blocked_params(model_id)
+        train_ts = split.train_df[TIMESTAMP_COL].reset_index(drop=True)
+        rep, model = _fit_final(
+            model_id, {model_id: tuned}, split.X_train, split.y_train, train_ts
+        )
+        return BayesHoldoutModel(rep, model), tuned
     split = load_holdout_split()
     tuned = load_tuned_blocked_params(model_id)
     pipeline = build_tuned_pipeline(model_id, tuned)
@@ -191,6 +212,14 @@ def global_importance(model_id: str, pipeline) -> tuple[pd.DataFrame, pd.DataFra
     Returns (top_df, optional_signed_coef_df, method_caption).
     """
     kind = model_info(model_id).explainability
+    if kind == "bayesian":
+        top, signed = global_importance_bayesian(pipeline)
+        return (
+            top,
+            signed,
+            "Global view uses posterior-mean elastic-net coefficients on the "
+            "interaction-frame design (Laplace L1 + ridge L2 priors).",
+        )
     if kind == "linear":
         top, signed = global_importance_linear(pipeline)
         return (
@@ -211,6 +240,37 @@ def global_importance(model_id: str, pipeline) -> tuple[pd.DataFrame, pd.DataFra
             "holdout subsample.",
         )
     raise ValueError(model_id)
+
+
+def global_importance_bayesian(pipeline: BayesHoldoutModel) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Posterior-mean coefficient table + signed subset for the Bayesian head."""
+    coef = pipeline.model.coef_summary().rename(columns={"mean": "coefficient"})
+    full = coef[["feature", "coefficient"]].copy()
+    full["abs_coefficient"] = full["coefficient"].abs()
+    top = full.nlargest(GLOBAL_TOP_N, "abs_coefficient").copy()
+    top["importance"] = top["abs_coefficient"]
+    pos = full.loc[full["coefficient"] > 0].nlargest(8, "coefficient")
+    neg = full.loc[full["coefficient"] < 0].nsmallest(8, "coefficient")
+    signed = pd.concat([pos, neg], ignore_index=True)
+    return top, signed
+
+
+def _local_bayesian(pipeline: BayesHoldoutModel, X_row: pd.DataFrame) -> pd.DataFrame:
+    """Per-wafer posterior-mean contribution = coefficient x design feature value."""
+    design = pipeline.rep.transform(X_row)
+    coef = pipeline.model.coef_summary().set_index("feature")["mean"]
+    names = list(design.columns)
+    row = design.iloc[0]
+    contrib = np.asarray([float(coef.get(n, 0.0)) * float(row[n]) for n in names])
+    df = pd.DataFrame(
+        {
+            "feature": names,
+            "contribution": contrib,
+            "coefficient": [float(coef.get(n, 0.0)) for n in names],
+        }
+    )
+    df["abs_contribution"] = np.abs(df["contribution"])
+    return df.nlargest(LOCAL_TOP_N, "abs_contribution")
 
 
 def _local_linear(pipeline, row_scaled: np.ndarray, names: np.ndarray) -> pd.DataFrame:
@@ -304,10 +364,21 @@ def wafer_explanation(
     threshold = _deploy_threshold(tuned)
     y_pred = int(predict_with_threshold(np.array([fail_proba]), threshold)[0])
 
+    kind = model_info(model_id).explainability
+    if kind == "bayesian":
+        return WaferExplanation(
+            observation_id=observation_id,
+            actual_label=y_true,
+            predicted_label=y_pred,
+            fail_probability=fail_proba,
+            threshold=threshold,
+            local_df=_local_bayesian(pipeline, X_row),
+            method="Local: posterior-mean coefficient × interaction-frame feature value.",
+        )
+
     X_scaled, names = scaled_matrix(pipeline, X_row)
     row_scaled = X_scaled[0]
 
-    kind = model_info(model_id).explainability
     if kind == "linear":
         local_df = _local_linear(pipeline, row_scaled, names)
         method = "Local: coefficient × scaled feature value."

@@ -68,11 +68,12 @@ from secom.pipelines import (
     RF_SELECT_TOP_K,
     RF_SELECT_TOP_K_GRID,
     elastic_net_lr,
-    extrap_preprocess,
     feature_pipeline,
     interp_preprocess,
     random_forest_classifier,
 )
+from secom.extrap_pipelines import EXTRAP_MODEL_IDS
+from secom.extrap_pipelines import is_bayesian as _is_bayesian_id
 
 LINEAR_TOP_K_PARAM = "preprocess__sensor_branch__select_t2_hubs__top_k"
 LINEAR_N_HUBS_PARAM = "preprocess__sensor_branch__select_t2_hubs__n_hubs"
@@ -172,16 +173,6 @@ def _pls_preprocess_best_defaults() -> dict[str, object]:
     }
 
 
-def _extrap_hub_feature_pipeline(
-    classifier, *, top_k: int = RF_SELECT_TOP_K, n_hubs: int = N_HUBS_DEFAULT
-):
-    """Extrapolation feature pipeline: raw + rolling-Z sensors through T²/hub selection."""
-    return feature_pipeline(
-        classifier,
-        extrap_preprocess(top_k=top_k, n_hubs=n_hubs),
-    )
-
-
 @dataclass(frozen=True)
 class ModelSpec:
     model_id: str
@@ -217,19 +208,6 @@ def _linear_lr_best_params(cv_summary: dict) -> dict:
         "classifier__estimator__C": float(cv_summary["best_c"]),
         "classifier__estimator__l1_ratio": float(cv_summary["best_l1_ratio"]),
     }
-
-
-def _extrap_enet_pipeline() -> Pipeline:
-    return _extrap_hub_feature_pipeline(
-        elastic_net_lr(
-            C=float(C_GRID[0]),
-            l1_ratio=float(L1_RATIO_GRID[0]),
-        )
-    )
-
-
-def _extrap_rf_pipeline() -> Pipeline:
-    return _extrap_hub_feature_pipeline(random_forest_classifier())
 
 
 def _topk_rf_pipeline() -> Pipeline:
@@ -378,34 +356,26 @@ MODEL_SPECS: dict[str, ModelSpec] = {
         build_grid_search_best_params=_pls_rf_best_params,
         track="interpolation",
     ),
-    "extrap_enet": ModelSpec(
-        model_id="extrap_enet",
-        build_pipeline=_extrap_enet_pipeline,
-        make_param_grid=_linear_lr_grid,
-        param_renames=_LINEAR_LR_RENAMES,
-        groupby_cols=_LINEAR_LR_GROUPBY,
-        best_defaults=_LINEAR_LR_DEFAULTS,
-        build_grid_search_best_params=_linear_lr_best_params,
-        track="extrapolation",
-    ),
-    "extrap_rf": ModelSpec(
-        model_id="extrap_rf",
-        build_pipeline=_extrap_rf_pipeline,
-        make_param_grid=_topk_rf_grid,
-        param_renames=_TOPK_RF_RENAMES,
-        groupby_cols=_TOPK_RF_GROUPBY,
-        best_defaults=_TOPK_RF_DEFAULTS,
-        build_grid_search_best_params=_topk_rf_best_params,
-        track="extrapolation",
-    ),
 }
+
+# Track-aware unified lookup: sklearn MODEL_SPECS (interpolation) are tuned via
+# GridSearchCV; the extrapolation ids are Bayesian and tuned via bayes/harness.py.
+TRACKS = ("interpolation", "extrapolation")
+ALL_MODEL_IDS: tuple[str, ...] = tuple(MODEL_SPECS.keys()) + tuple(EXTRAP_MODEL_IDS)
+
+
+def is_bayesian(model_id: str) -> bool:
+    """True for extrapolation-track Bayesian models (no sklearn ModelSpec)."""
+    return bool(_is_bayesian_id(model_id))
 
 
 def model_ids_for_track(track: str | None = None) -> list[str]:
-    """Model ids filtered by track; all ids when track is None."""
-    if track is None:
-        return list(MODEL_SPECS.keys())
-    return [mid for mid, spec in MODEL_SPECS.items() if spec.track == track]
+    """Model ids filtered by track across both registries; all ids when None."""
+    if track == "extrapolation":
+        return list(EXTRAP_MODEL_IDS)
+    if track == "interpolation":
+        return [mid for mid, spec in MODEL_SPECS.items() if spec.track == "interpolation"]
+    return list(ALL_MODEL_IDS)
 
 
 def _resolved_classifier_threshold(tuned_payload: dict) -> float:
