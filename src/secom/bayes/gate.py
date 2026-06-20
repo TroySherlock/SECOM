@@ -28,6 +28,7 @@ from sklearn.preprocessing import RobustScaler
 from secom.core import RANDOM_SEED, build_gate_feature_pipeline
 from secom.extrap_pipelines import (
     EXTRAP_GATE_BGM_COMPONENTS,
+    EXTRAP_GATE_CLIP,
     EXTRAP_GATE_CORR_THRESHOLD,
     EXTRAP_GATE_DENSITY_ALPHA,
     EXTRAP_GATE_LOADING_SCALE,
@@ -155,6 +156,7 @@ class ExtrapProcessGate:
         gate_corr_threshold: float = EXTRAP_GATE_CORR_THRESHOLD,
         n_seeds: int = EXTRAP_GATE_N_SEEDS,
         logic: str = EXTRAP_GATE_LOGIC,
+        clip: float = EXTRAP_GATE_CLIP,
     ):
         self.n_factors = int(n_factors)
         self.n_mixture_components = int(n_mixture_components)
@@ -163,6 +165,7 @@ class ExtrapProcessGate:
         self.q_alpha = float(q_alpha)
         self.svi_steps = int(svi_steps)
         self.gate_corr_threshold = float(gate_corr_threshold)
+        self.clip = float(clip)
         self.n_seeds = max(1, int(n_seeds))
         logic_norm = str(logic).strip().lower()
         if logic_norm not in ("or", "and"):
@@ -184,11 +187,13 @@ class ExtrapProcessGate:
 
         post = self._post_cluster(X_sensors)
         # Robust (median/IQR) scaling fit on all wafers, matching the interp track
-        # and the yield-model representation; resists SECOM's sensor outliers.
+        # and the yield-model representation; resists SECOM's sensor outliers in
+        # the *estimate*. The Gaussian sBFA/BGM/SPE assumes unit-ish, bounded
+        # inputs, so _scale_clip then clips the tails RobustScaler leaves intact.
         self.scaler_ = RobustScaler().fit(post)
 
         passing = y_arr == 0
-        ref = self.scaler_.transform(post)[passing]
+        ref = self._scale_clip(post)[passing]
         if ref.shape[0] == 0 or ref.shape[1] == 0:
             raise ValueError("ExtrapProcessGate requires passing wafers and features")
 
@@ -231,9 +236,13 @@ class ExtrapProcessGate:
             out = pd.DataFrame(out, index=X_sensors.index)
         return out.to_numpy(dtype="float64")
 
+    def _scale_clip(self, post: np.ndarray) -> np.ndarray:
+        """RobustScaler transform clipped to +/-self.clip so spikes can't dominate."""
+        return np.clip(self.scaler_.transform(post), -self.clip, self.clip)
+
     def _gate_matrix(self, X: pd.DataFrame) -> np.ndarray:
         post = self._post_cluster(X[self.sensor_cols_])
-        return self.scaler_.transform(post)
+        return self._scale_clip(post)
 
     def _density_from_matrix(self, std: np.ndarray) -> np.ndarray:
         """Mean BGM log-density across ensemble members (higher = more in-control)."""
@@ -314,6 +323,7 @@ class ExtrapProcessGate:
             "density_alpha": self.density_alpha,
             "q_alpha": self.q_alpha,
             "gate_corr_threshold": self.gate_corr_threshold,
+            "clip": self.clip,
             "n_seeds": self.n_seeds,
             "density_lcl": getattr(self, "density_lcl_", None),
             "q_ucl": getattr(self, "q_ucl_", None),

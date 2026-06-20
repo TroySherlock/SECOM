@@ -1,0 +1,18 @@
+{
+  "model_id": "intrap_pls_enet",
+  "direction": "sklearn_on_extrap",
+  "protocol": "blocked_time_local_strat",
+  "grid_search_best_params": {
+    "preprocess__sensor_branch__pls__n_components": 15,
+    "preprocess__sensor_branch__cluster__smart_corr__threshold": 0.95,
+    "classifier__estimator__C": 0.0075,
+    "classifier__estimator__l1_ratio": 0.3
+  },
+  "mean_pr_auc": 0.07394001634435057,
+  "std_pr_auc": 0.030292413142281118,
+  "mean_roc_auc": 0.5309487565654177,
+  "std_roc_auc": 0.07402426768007019,
+  "n_configs": 8,
+  "n_folds": 4,
+  "evaluated_at": "2026-06-20T14:51:16.450180+00:00"
+}

@@ -1,0 +1,38 @@
+{
+  "model_id": "extrap_hsic_static",
+  "direction": "bayes_on_interp",
+  "protocol": "random_stratified_oof",
+  "rw_under_random_cv": false,
+  "grid_search_best_params": {
+    "method": "hsic",
+    "k": 35,
+    "n_hubs": 5,
+    "C": 0.1,
+    "l1_ratio": 0.3,
+    "pos_weight": 15.0,
+    "rw_intercept": false,
+    "n_blocks": 3
+  },
+  "mean_pr_auc": 0.11699574012060907,
+  "std_pr_auc": 0.06411546889425457,
+  "mean_roc_auc": 0.568815987933635,
+  "std_roc_auc": 0.11255338059843584,
+  "per_fold": {
+    "pr_auc": [
+      0.07211442070499836,
+      0.23828936933023026,
+      0.11274506871108053,
+      0.056361202231138885,
+      0.10546863962559733
+    ],
+    "roc_auc": [
+      0.43765711412770236,
+      0.7058823529411764,
+      0.637506284565108,
+      0.4318910256410256,
+      0.6311431623931624
+    ]
+  },
+  "n_configs": 4,
+  "evaluated_at": "2026-06-20T15:22:58.279699+00:00"
+}

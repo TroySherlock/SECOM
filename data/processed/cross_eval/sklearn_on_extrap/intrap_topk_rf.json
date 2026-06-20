@@ -1,0 +1,18 @@
+{
+  "model_id": "intrap_topk_rf",
+  "direction": "sklearn_on_extrap",
+  "protocol": "blocked_time_local_strat",
+  "grid_search_best_params": {
+    "preprocess__sensor_branch__select_t2_hubs__top_k": 35,
+    "preprocess__sensor_branch__select_t2_hubs__n_hubs": 5,
+    "preprocess__sensor_branch__cluster__smart_corr__threshold": 0.9,
+    "classifier__estimator__max_depth": 5
+  },
+  "mean_pr_auc": 0.15733966393592796,
+  "std_pr_auc": 0.044593219395633654,
+  "mean_roc_auc": 0.6033978843428695,
+  "std_roc_auc": 0.0863110744495737,
+  "n_configs": 24,
+  "n_folds": 4,
+  "evaluated_at": "2026-06-20T14:49:53.897854+00:00"
+}

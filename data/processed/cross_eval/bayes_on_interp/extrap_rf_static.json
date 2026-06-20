@@ -1,0 +1,38 @@
+{
+  "model_id": "extrap_rf_static",
+  "direction": "bayes_on_interp",
+  "protocol": "random_stratified_oof",
+  "rw_under_random_cv": false,
+  "grid_search_best_params": {
+    "method": "rf",
+    "k": 35,
+    "n_hubs": 5,
+    "C": 0.01,
+    "l1_ratio": 0.7,
+    "pos_weight": 15.0,
+    "rw_intercept": false,
+    "n_blocks": 3
+  },
+  "mean_pr_auc": 0.09958934019755725,
+  "std_pr_auc": 0.01917695963998036,
+  "mean_roc_auc": 0.503057440925088,
+  "std_roc_auc": 0.04297006949533458,
+  "per_fold": {
+    "pr_auc": [
+      0.12470372177992178,
+      0.10616685055900818,
+      0.11010706037637208,
+      0.06944752730830742,
+      0.08752154096417683
+    ],
+    "roc_auc": [
+      0.45324283559577677,
+      0.5304172951231775,
+      0.5409753645047763,
+      0.44818376068376065,
+      0.5424679487179487
+    ]
+  },
+  "n_configs": 4,
+  "evaluated_at": "2026-06-20T15:23:40.950033+00:00"
+}

@@ -19,7 +19,7 @@ from itertools import combinations
 
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import RobustScaler
+from sklearn.preprocessing import RobustScaler, StandardScaler
 
 from secom.core import _SENSOR_VALUE_PATTERN_EXTRAP, RANDOM_SEED, RF_N_ESTIMATORS
 from secom.hub_interactions import (
@@ -127,27 +127,38 @@ class ExtrapRepresentation:
             self.output_names_ = list(self.pls_.output_names_)
             self.selected_cols_ = []
             self.hub_cols_ = []
-            return self
-
-        k = max(1, min(self.k, mat.shape[1]))
-        if self.method == "hsic":
-            sel = _select_hsic(mat, y_arr, k)
         else:
-            sel = _select_rf(mat, y_arr, k)
-        if not sel:
-            sel = list(range(min(k, mat.shape[1])))
-        self.selected_idx_ = sel
-        self.selected_cols_ = [cols[i] for i in sel]
-        self.hub_cols_ = self.selected_cols_[: max(0, self.n_hubs)]
-        self.pair_list_ = list(combinations(self.hub_cols_, 2))
-        self.square_cols_ = [f"sq_{c}" for c in self.hub_cols_]
-        self.pair_cols_ = [_interaction_column_name(a, b) for a, b in self.pair_list_]
-        self.output_names_ = (
-            list(self.selected_cols_) + list(self.square_cols_) + list(self.pair_cols_)
-        )
+            k = max(1, min(self.k, mat.shape[1]))
+            if self.method == "hsic":
+                sel = _select_hsic(mat, y_arr, k)
+            else:
+                sel = _select_rf(mat, y_arr, k)
+            if not sel:
+                sel = list(range(min(k, mat.shape[1])))
+            self.selected_idx_ = sel
+            self.selected_cols_ = [cols[i] for i in sel]
+            self.hub_cols_ = self.selected_cols_[: max(0, self.n_hubs)]
+            self.pair_list_ = list(combinations(self.hub_cols_, 2))
+            self.square_cols_ = [f"sq_{c}" for c in self.hub_cols_]
+            self.pair_cols_ = [
+                _interaction_column_name(a, b) for a, b in self.pair_list_
+            ]
+            self.output_names_ = (
+                list(self.selected_cols_)
+                + list(self.square_cols_)
+                + list(self.pair_cols_)
+            )
+
+        # Standardize the *full* design (main effects + squares + pairs, or PLS
+        # scores) so every column is unit-variance and the head's single shared
+        # elastic-net prior is scale-coherent. Squares/products are otherwise on
+        # a different (outlier-fattened) scale than the linear terms.
+        design = self._build_design(X)
+        self.design_scaler_ = StandardScaler().fit(design.to_numpy(dtype=float))
         return self
 
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+    def _build_design(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Unscaled design (sensor scaling + interaction frame), before StandardScaler."""
         mat = X[self.sensor_cols_].to_numpy(dtype=float)
         mat = self._impute(mat)
         mat = self.scaler_.transform(mat)
@@ -173,6 +184,11 @@ class ExtrapRepresentation:
             parts.append(_interaction_frame(std_df, self.pair_list_))
         design = pd.concat(parts, axis=1)
         return design[self.output_names_]
+
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        design = self._build_design(X)
+        scaled = self.design_scaler_.transform(design.to_numpy(dtype=float))
+        return pd.DataFrame(scaled, columns=self.output_names_, index=X.index)
 
     def fit_transform(self, X: pd.DataFrame, y) -> pd.DataFrame:
         return self.fit(X, y).transform(X)

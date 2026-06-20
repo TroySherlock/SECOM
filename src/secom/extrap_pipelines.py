@@ -27,18 +27,18 @@ EXTRAP_MODEL_IDS = (
 # Stage 1 selection size (physical anchors) and Stage 2 interaction expansion.
 # n_hubs >= 5 so the HSIC/RF screening models always build the interaction frame
 # (squares + pairs); sPLS ignores n_hubs (no interactions on latent scores).
-EXTRAP_K_GRID = [30, 35, 40]
-EXTRAP_N_HUBS_GRID = [5, 10]
-EXTRAP_SPLS_COMPONENTS_GRID = [15, 20, 25]
+EXTRAP_K_GRID = [35]
+EXTRAP_N_HUBS_GRID = [5]
+EXTRAP_SPLS_COMPONENTS_GRID = [15, 20]
 
 # Stage 3 elastic-net slope prior in sklearn terms: C (inverse total penalty) x
 # l1_ratio (L1/L2 mix). C grid fills the middle so the class-weighted likelihood
 # can land a usable slope strength instead of being forced to near-zero.
-EXTRAP_C_GRID = [0.01, 0.1, 0.5, 1.0]
-EXTRAP_L1_RATIO_GRID = [0.3, 0.5, 0.7]
+EXTRAP_C_GRID = [0.01, 0.1]
+EXTRAP_L1_RATIO_GRID = [0.3, 0.7]
 # Positive-class likelihood weight (renormalized to preserve effective N); lets
 # the minority class pull harder so larger C earns its keep.
-EXTRAP_POS_WEIGHT_GRID = [1.0, 5.0, 10.0]
+EXTRAP_POS_WEIGHT_GRID = [15]
 EXTRAP_RW_BLOCKS = 3
 
 # Inference budget: ADVI in the CV grid search, NUTS for the final fits.
@@ -63,6 +63,11 @@ EXTRAP_GATE_Q_ALPHA = 0.005
 EXTRAP_GATE_LOGIC = "or"
 EXTRAP_GATE_SVI_STEPS = 2000
 EXTRAP_GATE_CORR_THRESHOLD = CORRELATED_SELECTION_THRESHOLD
+# Robust-scaled gate features are clipped to +/-this bound before the Gaussian
+# sBFA/BGM/SPE, so un-clipped SECOM spikes cannot dominate the squared SPE and
+# log-density (RobustScaler resists outliers in the estimate but does not bound
+# the tails).
+EXTRAP_GATE_CLIP = 5.0
 # Seed-ensemble: average density/Q over this many independent sBFA+BGM fits so the
 # ADVI run-to-run variance does not flip the gate's operating point.
 EXTRAP_GATE_N_SEEDS = 5
@@ -114,6 +119,7 @@ def extrap_frozen_config_fragment() -> dict:
         "extrap_gate_svi_steps": int(EXTRAP_GATE_SVI_STEPS),
         "extrap_gate_corr_threshold": float(EXTRAP_GATE_CORR_THRESHOLD),
         "extrap_gate_n_seeds": int(EXTRAP_GATE_N_SEEDS),
+        "extrap_gate_clip": float(EXTRAP_GATE_CLIP),
         "extrap_risk_coverage_grid": [float(c) for c in EXTRAP_RISK_COVERAGE_GRID],
         "weighting_model_ids": list(WEIGHTING_MODEL_IDS),
         "decay_lambda_default": float(DECAY_LAMBDA_DEFAULT),
