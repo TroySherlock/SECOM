@@ -1,10 +1,9 @@
 """Shared SECOM foundation: paths, IO, splits, CV, shared builders, frozen config.
 
-This module is track-agnostic. Interpolation-specific pipeline code lives in
-:mod:`secom.intrap_pipelines`; extrapolation (Bayesian) code lives in
-:mod:`secom.extrap_pipelines`. ``secom.pipelines`` re-exports all three for
-backward compatibility. Foundation modules (``cv``, ``gates``, ``bayes``) import
-from here directly to avoid import cycles through the shim.
+This module is track-agnostic. The unified model grid, front-ends, classifier
+builders, gate config, and ``build_model_pipeline`` live in
+:mod:`secom.pipelines`. Foundation modules (``cv``, ``gates``, ``bayes``) import
+from here directly to avoid import cycles through the pipelines module.
 """
 from __future__ import annotations
 
@@ -19,7 +18,7 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_selection import VarianceThreshold
-from sklearn.impute import KNNImputer, SimpleImputer
+from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     balanced_accuracy_score,
@@ -32,10 +31,8 @@ from sklearn.model_selection import (
     StratifiedKFold,
     train_test_split,
 )
-from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import RobustScaler
-from xgboost import XGBClassifier
 
 from secom.paths import REPO_ROOT
 
@@ -78,23 +75,13 @@ RF_N_ESTIMATORS = 1000
 RF_MAX_DEPTH = 5
 RF_MIN_SAMPLES_LEAF = 10
 
-# Base KNN / XGB classifier hyperparameters (legacy reference builders).
-KNN_CLASSIFIER_NEIGHBORS = 10
-KNN_CLASSIFIER_WEIGHTS = "uniform"
-XGB_N_ESTIMATORS = 1000
-XGB_MAX_DEPTH = 3
-XGB_LEARNING_RATE = 0.05
-XGB_SCALE_POS_WEIGHT = 14.151515
-
 CORRELATED_SELECTION_THRESHOLD = 0.9
 CORRELATED_SELECTION_THRESHOLD_GRID = [0.9, 0.95]
 CORRELATED_SELECTION_METHOD = "spearman"
 CORRELATED_SELECTION_CRITERION = "corr_with_target"
 
-# Gate config now lives per-track: the interpolation Regularized-EFA gate in
-# secom.intrap_pipelines (INTERP_*), the extrapolation sBFA -> BGM + Q gate in
-# secom.extrap_pipelines (EXTRAP_GATE_*). build_gate_feature_pipeline (below)
-# stays shared by the interp gate's impute -> cluster front-end.
+# Gate config (EFA_GATE_* and BAYES_GATE_*) lives in secom.pipelines; both gates
+# share build_gate_feature_pipeline (below) for their impute -> cluster front-end.
 
 CV_N_JOBS = -1
 ESTIMATOR_N_JOBS = 1
@@ -126,12 +113,6 @@ _SENSOR_VALUE_PATTERN_EXTRAP = r"^c_\d+(?:_rz)?$"
 
 
 # --- Estimator + imputer builders (shared) -----------------------------------
-knn_imputer = partial(
-    KNNImputer,
-    n_neighbors=KNN_IMPUTE_NEIGHBORS,
-    weights="distance",
-)
-
 median_imputer = partial(
     SimpleImputer,
     strategy="median",
@@ -145,13 +126,6 @@ elastic_net_lr = partial(
     random_state=RANDOM_SEED,
 )
 
-knn_classifier = partial(
-    KNeighborsClassifier,
-    n_neighbors=KNN_CLASSIFIER_NEIGHBORS,
-    weights=KNN_CLASSIFIER_WEIGHTS,
-    n_jobs=ESTIMATOR_N_JOBS,
-)
-
 random_forest_classifier = partial(
     RandomForestClassifier,
     n_estimators=RF_N_ESTIMATORS,
@@ -161,22 +135,6 @@ random_forest_classifier = partial(
     class_weight="balanced",
     random_state=RANDOM_SEED,
     n_jobs=ESTIMATOR_N_JOBS,
-)
-
-xgboost_classifier = partial(
-    XGBClassifier,
-    n_estimators=XGB_N_ESTIMATORS,
-    max_depth=XGB_MAX_DEPTH,
-    learning_rate=XGB_LEARNING_RATE,
-    subsample=0.8,
-    colsample_bytree=0.8,
-    reg_lambda=2.0,
-    reg_alpha=0.5,
-    scale_pos_weight=XGB_SCALE_POS_WEIGHT,
-    random_state=RANDOM_SEED,
-    n_jobs=ESTIMATOR_N_JOBS,
-    verbosity=0,
-    eval_metric="logloss",
 )
 
 
@@ -372,25 +330,33 @@ def build_gate_feature_pipeline(corr_threshold: float | None = None) -> Pipeline
     ).set_output(transform="pandas")
 
 
-def calibrated_classifier(estimator) -> CalibratedClassifierCV:
-    """Wrap the base estimator with probability calibration (shared by all models)."""
+def calibrated_classifier(
+    estimator, calib_cv: int = CLASSIFIER_CALIBRATION_CV
+) -> CalibratedClassifierCV:
+    """Wrap the base estimator with probability calibration (shared by all models).
+
+    ``calib_cv`` lets the expensive Bayesian head calibrate with fewer folds
+    (each fold is a full ADVI refit) than the cheap LR/RF cells.
+    """
     return CalibratedClassifierCV(
         estimator=estimator,
         method=CLASSIFIER_CALIBRATION_METHOD,
-        cv=int(CLASSIFIER_CALIBRATION_CV),
+        cv=int(calib_cv),
     )
 
 
 def feature_pipeline(
     classifier,
     preprocess: ColumnTransformer,
+    *,
+    calib_cv: int = CLASSIFIER_CALIBRATION_CV,
 ) -> Pipeline:
     """Preprocess -> RobustScaler -> calibrated classifier."""
     return Pipeline(
         [
             ("preprocess", preprocess),
             ("scale", RobustScaler()),
-            ("classifier", calibrated_classifier(classifier)),
+            ("classifier", calibrated_classifier(classifier, calib_cv=calib_cv)),
         ]
     ).set_output(transform="pandas")
 
@@ -443,13 +409,9 @@ def threshold_profile_sweep(
 
 # --- Frozen config aggregator ------------------------------------------------
 def frozen_config() -> dict:
-    """Reproducibility snapshot, merging per-track fragments (lazy to avoid cycles)."""
+    """Reproducibility snapshot (lazy import of pipelines to avoid a cycle)."""
     from secom.costs import threshold_profile_config
-    from secom.extrap_pipelines import EXTRAP_MODEL_IDS, extrap_frozen_config_fragment
-    from secom.intrap_pipelines import (
-        INTERP_MODEL_IDS,
-        intrap_frozen_config_fragment,
-    )
+    from secom.pipelines import MODEL_IDS, pipelines_frozen_config_fragment
 
     config = {
         "random_seed": RANDOM_SEED,
@@ -479,9 +441,8 @@ def frozen_config() -> dict:
         "correlated_selection_criterion": CORRELATED_SELECTION_CRITERION,
         "holdout_bootstrap_n": int(HOLDOUT_BOOTSTRAP_N),
         "holdout_bootstrap_ci": float(HOLDOUT_BOOTSTRAP_CI),
-        "benchmark_model_ids": list(INTERP_MODEL_IDS + EXTRAP_MODEL_IDS),
+        "benchmark_model_ids": list(MODEL_IDS),
     }
-    config.update(intrap_frozen_config_fragment())
-    config.update(extrap_frozen_config_fragment())
+    config.update(pipelines_frozen_config_fragment())
     config.update(threshold_profile_config())
     return config

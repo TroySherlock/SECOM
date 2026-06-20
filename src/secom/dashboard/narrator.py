@@ -32,7 +32,7 @@ from secom.dashboard.explainability import (
 )
 from secom.pipelines import ID_COL, NARRATIVES_PATH
 
-NARRATIVE_MODEL_ID = "extrap_hsic_rw"
+NARRATIVE_MODEL_ID = "hsic_bayes"
 PROMPT_VERSION = "statistical-interpreter-v1"
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8080/v1"

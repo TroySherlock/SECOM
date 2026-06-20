@@ -88,8 +88,7 @@ class BlockedTimeSeriesCV:
     def split(self, X, y=None, groups=None):
         if self._folds is None:
             self._folds = self._build_folds()
-        for train_idx, val_idx in self._folds:
-            yield train_idx, val_idx
+        return iter(self._folds)
 
 
 def make_blocked_time_cv(train_df: pd.DataFrame) -> BlockedTimeSeriesCV:

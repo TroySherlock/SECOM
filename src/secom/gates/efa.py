@@ -1,26 +1,24 @@
-"""Interpolation gate: Regularized EFA -> Hotelling T2 + Q (SPE) statistics.
+"""Regularized-EFA gate: Hotelling T2 + Q (SPE) risk-coverage tool.
 
-Provides the in-pipeline ``EFAMonitorFeatures`` (appends ``gate_t2``/``gate_q``)
-and the standalone ``InterpProcessGate`` abstention report. Fit on passing
-training wafers so the statistics measure deviation from in-control behaviour.
+``EFAGate`` is a standalone abstention/risk-coverage report (no longer bound to a
+protocol): fit on passing training wafers so the statistics measure deviation
+from in-control behaviour, then flag out-of-control holdout wafers.
 """
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.covariance import LedoitWolf
 from sklearn.decomposition import FactorAnalysis
-from sklearn.utils.validation import check_is_fitted
 
 from secom.core import RANDOM_SEED, build_gate_feature_pipeline
 from secom.hub_interactions import sensor_value_columns
-from secom.intrap_pipelines import (
-    INTERP_EFA_N_FACTORS,
-    INTERP_GATE_CORR_THRESHOLD,
-    INTERP_GATE_LOGIC,
-    INTERP_Q_GATE_ALPHA,
-    INTERP_T2_GATE_ALPHA,
+from secom.pipelines import (
+    EFA_GATE_LOGIC,
+    EFA_GATE_N_FACTORS,
+    EFA_GATE_Q_ALPHA,
+    EFA_GATE_T2_ALPHA,
+    GATE_CORR_THRESHOLD,
 )
 
 
@@ -33,7 +31,7 @@ class RegularizedEFA:
     factors do not reconstruct.
     """
 
-    def __init__(self, n_factors: int = INTERP_EFA_N_FACTORS, random_state: int = RANDOM_SEED):
+    def __init__(self, n_factors: int = EFA_GATE_N_FACTORS, random_state: int = RANDOM_SEED):
         self.n_factors = int(n_factors)
         self.random_state = int(random_state)
 
@@ -77,66 +75,17 @@ class RegularizedEFA:
         return self._t2_from_scores(scores), self._q_from_matrix(mat, scores)
 
 
-class EFAMonitorFeatures(BaseEstimator, TransformerMixin):
-    """In-pipeline EFA monitor: append ``gate_t2`` and ``gate_q`` as features."""
-
-    T2_COL = "gate_t2"
-    Q_COL = "gate_q"
-
-    def __init__(
-        self,
-        n_factors: int = INTERP_EFA_N_FACTORS,
-        t2_alpha: float = INTERP_T2_GATE_ALPHA,
-        q_alpha: float = INTERP_Q_GATE_ALPHA,
-    ):
-        self.n_factors = int(n_factors)
-        self.t2_alpha = float(t2_alpha)
-        self.q_alpha = float(q_alpha)
-
-    def fit(self, X, y=None):
-        X_df = self._as_dataframe(X)
-        self.feature_names_in_ = list(X_df.columns)
-        mat = X_df.to_numpy(dtype="float64")
-        if y is not None:
-            passing = np.asarray(y, dtype=int) == 0
-            if passing.sum() >= max(self.n_factors + 1, 5):
-                mat = mat[passing]
-        self.efa_ = RegularizedEFA(n_factors=self.n_factors).fit(mat)
-        self.t2_ucl_ = float(np.quantile(self.efa_.t2_ref_, 1.0 - self.t2_alpha))
-        self.q_ucl_ = float(np.quantile(self.efa_.q_ref_, 1.0 - self.q_alpha))
-        return self
-
-    def transform(self, X):
-        check_is_fitted(self, "efa_")
-        X_df = self._as_dataframe(X)
-        t2, q = self.efa_.t2_q(X_df.to_numpy(dtype="float64"))
-        return pd.DataFrame({self.T2_COL: t2, self.Q_COL: q}, index=X_df.index)
-
-    def get_feature_names_out(self, input_features=None):
-        check_is_fitted(self, "efa_")
-        return np.asarray([self.T2_COL, self.Q_COL], dtype=object)
-
-    @staticmethod
-    def _as_dataframe(X) -> pd.DataFrame:
-        if isinstance(X, pd.DataFrame):
-            df = X.copy()
-        else:
-            df = pd.DataFrame(X)
-        df.columns = df.columns.astype(str)
-        return df
-
-
-class InterpProcessGate:
-    """Interpolation gate: Regularized EFA -> Hotelling T2 + Q (SPE) abstention."""
+class EFAGate:
+    """Regularized EFA -> Hotelling T2 + Q (SPE) abstention / risk-coverage gate."""
 
     def __init__(
         self,
         *,
-        n_factors: int = INTERP_EFA_N_FACTORS,
-        t2_alpha: float = INTERP_T2_GATE_ALPHA,
-        q_alpha: float = INTERP_Q_GATE_ALPHA,
-        gate_corr_threshold: float = INTERP_GATE_CORR_THRESHOLD,
-        logic: str = INTERP_GATE_LOGIC,
+        n_factors: int = EFA_GATE_N_FACTORS,
+        t2_alpha: float = EFA_GATE_T2_ALPHA,
+        q_alpha: float = EFA_GATE_Q_ALPHA,
+        gate_corr_threshold: float = GATE_CORR_THRESHOLD,
+        logic: str = EFA_GATE_LOGIC,
     ):
         self.n_factors = int(n_factors)
         self.t2_alpha = float(t2_alpha)
@@ -147,10 +96,10 @@ class InterpProcessGate:
             raise ValueError(f"gate logic must be 'or' or 'and', got {logic!r}")
         self.logic = logic_norm
 
-    def fit(self, X_train: pd.DataFrame, y_train: pd.Series) -> "InterpProcessGate":
+    def fit(self, X_train: pd.DataFrame, y_train: pd.Series) -> "EFAGate":
         sensor_cols = sensor_value_columns(X_train.columns)
         if not sensor_cols:
-            raise ValueError("No sensor columns found for InterpProcessGate")
+            raise ValueError("No sensor columns found for EFAGate")
 
         self.feature_pipe_ = build_gate_feature_pipeline(self.gate_corr_threshold)
         y_arr = np.asarray(y_train, dtype=int)
@@ -162,7 +111,7 @@ class InterpProcessGate:
         ref_df = X_gate.loc[passing] if isinstance(X_gate, pd.DataFrame) else X_gate[passing]
         ref = np.asarray(ref_df, dtype="float64")
         if ref.shape[0] == 0 or ref.shape[1] == 0:
-            raise ValueError("InterpProcessGate requires passing wafers and nonzero features")
+            raise ValueError("EFAGate requires passing wafers and nonzero features")
 
         self.efa_ = RegularizedEFA(n_factors=self.n_factors).fit(ref)
         self.t2_ucl_ = float(np.quantile(self.efa_.t2_ref_, 1.0 - self.t2_alpha))
@@ -210,6 +159,20 @@ class InterpProcessGate:
 
     def is_in_control(self, X: pd.DataFrame) -> np.ndarray:
         return ~self.ooc_mask(X)
+
+    def ooc_severity(self, X: pd.DataFrame) -> np.ndarray:
+        """Per-wafer out-of-control severity in [0, 1] for risk-coverage ranking.
+
+        Each statistic becomes an empirical upper-tail exceedance p-value against
+        the passing reference (high T2 or high Q -> high severity); the max of the
+        two is the OR-logic severity, independent of the alpha operating point.
+        """
+        t2, q = self.t2_q_scores(X)
+        ref_t2 = self.efa_.t2_ref_
+        ref_q = self.efa_.q_ref_
+        anomaly_t2 = np.array([float(np.mean(ref_t2 <= v)) for v in t2], dtype="float64")
+        anomaly_q = np.array([float(np.mean(ref_q <= v)) for v in q], dtype="float64")
+        return np.maximum(anomaly_t2, anomaly_q)
 
     def flag_breakdown(self, X: pd.DataFrame) -> dict[str, int]:
         masks = self.flag_masks(X)

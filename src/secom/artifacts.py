@@ -12,6 +12,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_selection import SelectFromModel
 from sklearn.pipeline import Pipeline
 from secom.hub_interactions import (
+    HSICSelectHubBlock,
     LinearSelectT2HubBlock,
     extract_hub_interaction_info,
     sensor_value_columns,
@@ -28,7 +29,9 @@ from secom.pipelines import (
 )
 from secom.utils import json_safe
 
-REFERENCE_MODELS = {"linear": "extrap_hsic_rw", "topk": "extrap_rf_static"}
+# Reference models for the reduction widget + shared cluster example. Both are
+# RF-selection front-ends so the stage breakdown extracts cleanly.
+REFERENCE_MODELS = {"linear": "rfsel_enet", "topk": "rfsel_rf"}
 
 
 def _sensor_branch_pipeline(preprocess: ColumnTransformer) -> Pipeline:
@@ -50,10 +53,10 @@ def _sensor_branch_columns(sensor_pipe: Pipeline) -> list[str]:
 
 
 def _model_family(model_id: str) -> str:
-    if "linear" in model_id or model_id.endswith("enet"):
-        return "linear"
-    if "topk" in model_id or model_id.endswith("_rf") or model_id.endswith("_xgb"):
+    if model_id.endswith("_rf"):
         return "topk"
+    if model_id.endswith("_enet") or model_id.endswith("_bayes"):
+        return "linear"
     return "unknown"
 
 
@@ -181,9 +184,9 @@ def extract_model_artifacts(
     rf_selection = None
     hub_interactions = None
 
-    if "select_t2_hubs" in sensor_pipe.named_steps:
-        block: LinearSelectT2HubBlock = sensor_pipe.named_steps["select_t2_hubs"]
-        cluster_cols = list(X_clust.columns)
+    block = sensor_pipe.named_steps.get("front_end")
+    cluster_cols = list(X_clust.columns)
+    if isinstance(block, LinearSelectT2HubBlock):
         rf_selection = _extract_rf_selection(block.select_, cluster_cols)
         stages["after_selection"] = rf_selection["selected_count"]
         hub_interactions = extract_hub_interaction_info(block)
@@ -191,6 +194,20 @@ def extract_model_artifacts(
         stages["after_hub_interactions"] = (
             int(rf_selection["selected_count"]) + 1 + n_interact
         )
+    elif isinstance(block, HSICSelectHubBlock):
+        selected = list(getattr(block, "selected_columns_", []))
+        hubs = [str(h) for h in getattr(block, "hubs_", [])]
+        n_interact = int(getattr(block, "n_interaction_features_", 0))
+        stages["after_selection"] = len(selected)
+        stages["after_hub_interactions"] = len(selected) + 1 + n_interact
+        hub_interactions = {
+            "top_k_requested": int(block.top_k),
+            "n_hubs_requested": int(block.n_hubs),
+            "n_hubs_selected": len(hubs),
+            "n_interaction_features": n_interact,
+            "hub_sensors": hubs,
+            "selected_features": [str(c) for c in selected],
+        }
 
     stages["after_preprocess"] = len(preprocess.get_feature_names_out())
     stages["classifier_input"] = len(scale.get_feature_names_out())

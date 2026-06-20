@@ -1,17 +1,17 @@
-"""Process gates.
+"""Standalone risk-coverage gates (not pipeline steps).
 
-Interpolation: Regularized-EFA -> Hotelling T2 + Q (``secom.gates.efa``).
-Extrapolation: sparse Bayesian factor analysis -> BGM density + Q
-(``secom.bayes.gate.ExtrapProcessGate``).
+- ``EFAGate``: Regularized EFA -> Hotelling T2 + Q (``secom.gates.efa``).
+- ``BayesGate``: sparse Bayesian factor analysis -> BGM density + Q
+  (``secom.gates.bayes_gate``).
+
+Both score the raw post-cluster sensor space and are fit on passing wafers.
 """
-from secom.gates.efa import (
-    EFAMonitorFeatures,
-    InterpProcessGate,
-    RegularizedEFA,
-)
+from secom.gates.bayes_gate import BayesGate, SparseBayesianFactorAnalysis
+from secom.gates.efa import EFAGate, RegularizedEFA
 
 __all__ = [
+    "EFAGate",
     "RegularizedEFA",
-    "EFAMonitorFeatures",
-    "InterpProcessGate",
+    "BayesGate",
+    "SparseBayesianFactorAnalysis",
 ]

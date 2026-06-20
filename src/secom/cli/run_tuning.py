@@ -19,20 +19,18 @@ from secom.pipelines import (
     DECAY_LAMBDA_DEFAULT,
     TARGET_COL,
     TIMESTAMP_COL,
-    TUNED_BLOCKED_PARAMS_DIR,
-    TUNED_PARAMS_DIR,
     WEIGHTING_MODEL_IDS,
     feature_columns,
     load_mart,
     make_repeated_stratified_cv,
     split_train_test,
+    split_train_test_random,
 )
 from secom.tuning.registry import (
     ALL_MODEL_IDS,
     MODEL_SPECS,
     TRACKS,
     fit_with_progress,
-    is_bayesian,
     model_ids_for_track,
     run_grid_search,
     save_tuned_params,
@@ -42,21 +40,29 @@ from secom.tuning.registry import (
 )
 from secom.utils import tuned_blocked_params_path, tuned_params_path
 
-# CV pass per track: (protocol name, cv factory, output dir, output path fn).
+# CV pass per track: (protocol name, cv factory, output path fn). Each of the 9
+# model cells is tuned on BOTH protocols.
 CV_PASS_BY_TRACK = {
     "interpolation": (
         "repeated_stratified_5x2",
         make_repeated_stratified_cv,
-        TUNED_PARAMS_DIR,
         tuned_params_path,
     ),
     "extrapolation": (
         "blocked_time_local_strat",
         make_blocked_time_cv,
-        TUNED_BLOCKED_PARAMS_DIR,
         tuned_blocked_params_path,
     ),
 }
+
+
+def _train_for_track(df, track: str):
+    """Track-appropriate training split: random-stratified vs temporal."""
+    if track == "extrapolation":
+        train_df, _ = split_train_test(df)
+    else:
+        train_df, _ = split_train_test_random(df)
+    return train_df
 
 
 def _tune_pass(
@@ -166,29 +172,24 @@ def main(argv=None) -> int:
     args = _parse_args(argv)
     df = load_mart()
     feature_cols = feature_columns(df)
-    train_df, _ = split_train_test(df)
-    X_train = train_df[feature_cols]
-    y_train = train_df[TARGET_COL].astype(int)
 
-    for model_id in _select_model_ids(args.model, args.track):
-        if is_bayesian(model_id):
-            # Extrapolation track: custom Bayesian harness (blocked CV + threshold sweep).
-            from secom.bayes.harness import tune_bayes_model
-
-            tune_bayes_model(model_id, train_df, feature_cols)
-            continue
-        spec = MODEL_SPECS[model_id]
-        cv_protocol, cv_factory, _out_dir, out_path_fn = CV_PASS_BY_TRACK[spec.track]
-        _tune_pass(
-            model_id,
-            spec,
-            train_df,
-            X_train,
-            y_train,
-            cv_protocol,
-            cv_factory,
-            out_path_fn,
-        )
+    tracks = [args.track] if args.track else list(TRACKS)
+    for track in tracks:
+        cv_protocol, cv_factory, out_path_fn = CV_PASS_BY_TRACK[track]
+        train_df = _train_for_track(df, track)
+        X_train = train_df[feature_cols]
+        y_train = train_df[TARGET_COL].astype(int)
+        for model_id in _select_model_ids(args.model, track):
+            _tune_pass(
+                model_id,
+                MODEL_SPECS[model_id],
+                train_df,
+                X_train,
+                y_train,
+                cv_protocol,
+                cv_factory,
+                out_path_fn,
+            )
     return 0
 
 

@@ -1,4 +1,4 @@
-"""Bayesian elastic-net logistic head (NumPyro) with optional random-walk intercept.
+"""Bayesian elastic-net logistic head (NumPyro), as a scikit-learn estimator.
 
 Slope prior is an explicit elastic net parameterised in sklearn terms via ``C``
 (inverse total penalty) and ``l1_ratio`` (L1 vs L2 mix). These map onto a Laplace
@@ -9,158 +9,136 @@ Slope prior is an explicit elastic net parameterised in sklearn terms via ``C``
 
 so the negative log-prior matches sklearn's
 ``(1/C) * [l1_ratio * ||beta||_1 + ((1 - l1_ratio) / 2) * ||beta||_2^2]``.
-Drift is modelled structurally by a non-centred random-walk intercept over time
-blocks; out-of-sample prediction uses the last block's state (honest forecast).
+
+The estimator implements the standard ``fit(X, y, sample_weight=None)`` /
+``predict_proba`` / ``predict`` contract so it drops into a scikit-learn
+``Pipeline`` and ``CalibratedClassifierCV`` exactly where ``LogisticRegression``
+would. Probability calibration is therefore handled by the shared wrapper, not
+here.
 """
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from sklearn.base import BaseEstimator, ClassifierMixin
 
 
-def make_block_index(timestamps, n_blocks: int) -> np.ndarray:
-    """Assign rows to ``n_blocks`` contiguous time blocks by timestamp quantile."""
-    ts = pd.to_datetime(np.asarray(timestamps), errors="coerce").astype("int64").to_numpy(dtype=float)
-    n = len(ts)
-    if n == 0:
-        return np.zeros(0, dtype=int)
-    order = np.argsort(ts, kind="mergesort")
-    block = np.zeros(n, dtype=int)
-    edges = np.linspace(0, n, n_blocks + 1).astype(int)
-    for b in range(n_blocks):
-        block[order[edges[b]:edges[b + 1]]] = b
-    return block
-
-
-class BayesianElasticNetLogistic:
-    """NumPyro elastic-net logistic; static or random-walk intercept."""
+class BayesianElasticNetLogistic(ClassifierMixin, BaseEstimator):
+    """NumPyro elastic-net logistic regression with a static intercept."""
 
     def __init__(
         self,
-        *,
-        rw_intercept: bool = False,
-        n_blocks: int = 5,
         C: float = 0.1,
         l1_ratio: float = 0.5,
         pos_weight: float = 1.0,
-        inference: str = "nuts",
+        inference: str = "advi",
         draws: int = 500,
         tune: int = 500,
         svi_steps: int = 1500,
         seed: int = 42,
     ):
-        self.rw_intercept = bool(rw_intercept)
-        self.n_blocks = int(n_blocks)
-        self.C = float(C)
-        if self.C <= 0:
-            raise ValueError(f"C must be positive, got {C!r}")
-        # l1_ratio in (0, 1]; floor avoids an infinite Laplace scale at pure ridge.
-        self.l1_ratio = float(min(max(l1_ratio, 1e-6), 1.0))
-        self.pos_weight = float(pos_weight)
-        if self.pos_weight <= 0:
-            raise ValueError(f"pos_weight must be positive, got {pos_weight!r}")
-        self.inference = str(inference).lower()
-        self.draws = int(draws)
-        self.tune = int(tune)
-        self.svi_steps = int(svi_steps)
-        self.seed = int(seed)
-        self.calibrator_ = None
+        # sklearn convention: store constructor args verbatim (no validation /
+        # transformation here) so get_params/set_params/clone round-trip cleanly.
+        self.C = C
+        self.l1_ratio = l1_ratio
+        self.pos_weight = pos_weight
+        self.inference = inference
+        self.draws = draws
+        self.tune = tune
+        self.svi_steps = svi_steps
+        self.seed = seed
 
-    def set_calibrator(self, calibrator) -> "BayesianElasticNetLogistic":
-        """Attach a fitted probability calibrator applied inside ``predict_proba``."""
-        self.calibrator_ = calibrator
-        return self
+    # --- prior knobs (validated/derived at fit/sample time) ------------------
+    def _prior_scales(self) -> tuple[float, float, float]:
+        C = float(self.C)
+        if C <= 0:
+            raise ValueError(f"C must be positive, got {self.C!r}")
+        # l1_ratio in (0, 1]; floor avoids an infinite Laplace scale at pure ridge.
+        l1_ratio = float(min(max(float(self.l1_ratio), 1e-6), 1.0))
+        laplace_scale = C / l1_ratio
+        ridge_w = (1.0 - l1_ratio) / (2.0 * C)
+        return laplace_scale, ridge_w, l1_ratio
 
     # --- NumPyro model -------------------------------------------------------
-    def _model(self, design, y=None, block_idx=None, n_blocks=1, weights=None):
+    def _model(self, design, y=None, weights=None):
         import jax.numpy as jnp
         import numpyro
         import numpyro.distributions as dist
 
-        n, p = design.shape
-        laplace_scale = self.C / self.l1_ratio
-        ridge_w = (1.0 - self.l1_ratio) / (2.0 * self.C)
+        _, p = design.shape
+        laplace_scale, ridge_w, _ = self._prior_scales()
         beta = numpyro.sample("beta", dist.Laplace(jnp.zeros(p), laplace_scale))
         numpyro.factor("ridge", -ridge_w * jnp.sum(beta**2))
 
-        if self.rw_intercept and n_blocks > 1:
-            alpha0 = numpyro.sample("alpha0", dist.Normal(0.0, 5.0))
-            sigma_rw = numpyro.sample("sigma_rw", dist.HalfNormal(1.0))
-            steps = numpyro.sample(
-                "alpha_steps", dist.Normal(jnp.zeros(n_blocks - 1), 1.0)
-            )
-            walk = jnp.concatenate([jnp.zeros(1), jnp.cumsum(steps) * sigma_rw])
-            alpha_blocks = alpha0 + walk
-            intercept = alpha_blocks[block_idx]
-        else:
-            alpha = numpyro.sample("alpha", dist.Normal(0.0, 5.0))
-            intercept = alpha
-
-        logits = intercept + design @ beta
+        alpha = numpyro.sample("alpha", dist.Normal(0.0, 5.0))
+        logits = alpha + design @ beta
         if y is None:
             numpyro.sample("obs", dist.Bernoulli(logits=logits), obs=None)
         else:
-            # Class-weighted likelihood: scale each observation's log-prob by its
-            # (renormalized) weight so the minority class pulls harder without
-            # changing the effective sample size.
+            # Weighted likelihood: scale each observation's log-prob by its
+            # (renormalized) weight so the minority class / recent wafers pull
+            # harder without changing the effective sample size.
             log_lik = dist.Bernoulli(logits=logits).log_prob(y)
             if weights is not None:
                 log_lik = weights * log_lik
             numpyro.factor("obs", jnp.sum(log_lik))
 
     # --- Fit -----------------------------------------------------------------
-    def fit(self, design, y, block_idx=None) -> "BayesianElasticNetLogistic":
+    def fit(self, X, y, sample_weight=None) -> "BayesianElasticNetLogistic":
         import jax
         import jax.numpy as jnp
 
-        X = jnp.asarray(np.asarray(design, dtype=float))
-        y_arr = jnp.asarray(np.asarray(y, dtype=float))
-        self.n_features_ = int(X.shape[1])
+        pos_weight = float(self.pos_weight)
+        if pos_weight <= 0:
+            raise ValueError(f"pos_weight must be positive, got {self.pos_weight!r}")
+
+        design = np.asarray(X, dtype=float)
+        y_np = np.asarray(y, dtype=float)
+        self.classes_ = np.unique(y_np)
+        self.n_features_in_ = int(design.shape[1])
+        self.n_features_ = self.n_features_in_
         self.feature_names_ = (
-            list(design.columns) if isinstance(design, pd.DataFrame)
-            else [f"x{i}" for i in range(self.n_features_)]
+            list(X.columns) if isinstance(X, pd.DataFrame)
+            else [f"x{i}" for i in range(self.n_features_in_)]
         )
 
-        rw = self.rw_intercept and block_idx is not None
-        nb = int(self.n_blocks) if rw else 1
-        if rw:
-            bidx = jnp.asarray(np.asarray(block_idx, dtype=int))
-        else:
-            bidx = None
-        self._rw_active_ = rw
-        self._n_blocks_used_ = nb
-
-        # Per-observation class weights, renormalized to preserve the effective
-        # sample size (mean weight == 1) so the prior-likelihood balance is stable
-        # across pos_weight values.
-        y_np = np.asarray(y, dtype=float)
-        w = np.where(y_np == 1.0, self.pos_weight, 1.0)
+        # Combine an optional external sample_weight (e.g. time-decay) with the
+        # positive-class up-weighting, then renormalize to mean weight == 1.
+        base = (
+            np.ones_like(y_np)
+            if sample_weight is None
+            else np.asarray(sample_weight, dtype=float)
+        )
+        w = base * np.where(y_np == 1.0, pos_weight, 1.0)
         if w.sum() > 0:
             w = w * (len(w) / w.sum())
-        weights = jnp.asarray(w)
 
-        rng = jax.random.PRNGKey(self.seed)
-        if self.inference == "advi":
-            self.posterior_ = self._fit_advi(rng, X, y_arr, bidx, nb, weights)
+        Xj = jnp.asarray(design)
+        yj = jnp.asarray(y_np)
+        wj = jnp.asarray(w)
+
+        rng = jax.random.PRNGKey(int(self.seed))
+        if str(self.inference).lower() == "advi":
+            self.posterior_ = self._fit_advi(rng, Xj, yj, wj)
         else:
-            self.posterior_ = self._fit_nuts(rng, X, y_arr, bidx, nb, weights)
+            self.posterior_ = self._fit_nuts(rng, Xj, yj, wj)
         return self
 
-    def _fit_nuts(self, rng, X, y, bidx, nb, weights) -> dict:
+    def _fit_nuts(self, rng, X, y, weights) -> dict:
         from numpyro.infer import MCMC, NUTS
 
         kernel = NUTS(self._model)
         mcmc = MCMC(
             kernel,
-            num_warmup=self.tune,
-            num_samples=self.draws,
+            num_warmup=int(self.tune),
+            num_samples=int(self.draws),
             num_chains=1,
             progress_bar=False,
         )
-        mcmc.run(rng, design=X, y=y, block_idx=bidx, n_blocks=nb, weights=weights)
+        mcmc.run(rng, design=X, y=y, weights=weights)
         return {k: np.asarray(v) for k, v in mcmc.get_samples().items()}
 
-    def _fit_advi(self, rng, X, y, bidx, nb, weights) -> dict:
+    def _fit_advi(self, rng, X, y, weights) -> dict:
         import jax
         from numpyro.infer import SVI, Trace_ELBO
         from numpyro.infer.autoguide import AutoNormal
@@ -169,40 +147,32 @@ class BayesianElasticNetLogistic:
         guide = AutoNormal(self._model)
         svi = SVI(self._model, guide, optim.Adam(0.01), Trace_ELBO())
         result = svi.run(
-            rng, self.svi_steps, design=X, y=y, block_idx=bidx, n_blocks=nb,
-            weights=weights, progress_bar=False,
+            rng, int(self.svi_steps), design=X, y=y, weights=weights,
+            progress_bar=False,
         )
-        rng_s = jax.random.PRNGKey(self.seed + 1)
+        rng_s = jax.random.PRNGKey(int(self.seed) + 1)
         samples = guide.sample_posterior(
-            rng_s, result.params, sample_shape=(max(200, self.draws),)
+            rng_s, result.params, sample_shape=(max(200, int(self.draws)),)
         )
         return {k: np.asarray(v) for k, v in samples.items()}
 
     # --- Predict -------------------------------------------------------------
-    def _logits_samples(self, design) -> np.ndarray:
-        X = np.asarray(design, dtype=float)
+    def _logits_samples(self, X) -> np.ndarray:
+        design = np.asarray(X, dtype=float)
         beta = self.posterior_["beta"]  # (S, p)
-        if self._rw_active_:
-            alpha0 = self.posterior_["alpha0"][:, None]
-            sigma = self.posterior_["sigma_rw"][:, None]
-            steps = self.posterior_["alpha_steps"]  # (S, nb-1)
-            walk = np.cumsum(steps, axis=1) * sigma
-            alpha_last = alpha0[:, 0] + walk[:, -1]  # forecast = last block state
-            intercept = alpha_last[:, None]
-        else:
-            intercept = self.posterior_["alpha"][:, None]
-        return intercept + beta @ X.T  # (S, n)
+        intercept = self.posterior_["alpha"][:, None]
+        return intercept + beta @ design.T  # (S, n)
 
-    def predict_proba(self, design) -> np.ndarray:
-        logits = np.clip(self._logits_samples(design), -30.0, 30.0)
+    def predict_proba(self, X) -> np.ndarray:
+        logits = np.clip(self._logits_samples(X), -30.0, 30.0)
         probs = 1.0 / (1.0 + np.exp(-logits))
         mean = probs.mean(axis=0)
-        if self.calibrator_ is not None:
-            mean = np.asarray(self.calibrator_.transform(mean), dtype=float)
         return np.column_stack([1.0 - mean, mean])
 
-    def predict_proba_pos(self, design) -> np.ndarray:
-        return self.predict_proba(design)[:, 1]
+    def predict(self, X) -> np.ndarray:
+        pos = self.predict_proba(X)[:, 1]
+        idx = (pos >= 0.5).astype(int)
+        return self.classes_[idx]
 
     def coef_summary(self) -> pd.DataFrame:
         beta = self.posterior_["beta"]

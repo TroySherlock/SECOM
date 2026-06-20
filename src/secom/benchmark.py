@@ -42,29 +42,24 @@ from secom.metrics import (
     predict_with_threshold,
     stratified_bootstrap_holdout_metrics,
 )
-from secom.pipelines import frozen_config
 from secom.artifacts import (
     collect_holdout_artifacts,
     save_pipeline_artifacts,
 )
 from secom.cv import make_blocked_time_cv
-from secom.gate import InterpProcessGate
+from secom.gates import BayesGate, EFAGate
 from secom.pipelines import (
     BENCHMARK_MODEL_IDS,
     BENCHMARK_RESULTS_PATH,
-    EXTRAP_MODEL_IDS,
-    INTERP_MODEL_IDS,
+    MODEL_IDS,
     PIPELINE_ARTIFACTS_PATH,
     CV_N_JOBS,
     CV_SCORING,
     DECAY_LAMBDA_DEFAULT,
-    INTERP_GATE_CORR_THRESHOLD,
-    INTERP_GATE_LOGIC,
-    INTERP_Q_GATE_ALPHA,
-    INTERP_T2_GATE_ALPHA,
     RANDOM_SEED,
     RF_MAX_DEPTH,
     RF_N_ESTIMATORS,
+    RISK_COVERAGE_GRID,
     CORRELATED_SELECTION_CRITERION,
     CORRELATED_SELECTION_METHOD,
     CORRELATED_SELECTION_THRESHOLD,
@@ -76,10 +71,8 @@ from secom.pipelines import (
     TUNED_PARAMS_DIR,
     TUNED_BLOCKED_PARAMS_DIR,
     WEIGHTING_MODEL_IDS,
-    XGB_MAX_DEPTH,
-    XGB_N_ESTIMATORS,
-    XGB_SCALE_POS_WEIGHT,
     feature_columns,
+    frozen_config,
     holdout_split_summary,
     load_mart,
     make_repeated_stratified_cv,
@@ -280,77 +273,80 @@ def run_weighted_blocked_leaderboard(
     return leaderboard.reset_index(drop=True)
 
 
-def run_interp_gate_conditional_benchmark(
+def fit_holdout_pipelines(
     pipelines: dict,
     X_train: pd.DataFrame,
     y_train: pd.Series,
-    X_test: pd.DataFrame,
+    tuned: dict[str, dict] | None,
+    train_timestamps: pd.Series | None = None,
+) -> dict[str, Pipeline]:
+    """Fit each tuned pipeline once on the full train (decay-weighted if capable)."""
+    fitted: dict[str, Pipeline] = {}
+    for name, pipeline in pipelines.items():
+        f, _ = fit_pipeline_weighted(
+            pipeline,
+            X_train,
+            y_train,
+            _holdout_sample_weights(name, tuned, train_timestamps),
+        )
+        fitted[name] = f
+    return fitted
+
+
+def holdout_scores(fitted: dict[str, Pipeline], X_test: pd.DataFrame) -> dict[str, np.ndarray]:
+    return {name: f.predict_proba(X_test)[:, 1] for name, f in fitted.items()}
+
+
+def gate_conditional_report(
+    scores: dict[str, np.ndarray],
     y_test: pd.Series,
-    gate: InterpProcessGate,
+    gate,
+    X_test: pd.DataFrame,
     *,
     show_progress: bool = True,
 ) -> pd.DataFrame:
-    """Conditional metrics on in-control wafers + coverage (EFA T² + Q gate).
+    """Conditional metrics on the gate's in-control wafers + coverage.
 
-    Interpolation analogue of ``run_gate_conditional_benchmark``: the gate
-    abstains under its configured ``logic`` (``"or"`` when either post-cluster
-    EFA T² or Q trips, ``"and"`` only when both do). Interpolation models are
-    unweighted, so pipelines are fit plainly on the (random-holdout) train.
+    Works for either standalone gate (``EFAGate`` / ``BayesGate``): the gate
+    abstains under its configured ``logic``; per-statistic flag counts come from
+    ``gate.flag_breakdown``.
     """
-    masks = gate.flag_masks(X_test)
     in_control = gate.is_in_control(X_test)
-    y_test_arr = np.asarray(y_test).astype(int)
-    n_total = int(len(y_test_arr))
+    breakdown = gate.flag_breakdown(X_test)
+    y_arr = np.asarray(y_test).astype(int)
+    n_total = int(len(y_arr))
     n_in_control = int(in_control.sum())
-    n_fails_total = int(y_test_arr.sum())
-    n_fails_in_control = int(y_test_arr[in_control].sum())
-
-    n_flagged_t2 = int(masks["t2_ooc"].sum())
-    n_flagged_q = int(masks["q_ooc"].sum())
-    n_flagged_both = int(masks["both_ooc"].sum())
-    fails = y_test_arr.astype(bool)
-    n_fails_flagged_t2 = int((masks["t2_ooc"] & fails).sum())
-    n_fails_flagged_q = int((masks["q_ooc"] & fails).sum())
-    n_fails_flagged_both = int((masks["both_ooc"] & fails).sum())
+    n_fails_total = int(y_arr.sum())
+    n_fails_in_control = int(y_arr[in_control].sum())
 
     shared = {
         "coverage": (n_in_control / n_total) if n_total else None,
         "n_total": n_total,
         "n_in_control": n_in_control,
         "n_flagged_ooc": n_total - n_in_control,
-        "n_flagged_t2": n_flagged_t2,
-        "n_flagged_q": n_flagged_q,
-        "n_flagged_both": n_flagged_both,
         "n_fails_total": n_fails_total,
         "n_fails_in_control": n_fails_in_control,
         "n_fails_flagged_ooc": n_fails_total - n_fails_in_control,
-        "n_fails_flagged_t2": n_fails_flagged_t2,
-        "n_fails_flagged_q": n_fails_flagged_q,
-        "n_fails_flagged_both": n_fails_flagged_both,
+        **{k: v for k, v in breakdown.items() if k.startswith("n_flagged")},
     }
 
     if show_progress:
         coverage = n_in_control / n_total if n_total else 0.0
         print(
-            f"Interp gate (EFA T² {gate.logic.upper()} Q): coverage {coverage:.1%} "
-            f"({n_in_control}/{n_total}); T²={n_flagged_t2} Q={n_flagged_q} "
-            f"both={n_flagged_both}; fails in-control "
-            f"{n_fails_in_control}/{n_fails_total}"
+            f"  gate {gate.config().get('method')} ({gate.logic.upper()}): "
+            f"coverage {coverage:.1%} ({n_in_control}/{n_total}); "
+            f"fails in-control {n_fails_in_control}/{n_fails_total}"
         )
 
     rows = []
-    for name, pipeline in pipelines.items():
-        fitted, _threshold = fit_pipeline_weighted(pipeline, X_train, y_train, None)
-        y_score = fitted.predict_proba(X_test)[:, 1]
-
+    for name, y_score in scores.items():
         row: dict = {
             "pipeline": name,
             **shared,
-            "global_pr_auc": float(average_precision_score(y_test_arr, y_score)),
-            "global_roc_auc": float(roc_auc_score(y_test_arr, y_score)),
+            "global_pr_auc": float(average_precision_score(y_arr, y_score)),
+            "global_roc_auc": float(roc_auc_score(y_arr, y_score)),
         }
-
-        y_ic = y_test_arr[in_control]
+        y_ic = y_arr[in_control]
         score_ic = y_score[in_control]
         enough = (
             n_fails_in_control >= MIN_CONDITIONAL_POSITIVES
@@ -375,14 +371,50 @@ def run_interp_gate_conditional_benchmark(
             row["conditional_pr_auc_ci_low"] = None
             row["conditional_pr_auc_ci_high"] = None
         rows.append(row)
-        if show_progress:
-            cond = row["conditional_pr_auc"]
-            cond_str = f"{cond:.3f}" if cond is not None else "n/a (<5 fails)"
-            print(
-                f"  {name}: conditional PR AUC {cond_str} "
-                f"vs global {row['global_pr_auc']:.3f}"
-            )
+    return pd.DataFrame(rows)
 
+
+def gate_risk_coverage(
+    scores: dict[str, np.ndarray],
+    y_test: pd.Series,
+    gate,
+    X_test: pd.DataFrame,
+    coverage_grid=RISK_COVERAGE_GRID,
+) -> pd.DataFrame:
+    """Rank holdout wafers by the gate's OOC severity; rescore retained subsets.
+
+    For each target ``coverage`` keep the least-suspicious ``round(c * n)`` wafers
+    and rescore every model. ``coverage == 1.0`` keeps all wafers (== global).
+    AUCs are NaN when the kept set has too few fails or is single-class. Returns
+    ``[pipeline, coverage, n_kept, n_fails_kept, pr_auc, roc_auc]``.
+    """
+    severity = np.asarray(gate.ooc_severity(X_test), dtype="float64")
+    y_arr = np.asarray(y_test).astype(int)
+    n_total = int(len(y_arr))
+    order = np.argsort(severity, kind="mergesort")  # least-suspicious first
+
+    rows = []
+    for c in coverage_grid:
+        c = float(c)
+        n_keep = max(0, min(n_total, int(round(c * n_total))))
+        keep_idx = order[:n_keep]
+        y_keep = y_arr[keep_idx]
+        n_fails_kept = int(y_keep.sum())
+        enough = n_fails_kept >= MIN_CONDITIONAL_POSITIVES and len(np.unique(y_keep)) > 1
+        for name, y_score in scores.items():
+            s_keep = np.asarray(y_score)[keep_idx]
+            pr_auc = float(average_precision_score(y_keep, s_keep)) if enough else float("nan")
+            roc_auc = float(roc_auc_score(y_keep, s_keep)) if enough else float("nan")
+            rows.append(
+                {
+                    "pipeline": name,
+                    "coverage": c,
+                    "n_kept": int(n_keep),
+                    "n_fails_kept": n_fails_kept,
+                    "pr_auc": pr_auc,
+                    "roc_auc": roc_auc,
+                }
+            )
     return pd.DataFrame(rows)
 
 
@@ -410,35 +442,24 @@ def _profile_holdout_columns(
 
 
 def run_holdout_benchmark(
-    pipelines: dict,
-    X_train: pd.DataFrame,
-    y_train: pd.Series,
-    X_test: pd.DataFrame,
+    scores: dict[str, np.ndarray],
     y_test: pd.Series,
     tuned: dict[str, dict] | None = None,
     *,
-    train_timestamps: pd.Series | None = None,
     show_progress: bool = True,
 ) -> pd.DataFrame:
-    """Fit on train, report holdout metrics.
+    """Report holdout metrics from precomputed positive-class scores.
 
-    When ``train_timestamps`` is given, weight-capable models are fit with
-    time-decay sample weights at their tuned ``decay_lambda`` (extrapolation
-    path). The random/in-distribution path leaves this None (unweighted).
+    Scores come from ``holdout_scores`` of pipelines fit once on the protocol's
+    train (decay-weighted where capable), so the expensive Bayesian heads are
+    not refit per report.
     """
     rows = []
 
     if show_progress:
-        print(f"Holdout: {len(pipelines)} pipelines (reporting only)")
+        print(f"Holdout: {len(scores)} pipelines (reporting only)")
 
-    for name, pipeline in pipelines.items():
-        fitted, _threshold = fit_pipeline_weighted(
-            pipeline,
-            X_train,
-            y_train,
-            _holdout_sample_weights(name, tuned, train_timestamps),
-        )
-        y_score = fitted.predict_proba(X_test)[:, 1]
+    for name, y_score in scores.items():
         row: dict = {
             "pipeline": name,
             "pr_auc": float(average_precision_score(y_test, y_score)),
@@ -522,8 +543,7 @@ def _merge_model_rows(
 
 def save_benchmark_results(
     *,
-    interp_ids,
-    extrap_ids,
+    model_ids,
     tuned: dict[str, dict] | None = None,
     tuned_blocked: dict[str, dict] | None = None,
     leaderboard: pd.DataFrame | None = None,
@@ -533,6 +553,8 @@ def save_benchmark_results(
     holdout_conditional: pd.DataFrame | None = None,
     holdout_conditional_random: pd.DataFrame | None = None,
     risk_coverage: pd.DataFrame | None = None,
+    risk_coverage_random: pd.DataFrame | None = None,
+    gate_reports: dict | None = None,
     holdout_split: dict | None = None,
     holdout_split_random: dict | None = None,
     process_gate: dict | None = None,
@@ -541,7 +563,9 @@ def save_benchmark_results(
     path: Path = BENCHMARK_RESULTS_PATH,
 ) -> dict:
     """Write benchmark JSON. When merge=True, update only the touched models'
-    sections in the existing file (used for single-model / single-track runs)."""
+    sections in the existing file (used for single-model runs)."""
+    interp_ids = list(model_ids)
+    extrap_ids = list(model_ids)
     payload: dict = {}
     if merge and path.exists():
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -556,9 +580,7 @@ def save_benchmark_results(
                 "in_distribution": CV_PROTOCOL_IN_DIST,
                 "extrapolation": CV_PROTOCOL_EXTRAP,
             },
-            "model_ids": list(BENCHMARK_MODEL_IDS),
-            "interpolation_model_ids": list(INTERP_MODEL_IDS),
-            "extrapolation_model_ids": list(EXTRAP_MODEL_IDS),
+            "model_ids": list(MODEL_IDS),
             "correlated_selection": {
                 "library": "feature_engine",
                 "steps": [
@@ -572,9 +594,6 @@ def save_benchmark_results(
             },
             "benchmark_rf_n_estimators": int(RF_N_ESTIMATORS),
             "benchmark_rf_max_depth": int(RF_MAX_DEPTH),
-            "benchmark_xgb_n_estimators": int(XGB_N_ESTIMATORS),
-            "benchmark_xgb_max_depth": int(XGB_MAX_DEPTH),
-            "benchmark_xgb_scale_pos_weight": float(XGB_SCALE_POS_WEIGHT),
             "holdout_is_reporting_only": True,
             "holdout_bootstrap": {
                 "n": int(HOLDOUT_BOOTSTRAP_N),
@@ -651,6 +670,10 @@ def save_benchmark_results(
         # Multi-row-per-model (one row per coverage), so replace wholesale rather
         # than merging by model id like the single-row leaderboard sections.
         payload["risk_coverage"] = risk_coverage.to_dict(orient="records")
+    if risk_coverage_random is not None:
+        payload["risk_coverage_random"] = risk_coverage_random.to_dict(orient="records")
+    if gate_reports is not None:
+        payload["gate_reports"] = gate_reports
     if process_gate is not None:
         payload["process_gate"] = process_gate
     if interp_process_gate is not None:
@@ -661,48 +684,113 @@ def save_benchmark_results(
     return payload
 
 
-def _select_model_ids(model: str | None, track: str | None) -> list[str]:
+def _select_model_ids(model: str | None) -> list[str]:
     if model is not None:
-        if model not in BENCHMARK_MODEL_IDS:
+        if model not in MODEL_IDS:
             raise SystemExit(
-                f"Unknown --model {model!r}; choose from {list(BENCHMARK_MODEL_IDS)}"
+                f"Unknown --model {model!r}; choose from {list(MODEL_IDS)}"
             )
         return [model]
-    if track == "interpolation":
-        return list(INTERP_MODEL_IDS)
-    if track == "extrapolation":
-        return list(EXTRAP_MODEL_IDS)
-    return list(BENCHMARK_MODEL_IDS)
+    return list(MODEL_IDS)
 
 
 def _parse_args(argv=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--model",
-        choices=list(BENCHMARK_MODEL_IDS),
+        choices=list(MODEL_IDS),
         help="Benchmark a single pipeline by model id (merges into existing JSON).",
-    )
-    parser.add_argument(
-        "--track",
-        choices=["interpolation", "extrapolation"],
-        help="Benchmark only one track (ignored if --model is given).",
     )
     return parser.parse_args(argv)
 
 
+def _fit_gate(gate_cls, X_train, y_train):
+    return gate_cls().fit(X_train, y_train)
+
+
+def _protocol_gate_reports(
+    scores: dict[str, np.ndarray],
+    y_test: pd.Series,
+    X_test: pd.DataFrame,
+    efa_gate: EFAGate,
+    bayes_gate: BayesGate,
+) -> dict:
+    """Conditional + risk-coverage for BOTH standalone gates on one protocol."""
+    return {
+        "efa": {
+            "config": efa_gate.config(),
+            "conditional": gate_conditional_report(
+                scores, y_test, efa_gate, X_test
+            ).to_dict(orient="records"),
+            "risk_coverage": gate_risk_coverage(
+                scores, y_test, efa_gate, X_test
+            ).to_dict(orient="records"),
+        },
+        "bayes": {
+            "config": bayes_gate.config(),
+            "conditional": gate_conditional_report(
+                scores, y_test, bayes_gate, X_test
+            ).to_dict(orient="records"),
+            "risk_coverage": gate_risk_coverage(
+                scores, y_test, bayes_gate, X_test
+            ).to_dict(orient="records"),
+        },
+    }
+
+
 def main(argv=None) -> None:
-    """Re-run after tuning. Interpolation track = stratified CV + random holdout;
-    extrapolation track = blocked CV + temporal holdout + process gate + decay.
-    A --model/--track subset merges into the existing benchmark JSON."""
+    """Re-run after tuning. Every cell runs on BOTH protocols:
+    interpolation = stratified CV + random holdout; extrapolation = blocked CV +
+    temporal holdout + time-decay. Both standalone gates (EFA, Bayes) are scored
+    on each protocol's holdout. A --model subset merges into the existing JSON."""
     args = _parse_args(argv)
-    selected = _select_model_ids(args.model, args.track)
-    interp_ids = [m for m in INTERP_MODEL_IDS if m in selected]
-    extrap_ids = [m for m in EXTRAP_MODEL_IDS if m in selected]
-    merge = set(selected) != set(BENCHMARK_MODEL_IDS)
+    selected = _select_model_ids(args.model)
+    merge = set(selected) != set(MODEL_IDS)
 
     df = load_mart()
     cols = feature_columns(df)
 
+    # --- Interpolation protocol: random stratified split ---------------------
+    rand_train_df, rand_test_df = split_train_test_random(df)
+    split_meta_random = holdout_split_summary(
+        rand_train_df, rand_test_df, split_mode="random"
+    )
+    Xr_train = rand_train_df[cols]
+    yr_train = rand_train_df[TARGET_COL].astype(int)
+    Xr_test = rand_test_df[cols]
+    yr_test = rand_test_df[TARGET_COL].astype(int)
+
+    tuned = load_all_tuned_params(model_ids=selected)
+    print("Stratified CV leaderboard (in-distribution protocol):")
+    leaderboard = run_pipeline_benchmark(
+        build_benchmark_pipelines(tuned, model_ids=selected),
+        Xr_train,
+        yr_train,
+        cv=make_repeated_stratified_cv(),
+        show_progress=True,
+    )
+    print("\nFitting random-holdout pipelines (interp):")
+    fitted_random = fit_holdout_pipelines(
+        build_benchmark_pipelines(tuned, model_ids=selected),
+        Xr_train,
+        yr_train,
+        tuned,
+        train_timestamps=None,
+    )
+    scores_random = holdout_scores(fitted_random, Xr_test)
+    print("\nRandom holdout (in-distribution):")
+    holdout_random = run_holdout_benchmark(scores_random, yr_test, tuned)
+
+    print("\nStandalone gates on the random holdout:")
+    efa_gate_random = _fit_gate(EFAGate, Xr_train, yr_train)
+    bayes_gate_random = _fit_gate(BayesGate, Xr_train, yr_train)
+    gate_random = _protocol_gate_reports(
+        scores_random, yr_test, Xr_test, efa_gate_random, bayes_gate_random
+    )
+    holdout_conditional_random = pd.DataFrame(gate_random["efa"]["conditional"])
+    risk_coverage_random = pd.DataFrame(gate_random["efa"]["risk_coverage"])
+
+    # --- Extrapolation protocol: temporal split -----------------------------
     train_df, test_df = split_train_test(df)
     split_meta = holdout_split_summary(train_df, test_df, split_mode="temporal")
     X_train = train_df[cols]
@@ -711,87 +799,53 @@ def main(argv=None) -> None:
     y_test = test_df[TARGET_COL].astype(int)
     train_ts = train_df[TIMESTAMP_COL].reset_index(drop=True)
 
-    tuned = leaderboard = holdout_random = split_meta_random = None
-    tuned_blocked = leaderboard_blocked = holdout = holdout_conditional = None
-    process_gate_config = None
-    interp_gate = holdout_conditional_random = None
-    risk_coverage = None
+    tuned_blocked = load_all_tuned_blocked_params(model_ids=selected)
+    print("\nWeighted blocked-CV leaderboard (extrapolation protocol):")
+    leaderboard_blocked = run_weighted_blocked_leaderboard(
+        build_benchmark_pipelines(tuned_blocked, extrapolation=True, model_ids=selected),
+        X_train,
+        y_train,
+        train_ts,
+        make_blocked_time_cv(train_df),
+        tuned_blocked,
+        show_progress=True,
+    )
+    print("\nFitting temporal-holdout pipelines (extrap):")
+    fitted_temporal = fit_holdout_pipelines(
+        build_benchmark_pipelines(tuned_blocked, extrapolation=True, model_ids=selected),
+        X_train,
+        y_train,
+        tuned_blocked,
+        train_timestamps=train_ts,
+    )
+    scores_temporal = holdout_scores(fitted_temporal, X_test)
+    print("\nTemporal holdout (extrapolation):")
+    holdout = run_holdout_benchmark(scores_temporal, y_test, tuned_blocked)
 
-    if interp_ids:
-        tuned = load_all_tuned_params(model_ids=interp_ids)
-        print("Stratified CV leaderboard (in-distribution protocol):")
-        leaderboard = run_pipeline_benchmark(
-            build_benchmark_pipelines(tuned, model_ids=interp_ids),
-            X_train,
-            y_train,
-            cv=make_repeated_stratified_cv(),
-            show_progress=True,
-        )
+    print("\nStandalone gates on the temporal holdout:")
+    efa_gate_temporal = _fit_gate(EFAGate, X_train, y_train)
+    bayes_gate_temporal = _fit_gate(BayesGate, X_train, y_train)
+    gate_temporal = _protocol_gate_reports(
+        scores_temporal, y_test, X_test, efa_gate_temporal, bayes_gate_temporal
+    )
+    holdout_conditional = pd.DataFrame(gate_temporal["bayes"]["conditional"])
+    risk_coverage = pd.DataFrame(gate_temporal["bayes"]["risk_coverage"])
 
-        rand_train_df, rand_test_df = split_train_test_random(df)
-        split_meta_random = holdout_split_summary(
-            rand_train_df, rand_test_df, split_mode="random"
-        )
-        Xr_train = rand_train_df[cols]
-        yr_train = rand_train_df[TARGET_COL].astype(int)
-        Xr_test = rand_test_df[cols]
-        yr_test = rand_test_df[TARGET_COL].astype(int)
-        print("\nRandom holdout (stratified-tuned, in-distribution):")
-        holdout_random = run_holdout_benchmark(
-            build_benchmark_pipelines(tuned, model_ids=interp_ids),
-            Xr_train,
-            yr_train,
-            Xr_test,
-            yr_test,
-            tuned,
-            show_progress=True,
-        )
+    gate_reports = {"random": gate_random, "temporal": gate_temporal}
 
-        print(
-            f"\nInterp process gate (post-cluster EFA T² {INTERP_GATE_LOGIC.upper()} Q, "
-            "passing-train reference):"
+    # Pipeline artifacts (reduction stages, coef summaries) are a full-run product
+    # keyed off the reference models; a single-model subset can't rebuild the
+    # shared section, so only regenerate on a full run.
+    artifacts = (
+        None
+        if merge
+        else collect_holdout_artifacts(
+            fitted_temporal, X_train, y_train, holdout_split=split_meta
         )
-        interp_gate = InterpProcessGate(
-            t2_alpha=INTERP_T2_GATE_ALPHA,
-            q_alpha=INTERP_Q_GATE_ALPHA,
-            gate_corr_threshold=INTERP_GATE_CORR_THRESHOLD,
-            logic=INTERP_GATE_LOGIC,
-        ).fit(Xr_train, yr_train)
-        holdout_conditional_random = run_interp_gate_conditional_benchmark(
-            build_benchmark_pipelines(tuned, model_ids=interp_ids),
-            Xr_train,
-            yr_train,
-            Xr_test,
-            yr_test,
-            interp_gate,
-            show_progress=True,
-        )
-
-    bayes_artifacts = None
-    if extrap_ids:
-        from secom.benchmark_extrap import run_extrapolation_benchmark
-
-        extrap_out = run_extrapolation_benchmark(
-            extrap_ids,
-            X_train,
-            y_train,
-            X_test,
-            y_test,
-            train_df,
-            train_ts,
-            holdout_split=split_meta,
-        )
-        tuned_blocked = extrap_out["tuned_blocked"]
-        leaderboard_blocked = extrap_out["leaderboard_blocked"]
-        holdout = extrap_out["holdout"]
-        holdout_conditional = extrap_out["holdout_conditional"]
-        risk_coverage = extrap_out["risk_coverage"]
-        process_gate_config = extrap_out["process_gate"]
-        bayes_artifacts = extrap_out["artifacts"]
+    )
 
     save_benchmark_results(
-        interp_ids=interp_ids,
-        extrap_ids=extrap_ids,
+        model_ids=selected,
         tuned=tuned,
         tuned_blocked=tuned_blocked,
         leaderboard=leaderboard,
@@ -801,34 +855,28 @@ def main(argv=None) -> None:
         holdout_conditional=holdout_conditional,
         holdout_conditional_random=holdout_conditional_random,
         risk_coverage=risk_coverage,
+        risk_coverage_random=risk_coverage_random,
+        gate_reports=gate_reports,
         holdout_split=split_meta,
         holdout_split_random=split_meta_random,
-        process_gate=process_gate_config,
-        interp_process_gate=interp_gate.config() if interp_gate is not None else None,
+        process_gate=bayes_gate_temporal.config(),
+        interp_process_gate=efa_gate_random.config(),
         merge=merge,
     )
-
-    if bayes_artifacts is not None:
-        # Posterior coefficient summaries + representation config per Bayesian model.
-        save_pipeline_artifacts(bayes_artifacts)
+    if artifacts is not None:
+        save_pipeline_artifacts(artifacts)
 
     print(f"\nWrote {BENCHMARK_RESULTS_PATH}")
-    if bayes_artifacts is not None:
+    if artifacts is not None:
         print(f"Wrote {PIPELINE_ARTIFACTS_PATH}")
-    if leaderboard is not None:
-        print("\nStratified CV leaderboard:")
-        print(leaderboard.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
-    if leaderboard_blocked is not None:
-        print("\nBlocked CV leaderboard:")
-        print(
-            leaderboard_blocked.to_string(index=False, float_format=lambda x: f"{x:.3f}")
-        )
-    if holdout is not None:
-        print("\nTemporal holdout (extrapolation):")
-        print(holdout.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
-    if holdout_random is not None:
-        print("\nRandom holdout (in-distribution):")
-        print(holdout_random.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
+    print("\nStratified CV leaderboard:")
+    print(leaderboard.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
+    print("\nBlocked CV leaderboard:")
+    print(leaderboard_blocked.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
+    print("\nTemporal holdout (extrapolation):")
+    print(holdout.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
+    print("\nRandom holdout (in-distribution):")
+    print(holdout_random.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
 
 
 if __name__ == "__main__":

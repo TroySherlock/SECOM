@@ -24,7 +24,6 @@ from secom.metrics import compute_holdout_metrics, predict_with_threshold
 from secom.pipelines import (
     CHAMPION_IMPUTATION_METHOD,
     CV_SCORING,
-    DECAY_LAMBDA_GRID,
     GRID_SEARCH_VERBOSE,
     KNN_IMPUTE_NEIGHBORS,
     PRIMARY_TUNING_METRIC,
@@ -38,139 +37,54 @@ from secom.pipelines import (
     split_train_test,
     time_decay_weights,
 )
-from secom.utils import json_safe, tuned_params_path
-
-from sklearn.metrics import average_precision_score
-
-
-def _sample_weight_kwargs(timestamps, train_idx, decay_lambda: float) -> dict:
-    """Fit kwargs for time-decay weighting; empty when timestamps is None.
-
-    Passing no weights (timestamps=None) is required for models whose fit does
-    not accept sample_weight (e.g. k-NN).
-    """
-    if timestamps is None:
-        return {}
-    w = time_decay_weights(timestamps.iloc[train_idx], decay_lambda)
-    return {"classifier__sample_weight": w}
-
 from secom.pipelines import (
+    BAYES_C_GRID,
+    BAYES_L1_RATIO_GRID,
+    BAYES_N_HUBS,
+    BAYES_PLS_COMPONENTS,
+    BAYES_POS_WEIGHT_GRID,
+    BAYES_TOP_K,
     C_GRID,
     CORRELATED_SELECTION_THRESHOLD,
     CORRELATED_SELECTION_THRESHOLD_GRID,
+    DECAY_LAMBDA_GRID,
     L1_RATIO_GRID,
+    MODEL_CELLS,
+    MODEL_IDS,
     N_HUBS_DEFAULT,
     N_HUBS_GRID,
     PLS_N_COMPONENTS_DEFAULT,
     PLS_N_COMPONENTS_GRID,
     RF_MAX_DEPTH,
     RF_MAX_DEPTH_GRID,
-    RF_SELECT_TOP_K,
-    RF_SELECT_TOP_K_GRID,
-    elastic_net_lr,
-    feature_pipeline,
-    interp_preprocess,
-    random_forest_classifier,
+    TOP_K_DEFAULT,
+    TOP_K_GRID,
+    build_model_pipeline,
+    is_bayesian as _is_bayesian_id,
 )
-from secom.extrap_pipelines import EXTRAP_MODEL_IDS
-from secom.extrap_pipelines import is_bayesian as _is_bayesian_id
+from secom.utils import json_safe, tuned_params_path
 
-LINEAR_TOP_K_PARAM = "preprocess__sensor_branch__select_t2_hubs__top_k"
-LINEAR_N_HUBS_PARAM = "preprocess__sensor_branch__select_t2_hubs__n_hubs"
+from sklearn.metrics import average_precision_score
+
+# --- Unified pipeline param paths --------------------------------------------
+SELECT_TOP_K_PARAM = "preprocess__sensor_branch__front_end__top_k"
+SELECT_N_HUBS_PARAM = "preprocess__sensor_branch__front_end__n_hubs"
+PLS_N_COMPONENTS_PARAM = "preprocess__sensor_branch__front_end__n_components"
 SMART_CORR_THRESHOLD_PARAM = (
     "preprocess__sensor_branch__cluster__smart_corr__threshold"
 )
-def _hub_preprocess_grid() -> dict:
-    return {
-        LINEAR_TOP_K_PARAM: [int(k) for k in RF_SELECT_TOP_K_GRID],
-        LINEAR_N_HUBS_PARAM: [int(k) for k in N_HUBS_GRID],
-        SMART_CORR_THRESHOLD_PARAM: [float(t) for t in CORRELATED_SELECTION_THRESHOLD_GRID],
-    }
+CLF_C_PARAM = "classifier__estimator__C"
+CLF_L1_PARAM = "classifier__estimator__l1_ratio"
+CLF_MAX_DEPTH_PARAM = "classifier__estimator__max_depth"
+CLF_POS_WEIGHT_PARAM = "classifier__estimator__pos_weight"
 
 
-def _hub_best_params(cv_summary: dict) -> dict:
-    return {
-        LINEAR_TOP_K_PARAM: int(cv_summary["best_top_k"]),
-        LINEAR_N_HUBS_PARAM: int(cv_summary["best_n_hubs"]),
-        SMART_CORR_THRESHOLD_PARAM: float(
-            cv_summary.get("best_corr_threshold", CORRELATED_SELECTION_THRESHOLD)
-        ),
-    }
-
-
-def _hub_preprocess_param_renames() -> dict[str, str]:
-    return {
-        f"param_{LINEAR_TOP_K_PARAM}": "top_k",
-        f"param_{LINEAR_N_HUBS_PARAM}": "n_hubs",
-        f"param_{SMART_CORR_THRESHOLD_PARAM}": "corr_threshold",
-    }
-
-
-def _hub_preprocess_groupby_cols() -> list[str]:
-    return ["top_k", "n_hubs", "corr_threshold"]
-
-
-def _hub_preprocess_best_defaults() -> dict[str, object]:
-    return {
-        "top_k": int(RF_SELECT_TOP_K),
-        "n_hubs": int(N_HUBS_DEFAULT),
-        "corr_threshold": float(CORRELATED_SELECTION_THRESHOLD),
-    }
-
-
-PLS_N_COMPONENTS_PARAM = "preprocess__sensor_branch__pls__n_components"
-
-
-def _hub_feature_pipeline(classifier, *, top_k: int = RF_SELECT_TOP_K, n_hubs: int = N_HUBS_DEFAULT):
-    """Interpolation RF-selection front-end + EFA T²/Q gate features → classifier."""
-    return feature_pipeline(
-        classifier,
-        interp_preprocess(front_end="rf", top_k=top_k, n_hubs=n_hubs, with_gate=True),
-    )
-
-
-def _pls_feature_pipeline(classifier, *, pls_n_components: int = PLS_N_COMPONENTS_DEFAULT):
-    """Interpolation PLS reduction front-end + EFA T²/Q gate features → classifier."""
-    return feature_pipeline(
-        classifier,
-        interp_preprocess(
-            front_end="pls", pls_n_components=pls_n_components, with_gate=True
-        ),
-    )
-
-
-def _pls_preprocess_grid() -> dict:
-    return {
-        PLS_N_COMPONENTS_PARAM: [int(k) for k in PLS_N_COMPONENTS_GRID],
-        SMART_CORR_THRESHOLD_PARAM: [float(t) for t in CORRELATED_SELECTION_THRESHOLD_GRID],
-    }
-
-
-def _pls_best_params(cv_summary: dict) -> dict:
-    return {
-        PLS_N_COMPONENTS_PARAM: int(cv_summary["best_pls_n_components"]),
-        SMART_CORR_THRESHOLD_PARAM: float(
-            cv_summary.get("best_corr_threshold", CORRELATED_SELECTION_THRESHOLD)
-        ),
-    }
-
-
-def _pls_preprocess_param_renames() -> dict[str, str]:
-    return {
-        f"param_{PLS_N_COMPONENTS_PARAM}": "pls_n_components",
-        f"param_{SMART_CORR_THRESHOLD_PARAM}": "corr_threshold",
-    }
-
-
-def _pls_preprocess_groupby_cols() -> list[str]:
-    return ["pls_n_components", "corr_threshold"]
-
-
-def _pls_preprocess_best_defaults() -> dict[str, object]:
-    return {
-        "pls_n_components": int(PLS_N_COMPONENTS_DEFAULT),
-        "corr_threshold": float(CORRELATED_SELECTION_THRESHOLD),
-    }
+def _sample_weight_kwargs(timestamps, train_idx, decay_lambda: float) -> dict:
+    """Fit kwargs for time-decay weighting; empty when timestamps is None."""
+    if timestamps is None:
+        return {}
+    w = time_decay_weights(timestamps.iloc[train_idx], decay_lambda)
+    return {"classifier__sample_weight": w}
 
 
 @dataclass(frozen=True)
@@ -182,200 +96,197 @@ class ModelSpec:
     groupby_cols: list[str]
     best_defaults: dict[str, object]
     build_grid_search_best_params: Callable[[dict], dict]
-    track: str = "interpolation"
+    n_jobs: int = -1
+    error_score: object = "raise"
 
 
-def _linear_lr_pipeline() -> Pipeline:
-    return _hub_feature_pipeline(
-        elastic_net_lr(
-            C=float(C_GRID[0]),
-            l1_ratio=float(L1_RATIO_GRID[0]),
-        )
+# --- Front-end grid fragments (selection vs PLS) -----------------------------
+def _selection_front_end_fragment(*, bayes: bool) -> dict:
+    """Grid / renames / defaults / best-params for HSIC & RF-selection front-ends."""
+    if bayes:
+        grid = {
+            SELECT_TOP_K_PARAM: [int(BAYES_TOP_K)],
+            SELECT_N_HUBS_PARAM: [int(BAYES_N_HUBS)],
+            SMART_CORR_THRESHOLD_PARAM: [float(CORRELATED_SELECTION_THRESHOLD)],
+        }
+    else:
+        grid = {
+            SELECT_TOP_K_PARAM: [int(k) for k in TOP_K_GRID],
+            SELECT_N_HUBS_PARAM: [int(k) for k in N_HUBS_GRID],
+            SMART_CORR_THRESHOLD_PARAM: [
+                float(t) for t in CORRELATED_SELECTION_THRESHOLD_GRID
+            ],
+        }
+    return {
+        "grid": grid,
+        "renames": {
+            f"param_{SELECT_TOP_K_PARAM}": "top_k",
+            f"param_{SELECT_N_HUBS_PARAM}": "n_hubs",
+            f"param_{SMART_CORR_THRESHOLD_PARAM}": "corr_threshold",
+        },
+        "groupby": ["top_k", "n_hubs", "corr_threshold"],
+        "defaults": {
+            "top_k": int(BAYES_TOP_K if bayes else TOP_K_DEFAULT),
+            "n_hubs": int(BAYES_N_HUBS if bayes else N_HUBS_DEFAULT),
+            "corr_threshold": float(CORRELATED_SELECTION_THRESHOLD),
+        },
+        "best": lambda cv: {
+            SELECT_TOP_K_PARAM: int(cv["best_top_k"]),
+            SELECT_N_HUBS_PARAM: int(cv["best_n_hubs"]),
+            SMART_CORR_THRESHOLD_PARAM: float(
+                cv.get("best_corr_threshold", CORRELATED_SELECTION_THRESHOLD)
+            ),
+        },
+    }
+
+
+def _pls_front_end_fragment(*, bayes: bool) -> dict:
+    if bayes:
+        grid = {
+            PLS_N_COMPONENTS_PARAM: [int(BAYES_PLS_COMPONENTS)],
+            SMART_CORR_THRESHOLD_PARAM: [float(CORRELATED_SELECTION_THRESHOLD)],
+        }
+    else:
+        grid = {
+            PLS_N_COMPONENTS_PARAM: [int(k) for k in PLS_N_COMPONENTS_GRID],
+            SMART_CORR_THRESHOLD_PARAM: [
+                float(t) for t in CORRELATED_SELECTION_THRESHOLD_GRID
+            ],
+        }
+    return {
+        "grid": grid,
+        "renames": {
+            f"param_{PLS_N_COMPONENTS_PARAM}": "pls_n_components",
+            f"param_{SMART_CORR_THRESHOLD_PARAM}": "corr_threshold",
+        },
+        "groupby": ["pls_n_components", "corr_threshold"],
+        "defaults": {
+            "pls_n_components": int(BAYES_PLS_COMPONENTS if bayes else PLS_N_COMPONENTS_DEFAULT),
+            "corr_threshold": float(CORRELATED_SELECTION_THRESHOLD),
+        },
+        "best": lambda cv: {
+            PLS_N_COMPONENTS_PARAM: int(cv["best_pls_n_components"]),
+            SMART_CORR_THRESHOLD_PARAM: float(
+                cv.get("best_corr_threshold", CORRELATED_SELECTION_THRESHOLD)
+            ),
+        },
+    }
+
+
+def _front_end_fragment(front_end: str, *, bayes: bool) -> dict:
+    if front_end == "pls":
+        return _pls_front_end_fragment(bayes=bayes)
+    return _selection_front_end_fragment(bayes=bayes)
+
+
+# --- Classifier-head grid fragments ------------------------------------------
+def _enet_head_fragment() -> dict:
+    return {
+        "grid": {
+            CLF_C_PARAM: [float(c) for c in C_GRID],
+            CLF_L1_PARAM: [float(r) for r in L1_RATIO_GRID],
+        },
+        "renames": {
+            f"param_{CLF_C_PARAM}": "c",
+            f"param_{CLF_L1_PARAM}": "l1_ratio",
+        },
+        "groupby": ["c", "l1_ratio"],
+        "defaults": {"c": float(C_GRID[0]), "l1_ratio": float(L1_RATIO_GRID[0])},
+        "best": lambda cv: {
+            CLF_C_PARAM: float(cv["best_c"]),
+            CLF_L1_PARAM: float(cv["best_l1_ratio"]),
+        },
+    }
+
+
+def _rf_head_fragment() -> dict:
+    return {
+        "grid": {CLF_MAX_DEPTH_PARAM: [int(d) for d in RF_MAX_DEPTH_GRID]},
+        "renames": {f"param_{CLF_MAX_DEPTH_PARAM}": "max_depth"},
+        "groupby": ["max_depth"],
+        "defaults": {"max_depth": int(RF_MAX_DEPTH)},
+        "best": lambda cv: {CLF_MAX_DEPTH_PARAM: int(cv["best_max_depth"])},
+    }
+
+
+def _bayes_head_fragment() -> dict:
+    return {
+        "grid": {
+            CLF_C_PARAM: [float(c) for c in BAYES_C_GRID],
+            CLF_L1_PARAM: [float(r) for r in BAYES_L1_RATIO_GRID],
+            CLF_POS_WEIGHT_PARAM: [float(w) for w in BAYES_POS_WEIGHT_GRID],
+        },
+        "renames": {
+            f"param_{CLF_C_PARAM}": "c",
+            f"param_{CLF_L1_PARAM}": "l1_ratio",
+            f"param_{CLF_POS_WEIGHT_PARAM}": "pos_weight",
+        },
+        "groupby": ["c", "l1_ratio", "pos_weight"],
+        "defaults": {
+            "c": float(BAYES_C_GRID[0]),
+            "l1_ratio": float(BAYES_L1_RATIO_GRID[0]),
+            "pos_weight": float(BAYES_POS_WEIGHT_GRID[0]),
+        },
+        "best": lambda cv: {
+            CLF_C_PARAM: float(cv["best_c"]),
+            CLF_L1_PARAM: float(cv["best_l1_ratio"]),
+            CLF_POS_WEIGHT_PARAM: float(cv["best_pos_weight"]),
+        },
+    }
+
+
+_HEAD_FRAGMENTS = {
+    "enet": _enet_head_fragment,
+    "rf": _rf_head_fragment,
+    "bayes": _bayes_head_fragment,
+}
+
+
+def _make_spec(model_id: str) -> ModelSpec:
+    front_end, classifier_kind = MODEL_CELLS[model_id]
+    bayes = classifier_kind == "bayes"
+    fe = _front_end_fragment(front_end, bayes=bayes)
+    head = _HEAD_FRAGMENTS[classifier_kind]()
+
+    def build_pipeline() -> Pipeline:
+        return build_model_pipeline(front_end, classifier_kind)
+
+    def make_param_grid() -> dict:
+        return {**fe["grid"], **head["grid"]}
+
+    def best_params(cv_summary: dict) -> dict:
+        return {**fe["best"](cv_summary), **head["best"](cv_summary)}
+
+    return ModelSpec(
+        model_id=model_id,
+        build_pipeline=build_pipeline,
+        make_param_grid=make_param_grid,
+        param_renames={**fe["renames"], **head["renames"]},
+        groupby_cols=[*fe["groupby"], *head["groupby"]],
+        best_defaults={**fe["defaults"], **head["defaults"]},
+        build_grid_search_best_params=best_params,
+        n_jobs=1 if bayes else -1,
+        # HSIC folds can go singular and Bayesian ADVI can blow up; nan keeps one
+        # bad fold from aborting the whole search.
+        error_score=(np.nan if (bayes or front_end == "hsic") else "raise"),
     )
 
 
-def _linear_lr_grid() -> dict:
-    return {
-        **_hub_preprocess_grid(),
-        "classifier__estimator__C": [float(c) for c in C_GRID],
-        "classifier__estimator__l1_ratio": [float(r) for r in L1_RATIO_GRID],
-    }
+MODEL_SPECS: dict[str, ModelSpec] = {mid: _make_spec(mid) for mid in MODEL_IDS}
 
-
-def _linear_lr_best_params(cv_summary: dict) -> dict:
-    return {
-        **_hub_best_params(cv_summary),
-        "classifier__estimator__C": float(cv_summary["best_c"]),
-        "classifier__estimator__l1_ratio": float(cv_summary["best_l1_ratio"]),
-    }
-
-
-def _topk_rf_pipeline() -> Pipeline:
-    return _hub_feature_pipeline(random_forest_classifier())
-
-
-def _topk_rf_grid() -> dict:
-    return {
-        **_hub_preprocess_grid(),
-        "classifier__estimator__max_depth": [int(d) for d in RF_MAX_DEPTH_GRID],
-    }
-
-
-def _topk_rf_best_params(cv_summary: dict) -> dict:
-    return {
-        **_hub_best_params(cv_summary),
-        "classifier__estimator__max_depth": int(cv_summary["best_max_depth"]),
-    }
-
-
-def _pls_enet_pipeline() -> Pipeline:
-    return _pls_feature_pipeline(
-        elastic_net_lr(
-            C=float(C_GRID[0]),
-            l1_ratio=float(L1_RATIO_GRID[0]),
-        )
-    )
-
-
-def _pls_enet_grid() -> dict:
-    return {
-        **_pls_preprocess_grid(),
-        "classifier__estimator__C": [float(c) for c in C_GRID],
-        "classifier__estimator__l1_ratio": [float(r) for r in L1_RATIO_GRID],
-    }
-
-
-def _pls_enet_best_params(cv_summary: dict) -> dict:
-    return {
-        **_pls_best_params(cv_summary),
-        "classifier__estimator__C": float(cv_summary["best_c"]),
-        "classifier__estimator__l1_ratio": float(cv_summary["best_l1_ratio"]),
-    }
-
-
-def _pls_rf_pipeline() -> Pipeline:
-    return _pls_feature_pipeline(random_forest_classifier())
-
-
-def _pls_rf_grid() -> dict:
-    return {
-        **_pls_preprocess_grid(),
-        "classifier__estimator__max_depth": [int(d) for d in RF_MAX_DEPTH_GRID],
-    }
-
-
-def _pls_rf_best_params(cv_summary: dict) -> dict:
-    return {
-        **_pls_best_params(cv_summary),
-        "classifier__estimator__max_depth": int(cv_summary["best_max_depth"]),
-    }
-
-
-_LINEAR_LR_RENAMES = {
-    **_hub_preprocess_param_renames(),
-    "param_classifier__estimator__C": "c",
-    "param_classifier__estimator__l1_ratio": "l1_ratio",
-}
-_LINEAR_LR_GROUPBY = [*_hub_preprocess_groupby_cols(), "c", "l1_ratio"]
-_LINEAR_LR_DEFAULTS = {
-    **_hub_preprocess_best_defaults(),
-    "c": float(C_GRID[0]),
-    "l1_ratio": float(L1_RATIO_GRID[0]),
-}
-
-_TOPK_RF_RENAMES = {
-    **_hub_preprocess_param_renames(),
-    "param_classifier__estimator__max_depth": "max_depth",
-}
-_TOPK_RF_GROUPBY = [*_hub_preprocess_groupby_cols(), "max_depth"]
-_TOPK_RF_DEFAULTS = {
-    **_hub_preprocess_best_defaults(),
-    "max_depth": int(RF_MAX_DEPTH),
-}
-
-_PLS_ENET_RENAMES = {
-    **_pls_preprocess_param_renames(),
-    "param_classifier__estimator__C": "c",
-    "param_classifier__estimator__l1_ratio": "l1_ratio",
-}
-_PLS_ENET_GROUPBY = [*_pls_preprocess_groupby_cols(), "c", "l1_ratio"]
-_PLS_ENET_DEFAULTS = {
-    **_pls_preprocess_best_defaults(),
-    "c": float(C_GRID[0]),
-    "l1_ratio": float(L1_RATIO_GRID[0]),
-}
-
-_PLS_RF_RENAMES = {
-    **_pls_preprocess_param_renames(),
-    "param_classifier__estimator__max_depth": "max_depth",
-}
-_PLS_RF_GROUPBY = [*_pls_preprocess_groupby_cols(), "max_depth"]
-_PLS_RF_DEFAULTS = {
-    **_pls_preprocess_best_defaults(),
-    "max_depth": int(RF_MAX_DEPTH),
-}
-
-MODEL_SPECS: dict[str, ModelSpec] = {
-    "intrap_linear_lr": ModelSpec(
-        model_id="intrap_linear_lr",
-        build_pipeline=_linear_lr_pipeline,
-        make_param_grid=_linear_lr_grid,
-        param_renames=_LINEAR_LR_RENAMES,
-        groupby_cols=_LINEAR_LR_GROUPBY,
-        best_defaults=_LINEAR_LR_DEFAULTS,
-        build_grid_search_best_params=_linear_lr_best_params,
-        track="interpolation",
-    ),
-    "intrap_topk_rf": ModelSpec(
-        model_id="intrap_topk_rf",
-        build_pipeline=_topk_rf_pipeline,
-        make_param_grid=_topk_rf_grid,
-        param_renames=_TOPK_RF_RENAMES,
-        groupby_cols=_TOPK_RF_GROUPBY,
-        best_defaults=_TOPK_RF_DEFAULTS,
-        build_grid_search_best_params=_topk_rf_best_params,
-        track="interpolation",
-    ),
-    "intrap_pls_enet": ModelSpec(
-        model_id="intrap_pls_enet",
-        build_pipeline=_pls_enet_pipeline,
-        make_param_grid=_pls_enet_grid,
-        param_renames=_PLS_ENET_RENAMES,
-        groupby_cols=_PLS_ENET_GROUPBY,
-        best_defaults=_PLS_ENET_DEFAULTS,
-        build_grid_search_best_params=_pls_enet_best_params,
-        track="interpolation",
-    ),
-    "intrap_pls_rf": ModelSpec(
-        model_id="intrap_pls_rf",
-        build_pipeline=_pls_rf_pipeline,
-        make_param_grid=_pls_rf_grid,
-        param_renames=_PLS_RF_RENAMES,
-        groupby_cols=_PLS_RF_GROUPBY,
-        best_defaults=_PLS_RF_DEFAULTS,
-        build_grid_search_best_params=_pls_rf_best_params,
-        track="interpolation",
-    ),
-}
-
-# Track-aware unified lookup: sklearn MODEL_SPECS (interpolation) are tuned via
-# GridSearchCV; the extrapolation ids are Bayesian and tuned via bayes/harness.py.
+# Both protocols run every cell; tuning loops (id, track).
 TRACKS = ("interpolation", "extrapolation")
-ALL_MODEL_IDS: tuple[str, ...] = tuple(MODEL_SPECS.keys()) + tuple(EXTRAP_MODEL_IDS)
+ALL_MODEL_IDS: tuple[str, ...] = tuple(MODEL_IDS)
 
 
 def is_bayesian(model_id: str) -> bool:
-    """True for extrapolation-track Bayesian models (no sklearn ModelSpec)."""
+    """True for the Bayesian-head cells (still plain sklearn pipelines now)."""
     return bool(_is_bayesian_id(model_id))
 
 
 def model_ids_for_track(track: str | None = None) -> list[str]:
-    """Model ids filtered by track across both registries; all ids when None."""
-    if track == "extrapolation":
-        return list(EXTRAP_MODEL_IDS)
-    if track == "interpolation":
-        return [mid for mid, spec in MODEL_SPECS.items() if spec.track == "interpolation"]
-    return list(ALL_MODEL_IDS)
+    """All 9 ids run on every protocol, so track only narrows the CLI label."""
+    return list(MODEL_IDS)
 
 
 def _resolved_classifier_threshold(tuned_payload: dict) -> float:
@@ -388,26 +299,19 @@ def _resolved_classifier_threshold(tuned_payload: dict) -> float:
 
 
 def resolve_grid_search_best_params(model_id: str, tuned_payload: dict) -> dict:
-    """Resolve tuned grid-search params for the current pipeline param names."""
-    raw = dict(tuned_payload.get("grid_search_best_params") or {})
-    cv_summary = tuned_payload.get("cv_summary") or {}
+    """Tuned grid-search params filtered to the current pipeline param names.
 
-    if LINEAR_TOP_K_PARAM not in raw and cv_summary.get("best_top_k") is not None:
-        raw[LINEAR_TOP_K_PARAM] = int(cv_summary["best_top_k"])
-
-    if LINEAR_N_HUBS_PARAM not in raw:
-        if cv_summary.get("best_n_hubs") is not None:
-            raw[LINEAR_N_HUBS_PARAM] = int(cv_summary["best_n_hubs"])
-        else:
-            raw[LINEAR_N_HUBS_PARAM] = int(N_HUBS_DEFAULT)
-
-    if SMART_CORR_THRESHOLD_PARAM not in raw:
-        if cv_summary.get("best_corr_threshold") is not None:
-            raw[SMART_CORR_THRESHOLD_PARAM] = float(cv_summary["best_corr_threshold"])
-        else:
-            raw[SMART_CORR_THRESHOLD_PARAM] = float(CORRELATED_SELECTION_THRESHOLD)
-
+    Falls back to rebuilding them from ``cv_summary`` (``best_*`` keys) when the
+    payload omits the explicit param dict.
+    """
     spec = MODEL_SPECS[model_id]
+    raw = dict(tuned_payload.get("grid_search_best_params") or {})
+    if not raw:
+        cv_summary = tuned_payload.get("cv_summary") or {}
+        try:
+            raw = spec.build_grid_search_best_params(cv_summary)
+        except KeyError:
+            raw = {}
     valid = spec.build_pipeline().get_params(deep=True)
     return {k: v for k, v in raw.items() if k in valid}
 
@@ -999,8 +903,8 @@ def run_grid_search(
         cv=cv,
         scoring=CV_SCORING,
         refit=False,
-        n_jobs=-1,
+        n_jobs=spec.n_jobs,
         verbose=verbose,
-        error_score="raise",
+        error_score=spec.error_score,
     )
     return search, n_candidates, n_splits, total_fits

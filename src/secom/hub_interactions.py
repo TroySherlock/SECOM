@@ -26,6 +26,38 @@ def _columns_matching(columns: Iterable[str], pattern: re.Pattern[str]) -> list[
     return [col for col in columns if pattern.fullmatch(str(col))]
 
 
+def _ensure_numpy_linalg_compat() -> None:
+    """pyHSICLasso's nlars references the NumPy<2 private alias ``np.linalg.linalg``.
+
+    NumPy 2.x removed it, which turns nlars's singular-matrix recovery
+    (``except np.linalg.linalg.LinAlgError``) into an ``AttributeError``. Restore
+    the alias so the library's own noise-injection fallback works.
+    """
+    if not hasattr(np.linalg, "linalg"):
+        np.linalg.linalg = np.linalg  # type: ignore[attr-defined]
+
+
+def _select_hsic(X: np.ndarray, y: np.ndarray, k: int) -> list[int]:
+    """Top-k feature indices by Block HSIC-Lasso nonlinear screening (ranked)."""
+    import contextlib
+    import io
+    import warnings
+
+    from pyHSICLasso import HSICLasso
+
+    _ensure_numpy_linalg_compat()
+    hl = HSICLasso()
+    hl.input(np.asarray(X, dtype=float), np.asarray(y, dtype=int))
+    # Block HSIC Lasso (library default B/M): exact HSIC is O(n^2) per feature and
+    # far too slow across the tuning grid. redirect_stdout swallows the library's
+    # progress prints; catch_warnings drops the "B must be an exact divisor" notice.
+    with contextlib.redirect_stdout(io.StringIO()), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        hl.classification(int(k))
+    idx = [int(i) for i in hl.get_index()]
+    return idx[:k]
+
+
 class MahalanobisT2Features(BaseEstimator, TransformerMixin):
     """Hotelling T² via LedoitWolf (or EmpiricalCovariance) squared Mahalanobis distance."""
 
@@ -258,6 +290,73 @@ class LinearSelectT2HubBlock(BaseEstimator, TransformerMixin):
                 out.columns = cols
             return out
         return pd.DataFrame(X_sel, index=X_df.index, columns=cols)
+
+    @staticmethod
+    def _as_dataframe(X) -> pd.DataFrame:
+        if isinstance(X, pd.DataFrame):
+            df = X.copy()
+        else:
+            df = pd.DataFrame(X)
+        df.columns = df.columns.astype(str)
+        return df
+
+
+class HSICSelectHubBlock(BaseEstimator, TransformerMixin):
+    """HSIC-Lasso top-k selection, Hotelling T2, and hub pair interactions.
+
+    The selection-front-end analogue of ``LinearSelectT2HubBlock`` but with
+    nonlinear Block HSIC-Lasso screening instead of RF impurity. Fits on the
+    post-cluster matrix (already reduced by ``SmartCorrelatedSelection``).
+    """
+
+    def __init__(
+        self,
+        top_k: int = 15,
+        n_hubs: int = 8,
+    ):
+        self.top_k = top_k
+        self.n_hubs = n_hubs
+
+    def fit(self, X, y=None):
+        X_df = self._as_dataframe(X)
+        self.feature_names_in_ = list(X_df.columns)
+        cols = list(X_df.columns)
+        k = max(1, min(int(self.top_k), len(cols)))
+        idx = _select_hsic(X_df.to_numpy(dtype=float), np.asarray(y, dtype=int), k)
+        if not idx:
+            idx = list(range(k))
+        self.selected_columns_ = [str(cols[i]) for i in idx]
+        X_sel = X_df[self.selected_columns_]
+
+        self.t2_ = MahalanobisT2Features()
+        self.t2_.fit(X_sel, y)
+
+        n = max(0, int(self.n_hubs))
+        self.hubs_ = list(self.selected_columns_[:n])
+        self.interaction_pairs_ = list(combinations(self.hubs_, 2))
+        self.interaction_names_ = [
+            _interaction_column_name(a, b) for a, b in self.interaction_pairs_
+        ]
+        self.n_interaction_features_ = len(self.interaction_names_)
+        return self
+
+    def transform(self, X):
+        check_is_fitted(self, "selected_columns_")
+        X_df = self._as_dataframe(X)
+        X_sel = X_df[self.selected_columns_]
+
+        t2_df = self.t2_.transform(X_sel)[[DEFAULT_T2_COL]]
+        parts: list[pd.DataFrame] = [X_sel, t2_df]
+        if self.interaction_pairs_:
+            parts.append(_interaction_frame(X_sel, self.interaction_pairs_))
+        return pd.concat(parts, axis=1)
+
+    def get_feature_names_out(self, input_features=None):
+        check_is_fitted(self, "t2_")
+        names: list[str] = list(self.selected_columns_)
+        names.append(DEFAULT_T2_COL)
+        names.extend(list(self.interaction_names_))
+        return np.asarray(names, dtype=object)
 
     @staticmethod
     def _as_dataframe(X) -> pd.DataFrame:

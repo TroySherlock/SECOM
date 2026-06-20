@@ -7,8 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from secom.pipelines import (
-    EXTRAP_MODEL_IDS,
-    INTERP_MODEL_IDS,
+    MODEL_IDS,
     TUNED_BLOCKED_PARAMS_DIR,
     TUNED_PARAMS_DIR,
 )
@@ -57,9 +56,9 @@ def load_tuned_blocked_params(model_id: str) -> dict:
 
 def load_all_tuned_params(
     base_dir: Path = TUNED_PARAMS_DIR,
-    model_ids=INTERP_MODEL_IDS,
+    model_ids=MODEL_IDS,
 ) -> dict[str, dict]:
-    """Load tuned params for the given model ids (interpolation track by default)."""
+    """Load tuned params for the given model ids (all 9 by default)."""
     model_ids = list(model_ids)
     missing = [
         model_id
@@ -75,8 +74,8 @@ def load_all_tuned_params(
     return {model_id: load_tuned_params(model_id, base_dir) for model_id in model_ids}
 
 
-def load_all_tuned_blocked_params(model_ids=EXTRAP_MODEL_IDS) -> dict[str, dict]:
-    """Load blocked-tuned params for the extrapolation track by default."""
+def load_all_tuned_blocked_params(model_ids=MODEL_IDS) -> dict[str, dict]:
+    """Load blocked-tuned (temporal protocol) params (all 9 by default)."""
     return load_all_tuned_params(TUNED_BLOCKED_PARAMS_DIR, model_ids=model_ids)
 
 

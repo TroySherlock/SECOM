@@ -16,12 +16,16 @@ from secom.costs import (
 from secom.pipelines import (
     BENCHMARK_MODEL_IDS,
     BENCHMARK_RESULTS_PATH,
+    MODEL_CELLS,
+    MODEL_IDS,
     N_SENSORS,
     PIPELINE_ARTIFACTS_PATH,
 )
 from secom.utils import load_tuned_params
 
-REFERENCE_MODELS = {"linear": "extrap_hsic_rw", "topk": "extrap_rf_static"}
+# Reduction widget + shared cluster example reference (both RF-selection cells).
+REFERENCE_MODELS = {"linear": "rfsel_enet", "topk": "rfsel_rf"}
+TRACKS: tuple[str, str] = ("extrapolation", "interpolation")
 
 
 @dataclass(frozen=True)
@@ -33,148 +37,52 @@ class ModelInfo:
     feature_path: str
     description: str
     tuning_notebook: str
-    explainability: Literal["linear", "tree", "knn", "bayesian"]
-    track: Literal["interpolation", "extrapolation"] = "interpolation"
+    explainability: Literal["linear", "tree", "bayesian"]
+    track: str = "both"
 
 
-_SHARED_FEATURE_PATH = (
-    "Median impute → cluster → RF top-k → T² → hub pairs → scale"
-)
-_PLS_FEATURE_PATH = "Median impute → cluster → PLS components → scale"
-# Interpolation models also carry the Regularized-EFA gate (gate_t2 / gate_q).
-_INTERP_GATE_NOTE = " (+ EFA T²/Q gate features)"
-# Extrapolation (Bayesian) feature paths: rolling-Z screening → interaction frame.
-_BAYES_HSIC_PATH = "Rolling-Z sensors → HSIC-Lasso select K → interaction frame (mains+pairs+squares)"
-_BAYES_RF_PATH = "Rolling-Z sensors → random-forest importance select K → interaction frame (mains+pairs+squares)"
-
-MODEL_CATALOG: dict[str, ModelInfo] = {
-    "intrap_linear_lr": ModelInfo(
-        model_id="intrap_linear_lr",
-        display_name="RF-select → Elastic Net (interp)",
-        family="Interpolation track",
-        classifier="Logistic regression (elastic net, saga)",
-        feature_path=f"{_SHARED_FEATURE_PATH}{_INTERP_GATE_NOTE} → elastic-net LR",
-        description=(
-            "Elastic-net logistic regression on the RF-selection sensor path, "
-            "with Regularized-EFA T²/Q gate features."
-        ),
-        tuning_notebook="tuning/intrap_linear_lr.ipynb",
-        explainability="linear",
-        track="interpolation",
-    ),
-    "intrap_topk_rf": ModelInfo(
-        model_id="intrap_topk_rf",
-        display_name="RF-select → Random Forest (interp)",
-        family="Interpolation track",
-        classifier="Random forest",
-        feature_path=f"{_SHARED_FEATURE_PATH}{_INTERP_GATE_NOTE} → RF",
-        description=(
-            "Random forest on the RF-selection sensor path, with "
-            "Regularized-EFA T²/Q gate features."
-        ),
-        tuning_notebook="tuning/intrap_topk_rf.ipynb",
-        explainability="tree",
-        track="interpolation",
-    ),
-    "intrap_pls_enet": ModelInfo(
-        model_id="intrap_pls_enet",
-        display_name="PLS → Elastic Net (interp)",
-        family="Interpolation track",
-        classifier="Logistic regression (elastic net, saga)",
-        feature_path=f"{_PLS_FEATURE_PATH}{_INTERP_GATE_NOTE} → elastic-net LR",
-        description=(
-            "Elastic-net logistic regression on PLS latent components, with "
-            "Regularized-EFA T²/Q gate features."
-        ),
-        tuning_notebook="tuning/intrap_pls_enet.ipynb",
-        explainability="linear",
-        track="interpolation",
-    ),
-    "intrap_pls_rf": ModelInfo(
-        model_id="intrap_pls_rf",
-        display_name="PLS → Random Forest (interp)",
-        family="Interpolation track",
-        classifier="Random forest",
-        feature_path=f"{_PLS_FEATURE_PATH}{_INTERP_GATE_NOTE} → RF",
-        description=(
-            "Random forest on PLS latent components, with Regularized-EFA "
-            "T²/Q gate features."
-        ),
-        tuning_notebook="tuning/intrap_pls_rf.ipynb",
-        explainability="tree",
-        track="interpolation",
-    ),
-    "extrap_hsic_static": ModelInfo(
-        model_id="extrap_hsic_static",
-        display_name="HSIC → Bayesian enet (static)",
-        family="Extrapolation track",
-        classifier="Bayesian elastic-net logistic (static intercept)",
-        feature_path=f"{_BAYES_HSIC_PATH} → static Bayesian enet",
-        description=(
-            "HSIC-Lasso nonlinear screening + physical interaction frame, then a "
-            "static Bayesian elastic-net logistic head (blocked CV, temporal holdout)."
-        ),
-        tuning_notebook="(harness) python -m secom.cli.run_tuning --model extrap_hsic_static",
-        explainability="bayesian",
-        track="extrapolation",
-    ),
-    "extrap_hsic_rw": ModelInfo(
-        model_id="extrap_hsic_rw",
-        display_name="HSIC → Bayesian enet (RW intercept)",
-        family="Extrapolation track",
-        classifier="Bayesian elastic-net logistic (random-walk intercept)",
-        feature_path=f"{_BAYES_HSIC_PATH} → RW-intercept Bayesian enet",
-        description=(
-            "HSIC-Lasso screening + interaction frame with a random-walk intercept "
-            "that tracks base-rate drift across time blocks."
-        ),
-        tuning_notebook="(harness) python -m secom.cli.run_tuning --model extrap_hsic_rw",
-        explainability="bayesian",
-        track="extrapolation",
-    ),
-    "extrap_rf_static": ModelInfo(
-        model_id="extrap_rf_static",
-        display_name="RF select → Bayesian enet (static)",
-        family="Extrapolation track",
-        classifier="Bayesian elastic-net logistic (static intercept)",
-        feature_path=f"{_BAYES_RF_PATH} → static Bayesian enet",
-        description=(
-            "Random-forest importance screening + interaction frame, then a static "
-            "Bayesian elastic-net logistic head."
-        ),
-        tuning_notebook="(harness) python -m secom.cli.run_tuning --model extrap_rf_static",
-        explainability="bayesian",
-        track="extrapolation",
-    ),
-    "extrap_rf_rw": ModelInfo(
-        model_id="extrap_rf_rw",
-        display_name="RF select → Bayesian enet (RW intercept)",
-        family="Extrapolation track",
-        classifier="Bayesian elastic-net logistic (random-walk intercept)",
-        feature_path=f"{_BAYES_RF_PATH} → RW-intercept Bayesian enet",
-        description=(
-            "Random-forest importance screening + interaction frame with a random-walk "
-            "intercept for base-rate drift."
-        ),
-        tuning_notebook="(harness) python -m secom.cli.run_tuning --model extrap_rf_rw",
-        explainability="bayesian",
-        track="extrapolation",
-    ),
-    "extrap_spls_rw": ModelInfo(
-        model_id="extrap_spls_rw",
-        display_name="sPLS → Bayesian enet (RW intercept)",
-        family="Extrapolation track",
-        classifier="Bayesian elastic-net logistic (random-walk intercept)",
-        feature_path="Rolling-Z sensors → sPLS components → RW-intercept Bayesian enet",
-        description=(
-            "Supervised PLS aggregation (distributed-signal comparator) with a "
-            "random-walk-intercept Bayesian elastic-net head."
-        ),
-        tuning_notebook="(harness) python -m secom.cli.run_tuning --model extrap_spls_rw",
-        explainability="bayesian",
-        track="extrapolation",
-    ),
+# Each of the 9 cells runs on BOTH protocols; the dashboard's track selector
+# picks which protocol's tuned artifacts/holdout to view.
+_FRONT_END_LABEL = {
+    "hsic": "HSIC-Lasso select K → T² → hub pairs",
+    "rfsel": "RF-select K → T² → hub pairs",
+    "pls": "sPLS components",
 }
+_FRONT_END_NAME = {"hsic": "HSIC", "rfsel": "RF-select", "pls": "sPLS"}
+_CLASSIFIER_LABEL = {
+    "enet": "Elastic-net logistic (saga)",
+    "rf": "Random forest",
+    "bayes": "Bayesian elastic-net logistic (NumPyro)",
+}
+_CLASSIFIER_NAME = {"enet": "Elastic Net", "rf": "Random Forest", "bayes": "Bayesian enet"}
+_EXPLAINABILITY: dict[str, Literal["linear", "tree", "bayesian"]] = {
+    "enet": "linear",
+    "rf": "tree",
+    "bayes": "bayesian",
+}
+
+
+def _build_model_info(model_id: str) -> ModelInfo:
+    front_end, classifier_kind = MODEL_CELLS[model_id]
+    fe_path = _FRONT_END_LABEL[front_end]
+    return ModelInfo(
+        model_id=model_id,
+        display_name=f"{_FRONT_END_NAME[front_end]} → {_CLASSIFIER_NAME[classifier_kind]}",
+        family="Unified 3×3 grid",
+        classifier=_CLASSIFIER_LABEL[classifier_kind],
+        feature_path=f"raw+rz → impute → cluster → {fe_path} → scale → {_CLASSIFIER_LABEL[classifier_kind]}",
+        description=(
+            f"{_FRONT_END_LABEL[front_end]} front-end into a "
+            f"{_CLASSIFIER_LABEL[classifier_kind]} head; calibrated (isotonic) and "
+            "run on both the random-stratified and blocked-temporal protocols."
+        ),
+        tuning_notebook=f"python -m secom.cli.run_tuning --model {model_id}",
+        explainability=_EXPLAINABILITY[classifier_kind],
+        track="both",
+    )
+
+
+MODEL_CATALOG: dict[str, ModelInfo] = {mid: _build_model_info(mid) for mid in MODEL_IDS}
 
 
 def load_benchmark_results(path: Path | str = BENCHMARK_RESULTS_PATH) -> dict[str, Any]:

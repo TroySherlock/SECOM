@@ -1,22 +1,17 @@
-"""Extrapolation process gate: sBFA -> BayesianGaussianMixture density + Q (SPE).
+"""Bayesian gate: sBFA -> BayesianGaussianMixture density + Q (SPE).
 
-The interpolation gate (``secom.gates.efa.InterpProcessGate``) uses a Regularized
-EFA -> Hotelling T2 + Q monitor. This is its extrapolation analogue: a *sparse
-Bayesian factor analysis* (NumPyro, ADVI) replaces the frequentist EFA, a
+The EFA gate (``secom.gates.efa.EFAGate``) uses a Regularized EFA -> Hotelling T2
++ Q monitor. ``BayesGate`` is its Bayesian analogue: a *sparse Bayesian factor
+analysis* (NumPyro, ADVI) replaces the frequentist EFA, a
 ``BayesianGaussianMixture`` density on the factor scores replaces the Hotelling
 T2 density, and the same Q / SPE reconstruction statistic flags structural
-breaks the factor model cannot explain. There is deliberately no Hotelling T2
-and no Isolation Forest here.
+breaks the factor model cannot explain. No Hotelling T2 and no Isolation Forest.
 
 The gate scores wafers in the RAW post-cluster sensor space (impute ->
-SmartCorrelatedSelection, the same front-end as the interp gate), *not* the
-rolling-Z space the yield models consume. Raw absolutes retain the drift/level
-the rolling-Z transform normalises away, so the gate stays orthogonal to the
+SmartCorrelatedSelection), not the rolling-Z space, so it stays orthogonal to the
 yield models and flags process excursions they do not already capture. It is fit
-once on the passing training wafers so the statistics measure deviation from
-in-control behaviour. Control limits are empirical passing-wafer quantiles: a
-low BGM log-density (``alpha`` lower tail) or a high SPE (``alpha`` upper tail)
-trips the gate.
+on the passing training wafers; control limits are empirical passing-wafer
+quantiles (low BGM log-density or high SPE trips the gate).
 """
 from __future__ import annotations
 
@@ -26,19 +21,19 @@ from sklearn.mixture import BayesianGaussianMixture
 from sklearn.preprocessing import RobustScaler
 
 from secom.core import RANDOM_SEED, build_gate_feature_pipeline
-from secom.extrap_pipelines import (
-    EXTRAP_GATE_BGM_COMPONENTS,
-    EXTRAP_GATE_CLIP,
-    EXTRAP_GATE_CORR_THRESHOLD,
-    EXTRAP_GATE_DENSITY_ALPHA,
-    EXTRAP_GATE_LOADING_SCALE,
-    EXTRAP_GATE_LOGIC,
-    EXTRAP_GATE_N_FACTORS,
-    EXTRAP_GATE_N_SEEDS,
-    EXTRAP_GATE_Q_ALPHA,
-    EXTRAP_GATE_SVI_STEPS,
-)
 from secom.hub_interactions import sensor_value_columns
+from secom.pipelines import (
+    BAYES_GATE_BGM_COMPONENTS,
+    BAYES_GATE_CLIP,
+    BAYES_GATE_DENSITY_ALPHA,
+    BAYES_GATE_LOADING_SCALE,
+    BAYES_GATE_LOGIC,
+    BAYES_GATE_N_FACTORS,
+    BAYES_GATE_N_SEEDS,
+    BAYES_GATE_Q_ALPHA,
+    BAYES_GATE_SVI_STEPS,
+    GATE_CORR_THRESHOLD,
+)
 
 
 class SparseBayesianFactorAnalysis:
@@ -54,9 +49,9 @@ class SparseBayesianFactorAnalysis:
     def __init__(
         self,
         *,
-        n_factors: int = EXTRAP_GATE_N_FACTORS,
-        loading_scale: float = EXTRAP_GATE_LOADING_SCALE,
-        svi_steps: int = EXTRAP_GATE_SVI_STEPS,
+        n_factors: int = BAYES_GATE_N_FACTORS,
+        loading_scale: float = BAYES_GATE_LOADING_SCALE,
+        svi_steps: int = BAYES_GATE_SVI_STEPS,
         seed: int = RANDOM_SEED,
     ):
         self.n_factors = int(n_factors)
@@ -72,7 +67,6 @@ class SparseBayesianFactorAnalysis:
         W = numpyro.sample(
             "W", dist.Laplace(jnp.zeros((n_features, k)), self.loading_scale)
         )
-        # Diagonal idiosyncratic variances; jitter keeps the covariance PD.
         psi = numpyro.sample("psi", dist.HalfNormal(jnp.ones(n_features)))
         numpyro.sample(
             "x",
@@ -135,28 +129,28 @@ class SparseBayesianFactorAnalysis:
         return np.einsum("ij,ij->i", resid, resid)
 
 
-class ExtrapProcessGate:
-    """Extrapolation gate: sBFA -> BGM density + Q (SPE) abstention.
+class BayesGate:
+    """sBFA -> BGM density + Q (SPE) abstention / risk-coverage gate.
 
-    Parameters mirror ``InterpProcessGate``: ``density_alpha`` is the lower-tail
-    quantile on passing BGM log-densities (scores below trip the gate),
-    ``q_alpha`` the upper-tail quantile on passing SPE, and ``logic`` is ``"or"``
-    (abstain when either trips) or ``"and"`` (only when both agree).
+    ``density_alpha`` is the lower-tail quantile on passing BGM log-densities
+    (scores below trip the gate), ``q_alpha`` the upper-tail quantile on passing
+    SPE, and ``logic`` is ``"or"`` (abstain when either trips) or ``"and"`` (only
+    when both agree).
     """
 
     def __init__(
         self,
         *,
-        n_factors: int = EXTRAP_GATE_N_FACTORS,
-        n_mixture_components: int = EXTRAP_GATE_BGM_COMPONENTS,
-        loading_scale: float = EXTRAP_GATE_LOADING_SCALE,
-        density_alpha: float = EXTRAP_GATE_DENSITY_ALPHA,
-        q_alpha: float = EXTRAP_GATE_Q_ALPHA,
-        svi_steps: int = EXTRAP_GATE_SVI_STEPS,
-        gate_corr_threshold: float = EXTRAP_GATE_CORR_THRESHOLD,
-        n_seeds: int = EXTRAP_GATE_N_SEEDS,
-        logic: str = EXTRAP_GATE_LOGIC,
-        clip: float = EXTRAP_GATE_CLIP,
+        n_factors: int = BAYES_GATE_N_FACTORS,
+        n_mixture_components: int = BAYES_GATE_BGM_COMPONENTS,
+        loading_scale: float = BAYES_GATE_LOADING_SCALE,
+        density_alpha: float = BAYES_GATE_DENSITY_ALPHA,
+        q_alpha: float = BAYES_GATE_Q_ALPHA,
+        svi_steps: int = BAYES_GATE_SVI_STEPS,
+        gate_corr_threshold: float = GATE_CORR_THRESHOLD,
+        n_seeds: int = BAYES_GATE_N_SEEDS,
+        logic: str = BAYES_GATE_LOGIC,
+        clip: float = BAYES_GATE_CLIP,
     ):
         self.n_factors = int(n_factors)
         self.n_mixture_components = int(n_mixture_components)
@@ -172,34 +166,31 @@ class ExtrapProcessGate:
             raise ValueError(f"gate logic must be 'or' or 'and', got {logic!r}")
         self.logic = logic_norm
 
-    def fit(self, X_train: pd.DataFrame, y_train: pd.Series) -> "ExtrapProcessGate":
+    def fit(self, X_train: pd.DataFrame, y_train: pd.Series) -> "BayesGate":
         sensor_cols = sensor_value_columns(X_train.columns)
         if not sensor_cols:
-            raise ValueError("No raw sensor columns found for ExtrapProcessGate")
+            raise ValueError("No raw sensor columns found for BayesGate")
         self.sensor_cols_ = sensor_cols
 
-        # Raw post-cluster front-end (impute -> SmartCorrelatedSelection), fit on
-        # all wafers like the interp gate; the sBFA reference then uses passers.
         self.feature_pipe_ = build_gate_feature_pipeline(self.gate_corr_threshold)
         y_arr = np.asarray(y_train, dtype=int)
         X_sensors = X_train[sensor_cols]
         self.feature_pipe_.fit(X_sensors, y_arr)
 
         post = self._post_cluster(X_sensors)
-        # Robust (median/IQR) scaling fit on all wafers, matching the interp track
-        # and the yield-model representation; resists SECOM's sensor outliers in
-        # the *estimate*. The Gaussian sBFA/BGM/SPE assumes unit-ish, bounded
-        # inputs, so _scale_clip then clips the tails RobustScaler leaves intact.
+        # Robust (median/IQR) scaling fit on all wafers; _scale_clip then clips the
+        # tails RobustScaler leaves intact so spikes can't dominate the Gaussian
+        # sBFA/BGM/SPE.
         self.scaler_ = RobustScaler().fit(post)
 
         passing = y_arr == 0
         ref = self._scale_clip(post)[passing]
         if ref.shape[0] == 0 or ref.shape[1] == 0:
-            raise ValueError("ExtrapProcessGate requires passing wafers and features")
+            raise ValueError("BayesGate requires passing wafers and features")
 
         # Seed-ensemble: density (BGM log-likelihood) and Q (SPE) are invariant to
         # factor rotation/sign, so averaging them across independent sBFA+BGM fits
-        # is well-defined and removes the ADVI run-to-run flip.
+        # removes the ADVI run-to-run flip.
         n_components = max(1, min(self.n_mixture_components, ref.shape[0]))
         self.members_: list[tuple[SparseBayesianFactorAnalysis, BayesianGaussianMixture]] = []
         for i in range(self.n_seeds):
@@ -245,12 +236,10 @@ class ExtrapProcessGate:
         return self._scale_clip(post)
 
     def _density_from_matrix(self, std: np.ndarray) -> np.ndarray:
-        """Mean BGM log-density across ensemble members (higher = more in-control)."""
         per_member = [bgm.score_samples(sbfa.transform(std)) for sbfa, bgm in self.members_]
         return np.mean(per_member, axis=0)
 
     def _q_from_matrix(self, std: np.ndarray) -> np.ndarray:
-        """Mean SPE (Q) across ensemble members (higher = worse reconstruction)."""
         per_member = [sbfa.spe(std) for sbfa, _ in self.members_]
         return np.mean(per_member, axis=0)
 
@@ -263,10 +252,8 @@ class ExtrapProcessGate:
     def ooc_severity(self, X: pd.DataFrame) -> np.ndarray:
         """Per-wafer out-of-control severity in [0, 1] for risk-coverage ranking.
 
-        Each statistic is turned into an empirical exceedance p-value against the
-        passing reference: low density -> high ``anomaly_density``; high SPE ->
-        high ``anomaly_q``. The max of the two is the OR-logic severity (a wafer is
-        suspicious if *either* statistic is extreme), independent of the alpha
+        Low density -> high ``anomaly_density``; high SPE -> high ``anomaly_q``.
+        The max of the two is the OR-logic severity, independent of the alpha
         operating point.
         """
         std = self._gate_matrix(X)
@@ -291,7 +278,6 @@ class ExtrapProcessGate:
         }
 
     def ooc_mask(self, X: pd.DataFrame) -> np.ndarray:
-        """Out-of-control mask under the configured logic ('or' vs 'and')."""
         return self.flag_masks(X)["both_ooc" if self.logic == "and" else "either_ooc"]
 
     def is_in_control(self, X: pd.DataFrame) -> np.ndarray:
