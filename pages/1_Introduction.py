@@ -9,6 +9,7 @@ from secom.dashboard.charts import (
     fig_fails_over_time,
     fig_missing_rate_distribution,
     fig_missingness_structure,
+    fig_sensor_drift_heatmap,
     fig_sensor_histogram,
     fig_sensor_multicollinearity,
 )
@@ -20,7 +21,7 @@ from secom.dashboard.stg import (
     slice_stg_for_display,
     stg_available,
 )
-from secom.pipelines import DB_PATH, TARGET_COL, TIMESTAMP_COL
+from secom.pipelines import DB_PATH, TARGET_COL, TEST_SIZE, TIMESTAMP_COL
 
 
 MAX_TABLE_ROWS = 50
@@ -117,6 +118,28 @@ def main() -> None:
                 theme="streamlit",
                 key="p1_class_donut",
             )
+
+        st.markdown("---")
+        st.subheader("Sensor drift — what extrapolation works against")
+        render_blue_note(
+            "Each row is one of the most drift-prone sensors; each column is a time window. "
+            "Colour is the sensor's mean **standardized against the training era** (first 80% by "
+            "time), so blue/red cells show how far later wafers drift from what the models were "
+            "fit on. The dashed line marks the temporal holdout (latest 20%): the extrapolation "
+            "track must predict on this drifted regime, which is why selection-based models that "
+            "lock onto era-specific sensors degrade there while aggregation (sPLS) holds up."
+        )
+        st.plotly_chart(
+            fig_sensor_drift_heatmap(
+                df,
+                timestamp_col=TIMESTAMP_COL,
+                sensor_cols=sensor_cols,
+                test_size=TEST_SIZE,
+            ),
+            width="stretch",
+            theme="streamlit",
+            key="p1_sensor_drift",
+        )
 
         st.markdown("---")
         st.subheader("Missingness and redundancy")

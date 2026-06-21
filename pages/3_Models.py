@@ -16,7 +16,6 @@ from secom.dashboard.data import (
     list_model_ids,
     load_benchmark_results,
     model_info,
-    process_gate_meta,
     risk_coverage_df,
     time_decay_meta,
 )
@@ -30,8 +29,8 @@ from secom.dashboard.charts import (
 )
 from secom.dashboard.pr_curves import load_pr_curves
 from secom.costs import PROFILE_IDS, THRESHOLD_PROFILES
-from secom.pipelines import EXTRAP_MODEL_IDS
 
+# label -> (mean_col, std_col, chart_title)
 _CV_METRIC_SPECS_STRATIFIED: dict[str, tuple[str, str, str]] = {
     "PR-AUC": ("mean_pr_auc", "std_pr_auc", "Mean PR AUC (5×2 repeated stratified CV)"),
     "ROC-AUC": ("mean_roc_auc", "std_roc_auc", "Mean ROC AUC (5×2 repeated stratified CV)"),
@@ -89,9 +88,9 @@ def _format_holdout_split_caption(split: dict) -> str | None:
 def main() -> None:
     st.title("Models & benchmark results")
     st.caption(
-        "Six pipelines across two tracks — interpolation (stratified CV + random holdout) "
-        "and extrapolation (blocked time CV + temporal holdout + process gate) — "
-        "with F0.5 / F2 / F4 F-beta thresholds and a BER-minimizing cutoff."
+        "Nine pipelines (3 front-ends × 3 classifier heads), each run on both protocols — "
+        "interpolation (stratified CV + random holdout) and extrapolation (blocked time CV + "
+        "temporal holdout) — with F0.5 / F2 / F4 F-beta thresholds and a BER-minimizing cutoff."
     )
 
     try:
@@ -106,18 +105,17 @@ def main() -> None:
     tuned = payload.get("tuned_hyperparameters") or {}
     tuned_blocked = payload.get("tuned_hyperparameters_blocked") or {}
 
-    gate_logic_txt = str(process_gate_meta(payload).get("logic", "or")).upper()
     render_blue_note(
-        "The **interpolation** track (`intrap_*`) uses **5×2 stratified CV** and a **random "
-        "stratified holdout** (interpolation upper bound). The **extrapolation** track "
-        "(`extrap_*`) uses **blocked time CV** with local stratification, **Bayesian models "
-        "with a random-walk intercept** that tracks base-rate drift, and a **temporal forward "
-        "holdout** (latest 20% by time). A **process gate** (extrapolation: sparse Bayesian "
-        f"factor analysis → BGM density **{gate_logic_txt}** Q/SPE on passing-train wafers) "
-        "abstains on out-of-control wafers; we report **conditional PR-AUC** and **coverage** "
-        "on the wafers it scores, plus a **risk–coverage curve**. All holdout metrics are "
-        f"reporting-only (`holdout_is_reporting_only={payload.get('holdout_is_reporting_only', True)}`). "
-        "The random-minus-temporal gap across tracks is the cost of extrapolation."
+        "Every pipeline is tuned and scored on **both** protocols. The **interpolation** view "
+        "uses **5×2 stratified CV** and a **random stratified holdout** (in-distribution upper "
+        "bound). The **extrapolation** view uses **blocked time CV** with local stratification and "
+        "a **temporal forward holdout** (latest 20% by time), with optional exponential "
+        "time-decay sample weighting. Two standalone **risk-coverage gates** (EFA → T²+Q on the "
+        "random view; sparse Bayesian FA → BGM density + Q/SPE on the temporal view), fit on "
+        "passing-train wafers, are evaluated separately: we report **conditional PR-AUC**, "
+        "**coverage**, and a **risk–coverage curve** on the wafers they keep. All holdout metrics "
+        f"are reporting-only (`holdout_is_reporting_only={payload.get('holdout_is_reporting_only', True)}`). "
+        "The random-minus-temporal gap is the cost of extrapolation."
     )
 
     tab_cv, tab_holdout, tab_model = st.tabs(
@@ -172,9 +170,8 @@ def main() -> None:
                 [c for c in cols_to_show if c in protocol_cv_df.columns]
             ].copy()
             for col in display_cv.columns:
-                if col.startswith("mean_") or col.startswith("std_"):
-                    if display_cv[col].dtype.kind == "f":
-                        display_cv[col] = display_cv[col].round(3)
+                if display_cv[col].dtype.kind == "f":
+                    display_cv[col] = display_cv[col].round(3)
             st.dataframe(display_cv, width="stretch", hide_index=True)
             st.caption(
                 f"Rankings use mean {cv_metric} across all CV folds; error bars show ±1 SD."
@@ -265,39 +262,59 @@ def main() -> None:
                 lam_txt = ", ".join(lam_bits) if lam_bits else "none"
                 st.caption(
                     "Forward view: blocked-tuned hyperparameters with exponential time-decay "
-                    f"sample weighting (tuned `decay_lambda`: {lam_txt}; k-NN unweighted)."
+                    f"sample weighting (tuned `decay_lambda`: {lam_txt}; Bayesian heads unweighted)."
                 )
 
             st.dataframe(holdout_auc_summary_df(view_ho_df), width="stretch", hide_index=True)
 
-            # Process gate is extrapolation-only (blocked CV / temporal holdout).
-            cond_df = (
-                holdout_conditional_df(payload, key="holdout_conditional")
-                if use_blocked_cv
-                else None
-            )
-            gate_meta = process_gate_meta(payload) if use_blocked_cv else None
-            if cond_df is not None and not cond_df.empty and gate_meta:
+            # Standalone risk-coverage gate (not a pipeline step), per view:
+            # temporal -> sBFA → BGM density + Q; random -> Regularized EFA → T² + Q.
+            # Both fit on passing-train wafers only.
+            if use_blocked_cv:
+                cond_df = holdout_conditional_df(payload, key="holdout_conditional")
+                gate_meta = payload.get("process_gate") or {}
+                gate_title = "sBFA → BGM density"
+                flagged_label = "density"
+            else:
+                cond_df = holdout_conditional_df(payload, key="holdout_conditional_random")
+                gate_meta = payload.get("interp_process_gate") or {}
+                gate_title = "Regularized EFA → Hotelling T²"
+                flagged_label = "t2"
+            if not cond_df.empty and gate_meta:
                 logic_txt = str(gate_meta.get("logic", "or")).upper()
                 st.markdown(
-                    f"**Process gate (sBFA → BGM density {logic_txt} Q/SPE) — "
+                    f"**Risk-coverage gate ({gate_title} {logic_txt} Q/SPE) — "
                     "conditional metrics**"
                 )
-                d_lcl = gate_meta.get("density_lcl")
                 q_ucl = gate_meta.get("q_ucl")
-                d_txt = f"{float(d_lcl):.2f}" if d_lcl is not None else "?"
                 q_txt = f"{float(q_ucl):.1f}" if q_ucl is not None else "?"
-                st.caption(
+                base_caption = (
                     f"Raw post-cluster sensors (smart_corr threshold "
                     f"{gate_meta.get('gate_corr_threshold', '?')}); "
                     f"fit on {gate_meta.get('n_reference_wafers', '?')} passing train wafers, "
                     f"{gate_meta.get('n_features', '?')} features → "
-                    f"{gate_meta.get('n_factors', '?')} sBFA factors → "
-                    f"{gate_meta.get('n_mixture_components', '?')}-component BGM "
-                    f"(seed-ensemble n={gate_meta.get('n_seeds', '?')}). "
-                    f"Abstain when BGM log-density < {d_txt} (α={gate_meta.get('density_alpha', '?')}) "
-                    f"**{logic_txt}** Q/SPE > {q_txt} (α={gate_meta.get('q_alpha', '?')})."
+                    f"{gate_meta.get('n_factors', '?')} factors. "
                 )
+                if use_blocked_cv:
+                    d_lcl = gate_meta.get("density_lcl")
+                    d_txt = f"{float(d_lcl):.2f}" if d_lcl is not None else "?"
+                    st.caption(
+                        base_caption
+                        + f"{gate_meta.get('n_mixture_components', '?')}-component BGM "
+                        f"(seed-ensemble n={gate_meta.get('n_seeds', '?')}). "
+                        f"Abstain when BGM log-density < {d_txt} "
+                        f"(α={gate_meta.get('density_alpha', '?')}) "
+                        f"**{logic_txt}** Q/SPE > {q_txt} (α={gate_meta.get('q_alpha', '?')})."
+                    )
+                else:
+                    t2_ucl = gate_meta.get("t2_ucl")
+                    t2_txt = f"{float(t2_ucl):.1f}" if t2_ucl is not None else "?"
+                    st.caption(
+                        base_caption
+                        + f"Abstain when Hotelling T² > {t2_txt} "
+                        f"(α={gate_meta.get('t2_alpha', '?')}) "
+                        f"**{logic_txt}** Q/SPE > {q_txt} (α={gate_meta.get('q_alpha', '?')})."
+                    )
                 gate_cols = [
                     c
                     for c in [
@@ -308,12 +325,12 @@ def main() -> None:
                         "conditional_pr_auc_ci_high",
                         "global_pr_auc",
                         "n_in_control",
-                        "n_flagged_density",
+                        f"n_flagged_{flagged_label}",
                         "n_flagged_q",
                         "n_flagged_both",
                         "n_fails_in_control",
                         "n_fails_flagged_ooc",
-                        "n_fails_flagged_density",
+                        f"n_fails_flagged_{flagged_label}",
                         "n_fails_flagged_q",
                     ]
                     if c in cond_df.columns
@@ -324,14 +341,15 @@ def main() -> None:
                 st.dataframe(gate_display, width="stretch", hide_index=True)
                 st.caption(
                     "`coverage` = fraction of holdout wafers in control (scored by the model). "
-                    f"{logic_txt} logic: flagged if density or Q/SPE trips per the rule. "
+                    f"{logic_txt} logic: flagged if either statistic trips per the rule. "
                     "`conditional_pr_auc` is on in-control wafers only (None when "
                     "fewer than 5 in-control fails). Read beside `n_flagged_*` and "
                     "`n_fails_flagged_*` — gains can come from dropping easy negatives."
                 )
 
-                rc_df = risk_coverage_df(payload)
-                if not rc_df.empty:
+                # Risk-coverage severity sweep is computed for the temporal holdout.
+                rc_df = risk_coverage_df(payload) if use_blocked_cv else None
+                if rc_df is not None and not rc_df.empty:
                     st.markdown("**Risk–coverage curve**")
                     st.caption(
                         "Rank holdout wafers by the gate's OOC severity, then keep the "
@@ -357,14 +375,23 @@ def main() -> None:
 
     with tab_model:
         st.subheader("Pipeline architecture & tuning")
-        selected_id = st.selectbox(
-            "Select pipeline",
-            model_ids,
-            format_func=lambda mid: model_info(mid).display_name,
-            key="p3_model_select",
-        )
+        sel_col, track_col = st.columns([2, 1], gap="large")
+        with sel_col:
+            selected_id = st.selectbox(
+                "Select pipeline",
+                model_ids,
+                format_func=lambda mid: model_info(mid).display_name,
+                key="p3_model_select",
+            )
+        with track_col:
+            dd_track_label = st.radio(
+                "Track",
+                options=["Extrapolation (temporal)", "Interpolation (random)"],
+                key="p3_dd_track",
+            )
+        is_extrap = dd_track_label.startswith("Extrapolation")
+        track = "extrapolation" if is_extrap else "interpolation"
         info = model_info(selected_id)
-        is_extrap = selected_id in EXTRAP_MODEL_IDS
         left, right = st.columns([1.2, 1], gap="large")
         with left:
             st.markdown(f"### {info.display_name}")
@@ -402,7 +429,7 @@ def main() -> None:
                 "`python -m secom.cli.benchmark` to populate holdout confusion matrices."
             )
 
-        cv_curve, ho_curve, ber_point = load_pr_curves(selected_id)
+        cv_curve, ho_curve, ber_point = load_pr_curves(selected_id, track)
         st.plotly_chart(
             fig_pr_curve_cv_holdout(
                 cv_curve,
@@ -469,10 +496,10 @@ def main() -> None:
             st.caption("Re-run `python -m secom.cli.benchmark` after tuning.")
 
         render_blue_note(
-            "**F0.5 (conservative) thresholds** often hurt **Linear LR** and **k-NN**: "
-            "their scores are less well-calibrated than tree models, so a stricter fail-class "
-            "threshold misses more true fails (higher BER) while **Random Forest** and **XGBoost** "
-            "retain ranking under conservative cutoffs. **F2** is the default deploy profile; "
+            "**F0.5 (conservative) thresholds** lean on well-ranked scores near the high-precision "
+            "tail; all heads here are isotonic-calibrated, but the **elastic-net** and **Bayesian** "
+            "linear heads can still miss more true fails (higher BER) under a stricter fail-class "
+            "cutoff than the **Random Forest** head. **F2** is the default deploy profile; "
             "**BER** picks the symmetric misclassification minimum on the threshold grid."
         )
 

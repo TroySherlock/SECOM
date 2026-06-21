@@ -4,8 +4,9 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from secom.core import (
+from secom.pipelines import (
     BLOCKED_MIN_VAL_FAILS,
+    BLOCKED_WARMUP_MIN_TRAIN_FRACTION,
     N_BLOCKED_SPLITS,
     TARGET_COL,
     TIMESTAMP_COL,
@@ -17,6 +18,10 @@ class BlockedTimeSeriesCV:
 
     Rows must align positionally with the timestamps and targets passed at
     construction (``X`` from sklearn does not include ``measurement_ts``).
+
+    A warm-up guard (``min_train_fraction``) drops the earliest folds whose
+    training slice is smaller than that fraction of the rows, so no fold is
+    scored on a model trained on an unrealistically small early window.
     """
 
     def __init__(
@@ -26,11 +31,13 @@ class BlockedTimeSeriesCV:
         *,
         n_splits: int = N_BLOCKED_SPLITS,
         min_val_fails: int = BLOCKED_MIN_VAL_FAILS,
+        min_train_fraction: float = BLOCKED_WARMUP_MIN_TRAIN_FRACTION,
     ):
         self.timestamps = pd.to_datetime(np.asarray(timestamps), errors="coerce")
         self.y = np.asarray(y, dtype=int)
         self.n_splits = int(n_splits)
         self.min_val_fails = int(min_val_fails)
+        self.min_train_fraction = float(min_train_fraction)
         self._folds: list[tuple[np.ndarray, np.ndarray]] | None = None
 
     def _build_folds(self) -> list[tuple[np.ndarray, np.ndarray]]:
@@ -56,7 +63,7 @@ class BlockedTimeSeriesCV:
         block_ids = np.searchsorted(edges[1:].values, ts_sorted.values, side="right")
         block_ids = np.clip(block_ids, 0, self.n_splits - 1)
 
-        folds: list[tuple[np.ndarray, np.ndarray]] = []
+        candidates: list[tuple[np.ndarray, np.ndarray, int]] = []
         for val_block in range(1, self.n_splits):
             val_blocks = {val_block}
             while True:
@@ -74,10 +81,17 @@ class BlockedTimeSeriesCV:
             if int(y_sorted[val_mask].sum()) < self.min_val_fails:
                 continue
 
-            train_idx = order[train_mask]
-            val_idx = order[val_mask]
-            folds.append((train_idx, val_idx))
+            candidates.append(
+                (order[train_mask], order[val_mask], int(train_mask.sum()))
+            )
 
+        # Warm-up: keep only folds whose train slice reaches the minimum size;
+        # fall back to the largest-train candidate so split never returns empty.
+        min_train = int(np.ceil(self.min_train_fraction * n))
+        folds = [(tr, vl) for tr, vl, n_train in candidates if n_train >= min_train]
+        if not folds and candidates:
+            tr, vl, _ = max(candidates, key=lambda fold: fold[2])
+            folds = [(tr, vl)]
         return folds
 
     def get_n_splits(self, X=None, y=None, groups=None) -> int:

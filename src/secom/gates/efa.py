@@ -11,7 +11,7 @@ import pandas as pd
 from sklearn.covariance import LedoitWolf
 from sklearn.decomposition import FactorAnalysis
 
-from secom.core import RANDOM_SEED, build_gate_feature_pipeline
+from secom.pipelines import RANDOM_SEED, build_gate_feature_pipeline
 from secom.hub_interactions import sensor_value_columns
 from secom.pipelines import (
     EFA_GATE_LOGIC,

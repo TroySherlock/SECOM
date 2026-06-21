@@ -20,7 +20,7 @@ import pandas as pd
 from sklearn.mixture import BayesianGaussianMixture
 from sklearn.preprocessing import RobustScaler
 
-from secom.core import RANDOM_SEED, build_gate_feature_pipeline
+from secom.pipelines import RANDOM_SEED, build_gate_feature_pipeline
 from secom.hub_interactions import sensor_value_columns
 from secom.pipelines import (
     BAYES_GATE_BGM_COMPONENTS,

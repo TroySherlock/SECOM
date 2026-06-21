@@ -71,6 +71,7 @@ from secom.pipelines import (
     TUNED_PARAMS_DIR,
     TUNED_BLOCKED_PARAMS_DIR,
     WEIGHTING_MODEL_IDS,
+    clear_pipeline_cache,
     feature_columns,
     frozen_config,
     holdout_split_summary,
@@ -212,7 +213,7 @@ def run_weighted_blocked_leaderboard(
 
     Mirrors ``cross_validate`` over ``CV_SCORING`` but fits each fold with
     time-decay sample weights computed from that fold's own train rows, so it
-    matches the deployment-time weighted fit. Unweighted models (k-NN, lambda=0)
+    matches the deployment-time weighted fit. Unweighted cells (lambda=0)
     reproduce the plain blocked-CV numbers exactly.
     """
     splits = list(cv.split(X, y))
@@ -701,6 +702,11 @@ def _parse_args(argv=None) -> argparse.Namespace:
         choices=list(MODEL_IDS),
         help="Benchmark a single pipeline by model id (merges into existing JSON).",
     )
+    parser.add_argument(
+        "--clear-pipeline-cache",
+        action="store_true",
+        help="Clear the joblib preprocess cache before benchmarking (after editing front-ends).",
+    )
     return parser.parse_args(argv)
 
 
@@ -744,6 +750,8 @@ def main(argv=None) -> None:
     temporal holdout + time-decay. Both standalone gates (EFA, Bayes) are scored
     on each protocol's holdout. A --model subset merges into the existing JSON."""
     args = _parse_args(argv)
+    if args.clear_pipeline_cache:
+        clear_pipeline_cache()
     selected = _select_model_ids(args.model)
     merge = set(selected) != set(MODEL_IDS)
 

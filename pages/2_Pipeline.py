@@ -24,15 +24,15 @@ from secom.pipelines import (
     N_SPLITS,
     N_HUBS_GRID,
     PRIMARY_TUNING_METRIC,
-    RF_SELECT_TOP_K,
-    RF_SELECT_TOP_K_GRID,
+    TOP_K_DEFAULT,
+    TOP_K_GRID,
 )
 
 
 HYPERPARAM_NOTE = (
     "`top_k` and `n_hubs` are **hyperparameters** tuned "
     f"with {N_SPLITS}×{N_REPEATS} repeated stratified CV grid search "
-    f"(top-k grid: {', '.join(str(k) for k in RF_SELECT_TOP_K_GRID)}; "
+    f"(top-k grid: {', '.join(str(k) for k in TOP_K_GRID)}; "
     f"n_hubs grid: {', '.join(str(k) for k in N_HUBS_GRID)}), "
     "not fixed pipeline defaults."
 )
@@ -86,7 +86,8 @@ def main() -> None:
     render_preprocessing_flowchart()
     st.caption(
         "dbt profiles sensors before sklearn; shared steps run in-fold during CV and benchmark. "
-        "All four benchmark models use the same preprocess ending in scale → classifier."
+        "All nine pipelines (3 front-ends × 3 classifier heads) share this preprocess, "
+        "ending in scale → calibrated classifier."
     )
 
     st.divider()
@@ -161,7 +162,7 @@ def main() -> None:
             )
         else:
             st.plotly_chart(
-                fig_rf_topk_selection_example(top_k=RF_SELECT_TOP_K),
+                fig_rf_topk_selection_example(top_k=TOP_K_DEFAULT),
                 width="stretch",
                 theme="streamlit",
                 key="p2_rf_topk",

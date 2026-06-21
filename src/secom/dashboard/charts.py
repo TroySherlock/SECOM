@@ -39,6 +39,12 @@ COLORSCALE_CORRELATION = [
     [0.5, C_GREEN],
     [1.0, C_RED],
 ]
+# Standardized drift z ∈ [-, +]: blue below baseline, ~background at 0, red above.
+COLORSCALE_DRIFT_DIVERGING = [
+    [0.0, C_BLUE],
+    [0.5, CHART_BG],
+    [1.0, C_RED],
+]
 
 
 def _sized(fig: go.Figure, *, height: int, **layout: Any) -> go.Figure:
@@ -249,6 +255,120 @@ def fig_missingness_structure(
         showlegend=True,
     )
     return _sized(fig, height=400, margin=dict(t=80))
+
+
+def fig_sensor_drift_heatmap(
+    df: pd.DataFrame,
+    *,
+    timestamp_col: str,
+    sensor_cols: list[str] | None = None,
+    n_sensors: int = 30,
+    n_time_bins: int = 40,
+    test_size: float = 0.20,
+    z_clip: float = 4.0,
+) -> go.Figure:
+    """Heatmap of the most drift-prone sensors over time, standardized against the
+    training-era baseline (first ``1 - test_size`` of the timeline).
+
+    Each cell is a sensor's mean value in a time bin expressed in standard deviations
+    away from what it looked like during the training era, so later eras light up as
+    they drift from what the models were fit on. A vertical marker shows the temporal
+    holdout boundary (latest ``test_size``).
+    """
+    sensor_cols = sensor_cols or sensor_columns(df)
+    if not sensor_cols:
+        return _sized(go.Figure(), height=460)
+
+    plot_df = df[[timestamp_col] + sensor_cols].copy()
+    plot_df["_sort_ts"] = pd.to_datetime(plot_df[timestamp_col], errors="coerce")
+    plot_df = plot_df.sort_values("_sort_ts").reset_index(drop=True)
+    ts = plot_df["_sort_ts"]
+
+    n_rows = len(plot_df)
+    train_n = int(round(n_rows * (1.0 - test_size)))
+    if n_rows < 4 or train_n < 2 or train_n >= n_rows:
+        return _sized(go.Figure(), height=460)
+
+    # Median-impute, then z-score each sensor against its training-era mean/std.
+    values = plot_df[sensor_cols].astype(float)
+    values = values.fillna(values.median(numeric_only=True))
+    base = values.iloc[:train_n]
+    base_mean = base.mean()
+    base_std = base.std(ddof=0)
+    keep = base_std[base_std > 0].index.tolist()
+    if not keep:
+        return _sized(go.Figure(), height=460)
+    z = (values[keep] - base_mean[keep]) / base_std[keep]
+
+    # Rank sensors by how far the holdout era drifts from the training baseline.
+    holdout_drift = z.iloc[train_n:].mean().abs().sort_values(ascending=False)
+    top = holdout_drift.head(min(n_sensors, len(keep))).index.tolist()
+
+    # Equal-count time bins (oldest -> newest), one mean z per sensor per bin.
+    n_bins = min(n_time_bins, n_rows)
+    bins = np.array_split(np.arange(n_rows), n_bins)
+    z_top = z[top].to_numpy()
+    matrix = np.vstack([z_top[idx].mean(axis=0) for idx in bins]).T  # (sensor, bin)
+    matrix = np.clip(matrix, -z_clip, z_clip)
+
+    bin_end_labels = [f"{ts.iloc[idx[-1]]:%Y-%m-%d}" for idx in bins]
+    sensor_labels = list(top)
+
+    # Holdout boundary: first bin whose rows cross into the latest test_size.
+    boundary_bin = next(
+        (b for b, idx in enumerate(bins) if idx[-1] >= train_n), n_bins - 1
+    )
+
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=matrix,
+            x=list(range(n_bins)),
+            y=sensor_labels,
+            zmid=0.0,
+            zmin=-z_clip,
+            zmax=z_clip,
+            colorscale=COLORSCALE_DRIFT_DIVERGING,
+            colorbar=dict(title="σ vs train<br>baseline"),
+            customdata=np.broadcast_to(
+                np.array(bin_end_labels), matrix.shape
+            ),
+            hovertemplate=(
+                "Sensor %{y}<br>through %{customdata}<br>"
+                "%{z:.2f} σ vs train baseline<extra></extra>"
+            ),
+        )
+    )
+    fig.add_vline(
+        x=boundary_bin - 0.5,
+        line=dict(color=C_YELLOW, width=2, dash="dash"),
+    )
+    fig.add_annotation(
+        x=boundary_bin - 0.5,
+        y=1.02,
+        yref="paper",
+        text="← train · holdout (latest 20%) →",
+        showarrow=False,
+        font=dict(size=11, color=C_YELLOW),
+    )
+
+    tick_step = max(1, n_bins // 6)
+    tickvals = list(range(0, n_bins, tick_step))
+    fig.update_layout(
+        title=dict(text=f"Sensor drift over time (top {len(top)} drifting sensors)"),
+        xaxis=dict(
+            title="Measurement time (binned, oldest → newest)",
+            tickvals=tickvals,
+            ticktext=[bin_end_labels[i] for i in tickvals],
+            tickangle=-30,
+        ),
+        yaxis=dict(
+            title="Sensor id",
+            type="category",
+            autorange="reversed",
+            tickfont=dict(size=10),
+        ),
+    )
+    return _sized(fig, height=520, margin=dict(t=80))
 
 
 def fig_missing_rate_distribution(
@@ -651,7 +771,7 @@ def fig_benchmark_leaderboard(
     ascending: bool = False,
     marker_color: str | None = None,
 ) -> go.Figure:
-    """Horizontal leaderboard: mean point estimates with ±1 SD error bars."""
+    """Horizontal leaderboard of point estimates with ±1 SD error bars."""
     if df.empty:
         return _sized(go.Figure(), height=360)
 

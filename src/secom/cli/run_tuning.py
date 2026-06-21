@@ -20,6 +20,7 @@ from secom.pipelines import (
     TARGET_COL,
     TIMESTAMP_COL,
     WEIGHTING_MODEL_IDS,
+    clear_pipeline_cache,
     feature_columns,
     load_mart,
     make_repeated_stratified_cv,
@@ -165,11 +166,18 @@ def _parse_args(argv=None) -> argparse.Namespace:
         choices=sorted(TRACKS),
         help="Tune only models in this track (ignored if --model is given).",
     )
+    parser.add_argument(
+        "--clear-pipeline-cache",
+        action="store_true",
+        help="Clear the joblib preprocess cache before tuning (after editing front-ends).",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv=None) -> int:
     args = _parse_args(argv)
+    if args.clear_pipeline_cache:
+        clear_pipeline_cache()
     df = load_mart()
     feature_cols = feature_columns(df)
 

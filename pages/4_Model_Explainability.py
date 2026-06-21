@@ -5,7 +5,7 @@ import streamlit as st
 
 from secom.dashboard import render_blue_note
 from secom.dashboard.data import model_info
-from secom.pipelines import EXTRAP_MODEL_IDS
+from secom.pipelines import MODEL_IDS, TUNED_BLOCKED_PARAMS_DIR, TUNED_PARAMS_DIR
 from secom.dashboard.charts import (
     fig_coef_signed_bar,
     fig_local_contributions,
@@ -17,7 +17,11 @@ from secom.dashboard.explainability import (
     holdout_wafer_ids,
 )
 from secom.dashboard.narrator import NARRATIVE_MODEL_ID, get_wafer_narrative, load_narratives
-from secom.pipelines import TUNED_BLOCKED_PARAMS_DIR
+
+_TRACK_LABELS = {
+    "Extrapolation (temporal)": "extrapolation",
+    "Interpolation (random)": "interpolation",
+}
 
 
 
@@ -34,19 +38,28 @@ def _load_frozen_narratives() -> dict | None:
 def main() -> None:
     st.title("Model explainability")
     st.caption(
-        "Global drivers (top 15 features) and per-wafer breakdowns on the **latest 20%** "
-        "of wafers by measurement time (temporal holdout) for the extrapolation track. "
-        "Fit uses blocked-tuned hyperparameters from `data/processed/tuned_blocked/` "
-        "with time-decay weighting."
+        "Global drivers (top 15 features) and per-wafer breakdowns on the chosen track's "
+        "holdout — extrapolation uses the **latest 20%** of wafers by measurement time "
+        "(blocked-tuned hyperparameters + time-decay weighting); interpolation uses the "
+        "random stratified holdout (in-distribution)."
     )
 
+    track_label = st.radio(
+        "Track",
+        options=list(_TRACK_LABELS),
+        horizontal=True,
+        key="p4_track",
+    )
+    track = _TRACK_LABELS[track_label]
+    tuned_dir = TUNED_BLOCKED_PARAMS_DIR if track == "extrapolation" else TUNED_PARAMS_DIR
+
     try:
-        wafer_ids = holdout_wafer_ids()
+        wafer_ids = holdout_wafer_ids(track)
     except FileNotFoundError as exc:
         st.error(f"{exc}\n\nRun tuning and `python -m secom.cli.benchmark` first.")
         return
 
-    model_ids = list(EXTRAP_MODEL_IDS)
+    model_ids = list(MODEL_IDS)
 
     st.subheader("Global view")
     global_model = st.selectbox(
@@ -57,11 +70,11 @@ def main() -> None:
     )
 
     try:
-        top_df, signed_df, caption = cached_global_importance(global_model)
+        top_df, signed_df, caption = cached_global_importance(global_model, track)
     except FileNotFoundError as exc:
         st.error(
             f"Missing tuned params: {exc}\n\n"
-            f"Expected JSON under `{TUNED_BLOCKED_PARAMS_DIR}/`."
+            f"Expected JSON under `{tuned_dir}/`."
         )
         return
     except Exception as exc:
@@ -116,7 +129,7 @@ def main() -> None:
         )
 
     try:
-        result = cached_wafer_explanation(inspect_model, wafer_id)
+        result = cached_wafer_explanation(inspect_model, wafer_id, track)
     except FileNotFoundError as exc:
         st.error(str(exc))
         return
@@ -155,7 +168,10 @@ def main() -> None:
         )
 
     if inspect_model != NARRATIVE_MODEL_ID:
-        st.caption("Plain-English summary is available for the extrapolation elastic net only.")
+        st.caption(
+            "Plain-English summary is available only for "
+            f"**{model_info(NARRATIVE_MODEL_ID).display_name}** (the narrative model)."
+        )
 
     if inspect_model == NARRATIVE_MODEL_ID:
         st.divider()
