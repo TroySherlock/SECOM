@@ -1,6 +1,6 @@
-"""Plain-English wafer summaries for extrap_enet (facts + frozen Gemma narratives).
+"""Plain-English wafer summaries for hsic_bayes (facts + frozen Gemma narratives).
 
-Narratives explain the extrapolation elastic net on the temporal holdout.
+Narratives explain the HSIC -> Bayesian elastic-net head on the temporal holdout.
 
 Batch generation (requires local llama-server):
   python -m secom.cli.build_narratives
@@ -93,7 +93,7 @@ def _local_rows(local_df: pd.DataFrame) -> list[dict[str, Any]]:
 
 
 def build_wafer_facts(model_id: str, result: WaferExplanation) -> dict[str, Any]:
-    """Build JSON-serializable facts for linear_lr Gemma narration."""
+    """Build JSON-serializable facts for hsic_bayes Gemma narration."""
     if model_id != NARRATIVE_MODEL_ID:
         raise ValueError(f"Narration only supported for {NARRATIVE_MODEL_ID!r}, got {model_id!r}")
 

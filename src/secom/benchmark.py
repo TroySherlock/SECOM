@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Benchmark interpolation and extrapolation track pipelines.
+"""Benchmark the unified model grid on both evaluation protocols.
 
-Interpolation track (intrap_*): stratified CV + random holdout, from
-data/processed/tuned/<model_id>.json.
-Extrapolation track (extrap_*): blocked CV + temporal holdout + process gate +
-time-decay, from data/processed/tuned_blocked/<model_id>.json.
+Every cell (hsic_* / rfsel_* / pls_* x enet/rf/bayes) is scored on both:
+  - interpolation: stratified CV + random holdout, from data/processed/tuned/<model_id>.json
+  - extrapolation: blocked CV + temporal holdout + time-decay, from
+    data/processed/tuned_blocked/<model_id>.json
 
-Use --model ID or --track {interpolation,extrapolation} to benchmark a subset;
-subset runs merge into the existing benchmark JSON instead of overwriting it.
+Use --model ID to benchmark a single cell; subset runs merge into the existing
+benchmark JSON instead of overwriting it.
 Primary objective: maximize PR AUC on CV; F-beta thresholds (F0.5 / F2 / F4) plus BER-min.
 """
 from __future__ import annotations
@@ -48,11 +48,16 @@ from secom.artifacts import (
 )
 from secom.cv import make_blocked_time_cv
 from secom.gates import BayesGate, EFAGate
+from secom.reporting import (
+    collect_cv_oof_proba,
+    compute_global_importance,
+    pr_curve_payload,
+)
 from secom.pipelines import (
-    BENCHMARK_MODEL_IDS,
     BENCHMARK_RESULTS_PATH,
     MODEL_IDS,
     PIPELINE_ARTIFACTS_PATH,
+    REPORT_CACHE_PATH,
     CV_N_JOBS,
     CV_SCORING,
     DECAY_LAMBDA_DEFAULT,
@@ -73,7 +78,6 @@ from secom.pipelines import (
     WEIGHTING_MODEL_IDS,
     clear_pipeline_cache,
     feature_columns,
-    frozen_config,
     holdout_split_summary,
     load_mart,
     make_repeated_stratified_cv,
@@ -135,7 +139,7 @@ def _holdout_sample_weights(
     """Time-decay sample weights for a full-train fit (None if unweighted).
 
     Returns ``None`` when there is no weighting so lambda=0 reproduces the
-    unweighted fit exactly and k-NN (no sample_weight support) is never weighted.
+    unweighted fit exactly and weight-incapable heads are never weighted.
     """
     if train_timestamps is None:
         return None
@@ -744,6 +748,74 @@ def _protocol_gate_reports(
     }
 
 
+def _report_entries_for_track(
+    model_ids,
+    tuned_map: dict[str, dict],
+    fitted: dict[str, Pipeline],
+    scores: dict[str, np.ndarray],
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    y_test: pd.Series,
+    cv,
+    *,
+    train_ts: pd.Series | None = None,
+    weighted: bool = False,
+    show_progress: bool = True,
+) -> dict[str, dict]:
+    """Per-model frozen PR-curve + global-importance payload for one protocol.
+
+    Holdout PR data reuses the already-computed ``scores``; the CV-OOF curve is a
+    fresh decay-weighted fold pass (the deployment-equivalent fit).
+    """
+    entries: dict[str, dict] = {}
+    for name in model_ids:
+        decay_lambda = _model_decay_lambda(name, tuned_map) if weighted else 0.0
+        oof_pipeline = build_tuned_pipeline(name, tuned_map[name])
+        y_cv, score_cv = collect_cv_oof_proba(
+            oof_pipeline,
+            X_train,
+            y_train,
+            cv,
+            train_ts=train_ts if weighted else None,
+            decay_lambda=decay_lambda,
+        )
+        try:
+            ber_threshold = resolve_threshold_profiles(tuned_map[name]).get("ber")
+        except (KeyError, ValueError):
+            ber_threshold = None
+        pr_curve = pr_curve_payload(
+            y_cv, score_cv, y_test, scores[name], ber_threshold
+        )
+        importance = compute_global_importance(name, fitted[name], X_train)
+        entries[name] = {"pr_curve": pr_curve, "global_importance": importance}
+        if show_progress:
+            print(f"  report cache: {name}")
+    return entries
+
+
+def save_report_cache(
+    entries_by_track: dict[str, dict],
+    *,
+    merge: bool = False,
+    path: Path = REPORT_CACHE_PATH,
+) -> dict:
+    """Write the frozen dashboard report cache, keyed ``[track][model_id]``.
+
+    On a ``--model`` subset run (merge=True) only the touched models are replaced
+    within each track; other models' frozen reports are preserved.
+    """
+    payload: dict = {}
+    if merge and path.exists():
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    for track, entries in entries_by_track.items():
+        track_block = dict(payload.get(track) or {})
+        track_block.update(entries)
+        payload[track] = track_block
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(json_safe(payload), indent=2), encoding="utf-8")
+    return payload
+
+
 def main(argv=None) -> None:
     """Re-run after tuning. Every cell runs on BOTH protocols:
     interpolation = stratified CV + random holdout; extrapolation = blocked CV +
@@ -841,6 +913,37 @@ def main(argv=None) -> None:
 
     gate_reports = {"random": gate_random, "temporal": gate_temporal}
 
+    # Frozen dashboard report cache: PR curves (CV-OOF + holdout) and global
+    # importance, computed once here so the dashboard never refits a model.
+    print("\nFreezing dashboard report cache (PR curves + global importance):")
+    report_entries = {
+        "interpolation": _report_entries_for_track(
+            selected,
+            tuned,
+            fitted_random,
+            scores_random,
+            Xr_train,
+            yr_train,
+            yr_test,
+            make_repeated_stratified_cv(),
+            train_ts=None,
+            weighted=False,
+        ),
+        "extrapolation": _report_entries_for_track(
+            selected,
+            tuned_blocked,
+            fitted_temporal,
+            scores_temporal,
+            X_train,
+            y_train,
+            y_test,
+            make_blocked_time_cv(train_df),
+            train_ts=train_ts,
+            weighted=True,
+        ),
+    }
+    save_report_cache(report_entries, merge=merge)
+
     # Pipeline artifacts (reduction stages, coef summaries) are a full-run product
     # keyed off the reference models; a single-model subset can't rebuild the
     # shared section, so only regenerate on a full run.
@@ -875,6 +978,7 @@ def main(argv=None) -> None:
         save_pipeline_artifacts(artifacts)
 
     print(f"\nWrote {BENCHMARK_RESULTS_PATH}")
+    print(f"Wrote {REPORT_CACHE_PATH}")
     if artifacts is not None:
         print(f"Wrote {PIPELINE_ARTIFACTS_PATH}")
     print("\nStratified CV leaderboard:")

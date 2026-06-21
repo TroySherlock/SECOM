@@ -1,8 +1,8 @@
 """Run the tuned-pipeline benchmark.
 
-  python -m secom.cli.benchmark                      # all models, full rewrite
-  python -m secom.cli.benchmark --track extrapolation  # one track (merges JSON)
-  python -m secom.cli.benchmark --model extrap_enet    # one pipeline (merges JSON)
+  python -m secom.cli.benchmark                     # all models, full rewrite
+  python -m secom.cli.benchmark --model hsic_enet   # one pipeline (merges JSON)
+  python -m secom.cli.benchmark --clear-pipeline-cache  # drop joblib preprocess cache first
 """
 from __future__ import annotations
 

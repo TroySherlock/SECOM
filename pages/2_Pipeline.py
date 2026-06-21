@@ -23,7 +23,6 @@ from secom.pipelines import (
     N_REPEATS,
     N_SPLITS,
     N_HUBS_GRID,
-    PRIMARY_TUNING_METRIC,
     TOP_K_DEFAULT,
     TOP_K_GRID,
 )

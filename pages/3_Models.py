@@ -429,18 +429,22 @@ def main() -> None:
                 "`python -m secom.cli.benchmark` to populate holdout confusion matrices."
             )
 
-        cv_curve, ho_curve, ber_point = load_pr_curves(selected_id, track)
-        st.plotly_chart(
-            fig_pr_curve_cv_holdout(
-                cv_curve,
-                ho_curve,
-                ber_point=ber_point,
-                title=f"Precision–recall — {info.display_name}",
-            ),
-            width="stretch",
-            theme="streamlit",
-            key=f"p3_pr_curve_{selected_id}",
-        )
+        try:
+            cv_curve, ho_curve, ber_point = load_pr_curves(selected_id, track)
+        except FileNotFoundError as exc:
+            st.info(str(exc))
+        else:
+            st.plotly_chart(
+                fig_pr_curve_cv_holdout(
+                    cv_curve,
+                    ho_curve,
+                    ber_point=ber_point,
+                    title=f"Precision–recall — {info.display_name}",
+                ),
+                width="stretch",
+                theme="streamlit",
+                key=f"p3_pr_curve_{selected_id}",
+            )
         if is_extrap:
             st.caption(
                 "Purple: blocked time CV OOF PR curve on validation blocks only (earliest "

@@ -27,14 +27,9 @@ from secom.pipelines import (
     GRID_SEARCH_VERBOSE,
     KNN_IMPUTE_NEIGHBORS,
     PRIMARY_TUNING_METRIC,
-    TARGET_COL,
     THRESHOLD_GRID,
-    TUNED_PARAMS_DIR,
-    feature_columns,
     frozen_config,
-    load_mart,
     make_repeated_stratified_cv,
-    split_train_test,
     time_decay_weights,
 )
 from secom.pipelines import (

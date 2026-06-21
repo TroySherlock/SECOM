@@ -8,12 +8,11 @@ import pandas as pd
 import streamlit as st
 
 from secom.costs import DEFAULT_PROFILE_ID, resolve_threshold_profiles
-from secom.dashboard.data import model_info
+from secom.dashboard.data import model_info, report_entry
 from secom.metrics import predict_with_threshold
 from secom.pipelines import (
     BENCHMARK_MODEL_IDS,
     ID_COL,
-    RANDOM_SEED,
     TARGET_COL,
     TIMESTAMP_COL,
     WEIGHTING_MODEL_IDS,
@@ -23,6 +22,7 @@ from secom.pipelines import (
     split_train_test_random,
     time_decay_weights,
 )
+from secom.reporting import _bayes_mean_coef, scaled_matrix
 from secom.utils import (
     fitted_base_classifier,
     load_tuned_blocked_params,
@@ -30,9 +30,7 @@ from secom.utils import (
 )
 from secom.tuning.registry import build_tuned_pipeline, fit_pipeline_weighted
 
-GLOBAL_TOP_N = 15
 LOCAL_TOP_N = 5
-SHAP_BACKGROUND_ROWS = 200
 
 DEFAULT_TRACK = "extrapolation"
 
@@ -110,108 +108,9 @@ def fit_holdout_pipeline(model_id: str, track: str = DEFAULT_TRACK):
     return pipeline, tuned
 
 
-def scaled_matrix(pipeline, X: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
-    """Transform to scaled feature space; return (matrix, feature_names)."""
-    preprocess = pipeline.named_steps["preprocess"]
-    scale = pipeline.named_steps["scale"]
-    X_pre = preprocess.transform(X)
-    X_scaled = scale.transform(X_pre)
-    names = scale.get_feature_names_out()
-    return np.asarray(X_scaled, dtype=float), np.asarray(names, dtype=object)
-
-
 def _deploy_threshold(tuned: dict) -> float:
     profiles = resolve_threshold_profiles(tuned)
     return float(profiles[DEFAULT_PROFILE_ID])
-
-
-def _bayes_mean_coef(pipeline) -> np.ndarray:
-    """Posterior-mean elastic-net coefficients averaged over the calibration copies."""
-    classifier = pipeline.named_steps["classifier"]
-    if hasattr(classifier, "estimator_"):  # FixedThresholdClassifier
-        classifier = classifier.estimator_
-    calibrated = getattr(classifier, "calibrated_classifiers_", None)
-    if calibrated:
-        means = [c.estimator.coef_summary()["mean"].to_numpy() for c in calibrated]
-        return np.mean(means, axis=0)
-    return fitted_base_classifier(pipeline).coef_summary()["mean"].to_numpy()
-
-
-def global_importance_linear(pipeline) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Top |coef| table and signed coef subset for chart (elastic-net LR)."""
-    split = load_holdout_split()
-    _, names = scaled_matrix(pipeline, split.X_train.iloc[:1])
-    coefs = fitted_base_classifier(pipeline).coef_.ravel()
-    return _coef_tables(names, coefs)
-
-
-def global_importance_bayesian(pipeline) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Posterior-mean coefficient table + signed subset for the Bayesian head."""
-    split = load_holdout_split()
-    _, names = scaled_matrix(pipeline, split.X_train.iloc[:1])
-    coefs = _bayes_mean_coef(pipeline)
-    return _coef_tables(names, coefs)
-
-
-def _coef_tables(names, coefs) -> tuple[pd.DataFrame, pd.DataFrame]:
-    full = pd.DataFrame({"feature": names, "coefficient": np.asarray(coefs).ravel()})
-    full["abs_coefficient"] = np.abs(full["coefficient"])
-    top = full.nlargest(GLOBAL_TOP_N, "abs_coefficient").copy()
-    top["importance"] = top["abs_coefficient"]
-    pos = full.loc[full["coefficient"] > 0].nlargest(8, "coefficient")
-    neg = full.loc[full["coefficient"] < 0].nsmallest(8, "coefficient")
-    signed = pd.concat([pos, neg], ignore_index=True)
-    return top, signed
-
-
-def global_importance_shap(pipeline, model_id: str) -> pd.DataFrame:
-    import shap
-
-    split = load_holdout_split()
-    X_bg, names = scaled_matrix(pipeline, split.X_train)
-    if len(X_bg) > SHAP_BACKGROUND_ROWS:
-        rng = np.random.default_rng(RANDOM_SEED)
-        idx = rng.choice(len(X_bg), size=SHAP_BACKGROUND_ROWS, replace=False)
-        X_bg = X_bg[idx]
-
-    estimator = fitted_base_classifier(pipeline)
-    explainer = shap.TreeExplainer(estimator)
-    shap_values = explainer.shap_values(X_bg)
-    if isinstance(shap_values, list):
-        values = np.asarray(shap_values[1])
-    elif np.asarray(shap_values).ndim == 3:
-        values = np.asarray(shap_values)[:, :, 1]
-    else:
-        values = np.asarray(shap_values)
-
-    mean_abs = np.mean(np.abs(values), axis=0)
-    full = pd.DataFrame({"feature": names, "importance": mean_abs})
-    return full.nlargest(GLOBAL_TOP_N, "importance")
-
-
-def global_importance(model_id: str, pipeline) -> tuple[pd.DataFrame, pd.DataFrame | None, str]:
-    """Returns (top_df, optional_signed_coef_df, method_caption)."""
-    kind = model_info(model_id).explainability
-    if kind == "bayesian":
-        top, signed = global_importance_bayesian(pipeline)
-        return (
-            top,
-            signed,
-            "Global view uses posterior-mean elastic-net coefficients (averaged over "
-            "the calibration copies) on the scaled design (Laplace L1 + ridge L2 priors).",
-        )
-    if kind == "linear":
-        top, signed = global_importance_linear(pipeline)
-        return (
-            top,
-            signed,
-            "Global view uses elastic-net coefficients on scaled features "
-            "(underlying logistic inside shared pipeline calibration).",
-        )
-    if kind == "tree":
-        top = global_importance_shap(pipeline, model_id)
-        return top, None, "Global view uses mean |SHAP| from TreeExplainer on a train subsample."
-    raise ValueError(model_id)
 
 
 def _local_linear(row_scaled: np.ndarray, names: np.ndarray, coefs: np.ndarray) -> pd.DataFrame:
@@ -305,12 +204,22 @@ def holdout_wafer_ids(track: str = DEFAULT_TRACK) -> list:
     return sorted(ids, key=str)
 
 
-@st.cache_data(show_spinner="Computing global feature importance…")
+@st.cache_data(show_spinner=False)
 def cached_global_importance(
     model_id: str, track: str = DEFAULT_TRACK
 ) -> tuple[pd.DataFrame, pd.DataFrame | None, str]:
-    pipeline, _tuned = fit_holdout_pipeline(model_id, track)
-    return global_importance(model_id, pipeline)
+    """Read the frozen global-importance payload written by ``secom.benchmark``."""
+    entry = report_entry(track, model_id)
+    importance = (entry or {}).get("global_importance")
+    if not importance:
+        raise FileNotFoundError(
+            f"No frozen global importance for {model_id!r} ({track}). "
+            "Run: python -m secom.benchmark"
+        )
+    top = pd.DataFrame(importance.get("top") or [])
+    signed_records = importance.get("signed")
+    signed = pd.DataFrame(signed_records) if signed_records else None
+    return top, signed, str(importance.get("caption", ""))
 
 
 @st.cache_data(show_spinner="Building wafer explanation…")

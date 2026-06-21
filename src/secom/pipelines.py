@@ -77,9 +77,10 @@ TUNED_PARAMS_DIR = OUTPUT_DIR / "tuned"
 TUNED_BLOCKED_PARAMS_DIR = OUTPUT_DIR / "tuned_blocked"
 BENCHMARK_RESULTS_PATH = OUTPUT_DIR / "secom_pipeline_benchmark.json"
 PIPELINE_ARTIFACTS_PATH = OUTPUT_DIR / "secom_pipeline_artifacts.json"
-# Pre-generated wafer narratives for the extrapolation narrative model.
+# Frozen PR-curve + global-importance cache the dashboard reads (per track/model).
+REPORT_CACHE_PATH = OUTPUT_DIR / "secom_report_cache.json"
+# Pre-generated wafer narratives for the narrative model (hsic_bayes).
 NARRATIVES_PATH = OUTPUT_DIR / "extrap_wafer_narratives.json"
-LINEAR_LR_NARRATIVES_PATH = NARRATIVES_PATH
 
 TARGET_COL = "target"
 TIMESTAMP_COL = "measurement_ts"
@@ -498,6 +499,10 @@ MODEL_CELLS: dict[str, tuple[str, str]] = {
 
 # Backwards-compat alias used across the benchmark / dashboard / utils.
 BENCHMARK_MODEL_IDS = MODEL_IDS
+
+# Reference models for the dashboard reduction widget + shared cluster example
+# (both RF-selection front-ends so the stage breakdown extracts cleanly).
+REFERENCE_MODELS = {"linear": "rfsel_enet", "topk": "rfsel_rf"}
 
 # --- Front-end (selection / aggregation) grids -------------------------------
 # Selection front-ends (HSIC / RF) screen K sensors then expand the top n_hubs

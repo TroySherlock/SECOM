@@ -1,4 +1,4 @@
-"""Batch-generate frozen Gemma narratives for all extrap_enet holdout wafers."""
+"""Batch-generate frozen Gemma narratives for all hsic_bayes holdout wafers."""
 from __future__ import annotations
 
 import argparse
@@ -41,7 +41,7 @@ def _generate_with_retries(facts: dict, *, model: str) -> str:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate frozen Gemma wafer narratives for extrap_enet holdout wafers."
+        description="Generate frozen Gemma wafer narratives for hsic_bayes holdout wafers."
     )
     parser.add_argument(
         "--wafer-id",

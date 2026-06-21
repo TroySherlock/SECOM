@@ -20,11 +20,11 @@ from secom.pipelines import (
     MODEL_IDS,
     N_SENSORS,
     PIPELINE_ARTIFACTS_PATH,
+    REFERENCE_MODELS,
+    REPORT_CACHE_PATH,
 )
 from secom.utils import load_tuned_params
 
-# Reduction widget + shared cluster example reference (both RF-selection cells).
-REFERENCE_MODELS = {"linear": "rfsel_enet", "topk": "rfsel_rf"}
 TRACKS: tuple[str, str] = ("extrapolation", "interpolation")
 
 
@@ -321,6 +321,27 @@ def load_pipeline_artifacts(path: Path | None = None) -> dict[str, Any]:
             "Run: python -m secom.benchmark"
         )
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_report_cache(path: Path | None = None) -> dict[str, Any]:
+    """Frozen PR-curve + global-importance cache written by ``secom.benchmark``."""
+    path = path or REPORT_CACHE_PATH
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"Report cache not found at {path}. Run: python -m secom.benchmark"
+        )
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def report_entry(track: str, model_id: str) -> dict[str, Any]:
+    """Frozen report entry (`pr_curve`, `global_importance`) for one track/model."""
+    cache = load_report_cache()
+    entry = (cache.get(track) or {}).get(model_id)
+    if not entry:
+        raise FileNotFoundError(
+            f"No frozen report for {model_id!r} ({track}). Run: python -m secom.benchmark"
+        )
+    return entry
 
 
 def get_reference_artifacts(

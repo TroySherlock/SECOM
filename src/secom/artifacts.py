@@ -24,14 +24,10 @@ from secom.pipelines import (
     CORRELATED_SELECTION_METHOD,
     CORRELATED_SELECTION_THRESHOLD,
     PIPELINE_ARTIFACTS_PATH,
-    RANDOM_SEED,
+    REFERENCE_MODELS,
     TEST_SIZE,
 )
 from secom.utils import json_safe
-
-# Reference models for the reduction widget + shared cluster example. Both are
-# RF-selection front-ends so the stage breakdown extracts cleanly.
-REFERENCE_MODELS = {"linear": "rfsel_enet", "topk": "rfsel_rf"}
 
 
 def _sensor_branch_pipeline(preprocess: ColumnTransformer) -> Pipeline:

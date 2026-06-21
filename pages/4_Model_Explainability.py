@@ -5,7 +5,7 @@ import streamlit as st
 
 from secom.dashboard import render_blue_note
 from secom.dashboard.data import model_info
-from secom.pipelines import MODEL_IDS, TUNED_BLOCKED_PARAMS_DIR, TUNED_PARAMS_DIR
+from secom.pipelines import MODEL_IDS
 from secom.dashboard.charts import (
     fig_coef_signed_bar,
     fig_local_contributions,
@@ -51,7 +51,6 @@ def main() -> None:
         key="p4_track",
     )
     track = _TRACK_LABELS[track_label]
-    tuned_dir = TUNED_BLOCKED_PARAMS_DIR if track == "extrapolation" else TUNED_PARAMS_DIR
 
     try:
         wafer_ids = holdout_wafer_ids(track)
@@ -72,10 +71,7 @@ def main() -> None:
     try:
         top_df, signed_df, caption = cached_global_importance(global_model, track)
     except FileNotFoundError as exc:
-        st.error(
-            f"Missing tuned params: {exc}\n\n"
-            f"Expected JSON under `{tuned_dir}/`."
-        )
+        st.error(str(exc))
         return
     except Exception as exc:
         st.exception(exc)

@@ -1209,7 +1209,9 @@ def fig_local_contributions(
 ) -> go.Figure:
     """Wafer-level feature contributions (signed or unsigned)."""
     if df.empty:
-        return _sized(fig, height=height)
+        empty = go.Figure()
+        empty.update_layout(title=dict(text=title))
+        return _sized(empty, height=height)
     plot_df = df.sort_values("contribution", key=lambda s: s.abs(), ascending=True)
     colors = [C_RED if v < 0 else C_GREEN for v in plot_df["contribution"]]
     fig = go.Figure(
