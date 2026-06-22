@@ -14,18 +14,14 @@ from secom.pipelines import (
     BENCHMARK_MODEL_IDS,
     ID_COL,
     TARGET_COL,
-    TIMESTAMP_COL,
-    WEIGHTING_MODEL_IDS,
     feature_columns,
     load_mart,
     split_train_test,
     split_train_test_random,
-    time_decay_weights,
 )
 from secom.reporting import _bayes_mean_coef, scaled_matrix
 from secom.utils import (
     fitted_base_classifier,
-    load_tuned_blocked_params,
     load_tuned_params,
 )
 from secom.tuning.registry import build_tuned_pipeline, fit_pipeline_weighted
@@ -81,9 +77,8 @@ def load_holdout_split(track: str = DEFAULT_TRACK) -> HoldoutSplit:
 
 
 def _tuned_for(model_id: str, track: str) -> dict:
-    if track == "interpolation":
-        return load_tuned_params(model_id)
-    return load_tuned_blocked_params(model_id)
+    """Single in-distribution tuned params, reused for both tracks."""
+    return load_tuned_params(model_id)
 
 
 @st.cache_resource(show_spinner="Fitting pipeline on train split…")
@@ -93,17 +88,8 @@ def fit_holdout_pipeline(model_id: str, track: str = DEFAULT_TRACK):
     split = load_holdout_split(track)
     tuned = _tuned_for(model_id, track)
     pipeline = build_tuned_pipeline(model_id, tuned)
-    decay_lambda = (
-        float(tuned.get("decay_lambda", 0.0))
-        if (track == "extrapolation" and model_id in WEIGHTING_MODEL_IDS)
-        else 0.0
-    )
-    weights = None
-    if decay_lambda:
-        train_ts = split.train_df[TIMESTAMP_COL].reset_index(drop=True)
-        weights = time_decay_weights(train_ts, decay_lambda)
     pipeline, _ = fit_pipeline_weighted(
-        pipeline, split.X_train, split.y_train, weights
+        pipeline, split.X_train, split.y_train, None
     )
     return pipeline, tuned
 

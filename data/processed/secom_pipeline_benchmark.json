@@ -2,10 +2,9 @@
   "primary_metric": "pr_auc",
   "ranking": "descending_higher_is_better",
   "tuned_params_dir": "/home/troy/SECOM/data/processed/tuned",
-  "tuned_blocked_params_dir": "/home/troy/SECOM/data/processed/tuned_blocked",
   "cv_protocol": {
     "in_distribution": "repeated_stratified_5x2",
-    "extrapolation": "blocked_time_local_strat"
+    "extrapolation": "in_distribution_tuned_temporal_holdout"
   },
   "model_ids": [
     "hsic_enet",
@@ -135,286 +134,6 @@
       "classifier__estimator__pos_weight": 15.0
     }
   },
-  "tuned_hyperparameters_blocked": {
-    "hsic_enet": {
-      "preprocess__sensor_branch__front_end__top_k": 70,
-      "preprocess__sensor_branch__front_end__n_hubs": 10,
-      "preprocess__sensor_branch__cluster__smart_corr__threshold": 0.99,
-      "classifier__estimator__C": 0.01,
-      "classifier__estimator__l1_ratio": 0.3
-    },
-    "hsic_rf": {
-      "preprocess__sensor_branch__front_end__top_k": 50,
-      "preprocess__sensor_branch__front_end__n_hubs": 10,
-      "preprocess__sensor_branch__cluster__smart_corr__threshold": 0.9,
-      "classifier__estimator__max_depth": 3
-    },
-    "hsic_bayes": {
-      "preprocess__sensor_branch__front_end__top_k": 35,
-      "preprocess__sensor_branch__front_end__n_hubs": 5,
-      "preprocess__sensor_branch__cluster__smart_corr__threshold": 0.9,
-      "classifier__estimator__C": 0.0075,
-      "classifier__estimator__l1_ratio": 0.3,
-      "classifier__estimator__pos_weight": 15.0
-    },
-    "rfsel_enet": {
-      "preprocess__sensor_branch__front_end__top_k": 30,
-      "preprocess__sensor_branch__front_end__n_hubs": 10,
-      "preprocess__sensor_branch__cluster__smart_corr__threshold": 0.95,
-      "classifier__estimator__C": 0.0075,
-      "classifier__estimator__l1_ratio": 0.3
-    },
-    "rfsel_rf": {
-      "preprocess__sensor_branch__front_end__top_k": 70,
-      "preprocess__sensor_branch__front_end__n_hubs": 5,
-      "preprocess__sensor_branch__cluster__smart_corr__threshold": 0.95,
-      "classifier__estimator__max_depth": 3
-    },
-    "rfsel_bayes": {
-      "preprocess__sensor_branch__front_end__top_k": 35,
-      "preprocess__sensor_branch__front_end__n_hubs": 5,
-      "preprocess__sensor_branch__cluster__smart_corr__threshold": 0.9,
-      "classifier__estimator__C": 0.0075,
-      "classifier__estimator__l1_ratio": 0.3,
-      "classifier__estimator__pos_weight": 15.0
-    },
-    "pls_enet": {
-      "preprocess__sensor_branch__front_end__n_components": 25,
-      "preprocess__sensor_branch__cluster__smart_corr__threshold": 0.99,
-      "classifier__estimator__C": 0.01,
-      "classifier__estimator__l1_ratio": 0.5
-    },
-    "pls_rf": {
-      "preprocess__sensor_branch__front_end__n_components": 25,
-      "preprocess__sensor_branch__cluster__smart_corr__threshold": 0.99,
-      "classifier__estimator__max_depth": 5
-    },
-    "pls_bayes": {
-      "preprocess__sensor_branch__front_end__n_components": 25,
-      "preprocess__sensor_branch__cluster__smart_corr__threshold": 0.9,
-      "classifier__estimator__C": 0.0075,
-      "classifier__estimator__l1_ratio": 0.3,
-      "classifier__estimator__pos_weight": 15.0
-    }
-  },
-  "time_decay": {
-    "hsic_enet": {
-      "decay_lambda": 4.0,
-      "weight_capable": true,
-      "search": {
-        "best_decay_lambda": 4.0,
-        "best_mean_pr_auc": 0.09801912774878124,
-        "per_lambda_pr_auc": {
-          "0.0": 0.07884118952455718,
-          "0.25": 0.06786459593987501,
-          "0.5": 0.06764223761630869,
-          "1.0": 0.06109268523248128,
-          "2.0": 0.07136548515743078,
-          "4.0": 0.09801912774878124
-        },
-        "lambda_grid": [
-          0.0,
-          0.25,
-          0.5,
-          1.0,
-          2.0,
-          4.0
-        ]
-      }
-    },
-    "hsic_rf": {
-      "decay_lambda": 0.5,
-      "weight_capable": true,
-      "search": {
-        "best_decay_lambda": 0.5,
-        "best_mean_pr_auc": 0.17830739036190973,
-        "per_lambda_pr_auc": {
-          "0.0": 0.173267128840559,
-          "0.25": 0.17537371655566258,
-          "0.5": 0.17830739036190973,
-          "1.0": 0.16411592676411096,
-          "2.0": 0.12545983142888312,
-          "4.0": 0.12201085916503762
-        },
-        "lambda_grid": [
-          0.0,
-          0.25,
-          0.5,
-          1.0,
-          2.0,
-          4.0
-        ]
-      }
-    },
-    "hsic_bayes": {
-      "decay_lambda": 0.25,
-      "weight_capable": true,
-      "search": {
-        "best_decay_lambda": 0.25,
-        "best_mean_pr_auc": 0.050830387754500245,
-        "per_lambda_pr_auc": {
-          "0.0": 0.042109406614428135,
-          "0.25": 0.050830387754500245,
-          "0.5": 0.04930975385839108,
-          "1.0": 0.04413450547321515,
-          "2.0": 0.04348343079757591,
-          "4.0": 0.04385194953421904
-        },
-        "lambda_grid": [
-          0.0,
-          0.25,
-          0.5,
-          1.0,
-          2.0,
-          4.0
-        ]
-      }
-    },
-    "rfsel_enet": {
-      "decay_lambda": 0.0,
-      "weight_capable": true,
-      "search": {
-        "best_decay_lambda": 0.0,
-        "best_mean_pr_auc": 0.09664693453895022,
-        "per_lambda_pr_auc": {
-          "0.0": 0.09664693453895022,
-          "0.25": 0.09051270757118562,
-          "0.5": 0.08989834515587031,
-          "1.0": 0.07981575876691879,
-          "2.0": 0.07229235732743357,
-          "4.0": 0.05938686692268442
-        },
-        "lambda_grid": [
-          0.0,
-          0.25,
-          0.5,
-          1.0,
-          2.0,
-          4.0
-        ]
-      }
-    },
-    "rfsel_rf": {
-      "decay_lambda": 0.0,
-      "weight_capable": true,
-      "search": {
-        "best_decay_lambda": 0.0,
-        "best_mean_pr_auc": 0.2211091579119988,
-        "per_lambda_pr_auc": {
-          "0.0": 0.2211091579119988,
-          "0.25": 0.19042222045841167,
-          "0.5": 0.1848393628012568,
-          "1.0": 0.18677299790199614,
-          "2.0": 0.16088891519409426,
-          "4.0": 0.14826734508024947
-        },
-        "lambda_grid": [
-          0.0,
-          0.25,
-          0.5,
-          1.0,
-          2.0,
-          4.0
-        ]
-      }
-    },
-    "rfsel_bayes": {
-      "decay_lambda": 0.5,
-      "weight_capable": true,
-      "search": {
-        "best_decay_lambda": 0.5,
-        "best_mean_pr_auc": 0.0912396540591197,
-        "per_lambda_pr_auc": {
-          "0.0": 0.07517756463172721,
-          "0.25": 0.08527177753140548,
-          "0.5": 0.0912396540591197,
-          "1.0": 0.08184503749687062,
-          "2.0": 0.08276595582947845,
-          "4.0": 0.08673625980303049
-        },
-        "lambda_grid": [
-          0.0,
-          0.25,
-          0.5,
-          1.0,
-          2.0,
-          4.0
-        ]
-      }
-    },
-    "pls_enet": {
-      "decay_lambda": 0.25,
-      "weight_capable": true,
-      "search": {
-        "best_decay_lambda": 0.25,
-        "best_mean_pr_auc": 0.04353606469714237,
-        "per_lambda_pr_auc": {
-          "0.0": 0.043350443667890565,
-          "0.25": 0.04353606469714237,
-          "0.5": 0.043319554107289035,
-          "1.0": 0.04147234332134988,
-          "2.0": 0.04033294394388211,
-          "4.0": 0.040613801677733416
-        },
-        "lambda_grid": [
-          0.0,
-          0.25,
-          0.5,
-          1.0,
-          2.0,
-          4.0
-        ]
-      }
-    },
-    "pls_rf": {
-      "decay_lambda": 0.0,
-      "weight_capable": true,
-      "search": {
-        "best_decay_lambda": 0.0,
-        "best_mean_pr_auc": 0.04489220216556348,
-        "per_lambda_pr_auc": {
-          "0.0": 0.04489220216556348,
-          "0.25": 0.042652593308885364,
-          "0.5": 0.0422599215717134,
-          "1.0": 0.04086547659999451,
-          "2.0": 0.04469874028722542,
-          "4.0": 0.03868081254769397
-        },
-        "lambda_grid": [
-          0.0,
-          0.25,
-          0.5,
-          1.0,
-          2.0,
-          4.0
-        ]
-      }
-    },
-    "pls_bayes": {
-      "decay_lambda": 4.0,
-      "weight_capable": true,
-      "search": {
-        "best_decay_lambda": 4.0,
-        "best_mean_pr_auc": 0.04107003612836721,
-        "per_lambda_pr_auc": {
-          "0.0": 0.03858675215172429,
-          "0.25": 0.03870393402505376,
-          "0.5": 0.03878401727436701,
-          "1.0": 0.03809907271118137,
-          "2.0": 0.03794658439446469,
-          "4.0": 0.04107003612836721
-        },
-        "lambda_grid": [
-          0.0,
-          0.25,
-          0.5,
-          1.0,
-          2.0,
-          4.0
-        ]
-      }
-    }
-  },
   "leaderboard": [
     {
       "pipeline": "pls_enet",
@@ -534,419 +253,214 @@
       "std_pr_auc": 0.034163697579947826
     }
   ],
-  "leaderboard_blocked": [
-    {
-      "pipeline": "rfsel_rf",
-      "mean_ber_percent": 28.691446028513234,
-      "std_ber_percent": 0.0,
-      "mean_true_positive_percent": 75.0,
-      "std_true_positive_percent": 0.0,
-      "mean_true_negative_percent": 67.61710794297352,
-      "std_true_negative_percent": 0.0,
-      "mean_roc_auc": 0.7226578411405296,
-      "std_roc_auc": 0.0,
-      "mean_pr_auc": 0.2211091579119988,
-      "std_pr_auc": 0.0
-    },
-    {
-      "pipeline": "hsic_rf",
-      "mean_ber_percent": 38.711812627291245,
-      "std_ber_percent": 0.0,
-      "mean_true_positive_percent": 35.0,
-      "std_true_positive_percent": 0.0,
-      "mean_true_negative_percent": 87.57637474541752,
-      "std_true_negative_percent": 0.0,
-      "mean_roc_auc": 0.6883910386965377,
-      "std_roc_auc": 0.0,
-      "mean_pr_auc": 0.17830739036190973,
-      "std_pr_auc": 0.0
-    },
-    {
-      "pipeline": "hsic_enet",
-      "mean_ber_percent": 39.276985743380855,
-      "std_ber_percent": 0.0,
-      "mean_true_positive_percent": 30.0,
-      "std_true_positive_percent": 0.0,
-      "mean_true_negative_percent": 91.44602851323829,
-      "std_true_negative_percent": 0.0,
-      "mean_roc_auc": 0.6411914460285133,
-      "std_roc_auc": 0.0,
-      "mean_pr_auc": 0.09801912774878124,
-      "std_pr_auc": 0.0
-    },
-    {
-      "pipeline": "rfsel_enet",
-      "mean_ber_percent": 37.84114052953157,
-      "std_ber_percent": 0.0,
-      "mean_true_positive_percent": 40.0,
-      "std_true_positive_percent": 0.0,
-      "mean_true_negative_percent": 84.31771894093686,
-      "std_true_negative_percent": 0.0,
-      "mean_roc_auc": 0.6684826883910387,
-      "std_roc_auc": 0.0,
-      "mean_pr_auc": 0.09664693453895022,
-      "std_pr_auc": 0.0
-    },
-    {
-      "pipeline": "rfsel_bayes",
-      "mean_ber_percent": 36.812627291242364,
-      "std_ber_percent": 0.0,
-      "mean_true_positive_percent": 50.0,
-      "std_true_positive_percent": 0.0,
-      "mean_true_negative_percent": 76.37474541751527,
-      "std_true_negative_percent": 0.0,
-      "mean_roc_auc": 0.665427698574338,
-      "std_roc_auc": 0.0,
-      "mean_pr_auc": 0.0912396540591197,
-      "std_pr_auc": 0.0
-    },
-    {
-      "pipeline": "hsic_bayes",
-      "mean_ber_percent": 39.47046843177189,
-      "std_ber_percent": 0.0,
-      "mean_true_positive_percent": 40.0,
-      "std_true_positive_percent": 0.0,
-      "mean_true_negative_percent": 81.05906313645622,
-      "std_true_negative_percent": 0.0,
-      "mean_roc_auc": 0.5838594704684318,
-      "std_roc_auc": 0.0,
-      "mean_pr_auc": 0.050830387754500245,
-      "std_pr_auc": 0.0
-    },
-    {
-      "pipeline": "pls_rf",
-      "mean_ber_percent": 39.19042769857434,
-      "std_ber_percent": 0.0,
-      "mean_true_positive_percent": 65.0,
-      "std_true_positive_percent": 0.0,
-      "mean_true_negative_percent": 56.61914460285132,
-      "std_true_negative_percent": 0.0,
-      "mean_roc_auc": 0.5724032586558045,
-      "std_roc_auc": 0.0,
-      "mean_pr_auc": 0.04489220216556348,
-      "std_pr_auc": 0.0
-    },
-    {
-      "pipeline": "pls_enet",
-      "mean_ber_percent": 40.81975560081466,
-      "std_ber_percent": 0.0,
-      "mean_true_positive_percent": 65.0,
-      "std_true_positive_percent": 0.0,
-      "mean_true_negative_percent": 53.360488798370675,
-      "std_true_negative_percent": 0.0,
-      "mean_roc_auc": 0.5408350305498981,
-      "std_roc_auc": 0.0,
-      "mean_pr_auc": 0.04353606469714237,
-      "std_pr_auc": 0.0
-    },
-    {
-      "pipeline": "pls_bayes",
-      "mean_ber_percent": 43.38594704684318,
-      "std_ber_percent": 0.0,
-      "mean_true_positive_percent": 45.0,
-      "std_true_positive_percent": 0.0,
-      "mean_true_negative_percent": 68.22810590631364,
-      "std_true_negative_percent": 0.0,
-      "mean_roc_auc": 0.5223014256619144,
-      "std_roc_auc": 0.0,
-      "mean_pr_auc": 0.04107003612836721,
-      "std_pr_auc": 0.0
-    }
-  ],
   "holdout": [
     {
-      "pipeline": "pls_bayes",
-      "pr_auc": 0.1815303984993727,
-      "roc_auc": 0.706379173290938,
-      "f0_5_threshold": 0.01947223611805903,
-      "f0_5_ber_percent": 35.59220985691574,
-      "f0_5_true_positive_percent": 47.05882352941176,
-      "f0_5_true_negative_percent": 81.75675675675676,
-      "f0_5_confusion_matrix": [
-        [
-          242,
-          54
-        ],
-        [
-          9,
-          8
-        ]
-      ],
-      "f0_5_fbeta": 0.1509433962264151,
-      "f2_threshold": 0.01947223611805903,
-      "f2_ber_percent": 35.59220985691574,
-      "f2_true_positive_percent": 47.05882352941176,
-      "f2_true_negative_percent": 81.75675675675676,
-      "f2_confusion_matrix": [
-        [
-          242,
-          54
-        ],
-        [
-          9,
-          8
-        ]
-      ],
-      "f2_fbeta": 0.3076923076923077,
-      "f4_threshold": 0.01947223611805903,
-      "f4_ber_percent": 35.59220985691574,
-      "f4_true_positive_percent": 47.05882352941176,
-      "f4_true_negative_percent": 81.75675675675676,
-      "f4_confusion_matrix": [
-        [
-          242,
-          54
-        ],
-        [
-          9,
-          8
-        ]
-      ],
-      "f4_fbeta": 0.40718562874251496,
-      "ber_threshold": 0.01947223611805903,
-      "ber_ber_percent": 35.59220985691574,
-      "ber_true_positive_percent": 47.05882352941176,
-      "ber_true_negative_percent": 81.75675675675676,
-      "ber_confusion_matrix": [
-        [
-          242,
-          54
-        ],
-        [
-          9,
-          8
-        ]
-      ],
-      "ber_percent": 35.59220985691574,
-      "true_positive_percent": 47.05882352941176,
-      "true_negative_percent": 81.75675675675676,
-      "confusion_matrix": [
-        [
-          242,
-          54
-        ],
-        [
-          9,
-          8
-        ]
-      ],
-      "pr_auc_median": 0.17892732150845692,
-      "pr_auc_ci_low": 0.08358209633484687,
-      "pr_auc_ci_high": 0.3546946830968989,
-      "roc_auc_median": 0.7049383942766296,
-      "roc_auc_ci_low": 0.5768630763116058,
-      "roc_auc_ci_high": 0.8299234896661367,
-      "ber_percent_median": 35.76112877583466,
-      "ber_percent_ci_low": 24.15267289348172,
-      "ber_percent_ci_high": 47.69475357710652
-    },
-    {
       "pipeline": "pls_rf",
-      "pr_auc": 0.17504727289883845,
-      "roc_auc": 0.6632551669316376,
-      "f0_5_threshold": 0.06789944972486243,
-      "f0_5_ber_percent": 35.32392686804451,
-      "f0_5_true_positive_percent": 41.17647058823529,
-      "f0_5_true_negative_percent": 88.17567567567568,
+      "pr_auc": 0.21039457426036012,
+      "roc_auc": 0.7172098569157392,
+      "f0_5_threshold": 0.7708429214607304,
+      "f0_5_ber_percent": 47.22774244833069,
+      "f0_5_true_positive_percent": 5.88235294117647,
+      "f0_5_true_negative_percent": 99.66216216216216,
       "f0_5_confusion_matrix": [
         [
-          261,
-          35
+          295,
+          1
         ],
         [
-          10,
-          7
+          16,
+          1
         ]
       ],
-      "f0_5_fbeta": 0.1891891891891892,
-      "f2_threshold": 0.06789944972486243,
-      "f2_ber_percent": 35.32392686804451,
-      "f2_true_positive_percent": 41.17647058823529,
-      "f2_true_negative_percent": 88.17567567567568,
+      "f0_5_fbeta": 0.2,
+      "f2_threshold": 0.009487243621810908,
+      "f2_ber_percent": 32.611287758346585,
+      "f2_true_positive_percent": 70.58823529411765,
+      "f2_true_negative_percent": 64.1891891891892,
       "f2_confusion_matrix": [
         [
-          261,
-          35
+          190,
+          106
         ],
         [
-          10,
-          7
+          5,
+          12
         ]
       ],
-      "f2_fbeta": 0.3181818181818182,
-      "f4_threshold": 0.028957978989494752,
-      "f4_ber_percent": 35.08545310015898,
-      "f4_true_positive_percent": 47.05882352941176,
-      "f4_true_negative_percent": 82.77027027027027,
+      "f2_fbeta": 0.3225806451612903,
+      "f4_threshold": 0.0014992496248124063,
+      "f4_ber_percent": 35.75119236883943,
+      "f4_true_positive_percent": 76.47058823529412,
+      "f4_true_negative_percent": 52.02702702702703,
       "f4_confusion_matrix": [
         [
-          245,
-          51
+          154,
+          142
         ],
         [
-          9,
-          8
+          4,
+          13
         ]
       ],
-      "f4_fbeta": 0.4108761329305136,
-      "ber_threshold": 0.028957978989494752,
-      "ber_ber_percent": 35.08545310015898,
-      "ber_true_positive_percent": 47.05882352941176,
-      "ber_true_negative_percent": 82.77027027027027,
+      "f4_fbeta": 0.5175644028103045,
+      "ber_threshold": 0.009487243621810908,
+      "ber_ber_percent": 32.611287758346585,
+      "ber_true_positive_percent": 70.58823529411765,
+      "ber_true_negative_percent": 64.1891891891892,
       "ber_confusion_matrix": [
         [
-          245,
-          51
+          190,
+          106
         ],
         [
-          9,
-          8
+          5,
+          12
         ]
       ],
-      "ber_percent": 35.32392686804451,
-      "true_positive_percent": 41.17647058823529,
-      "true_negative_percent": 88.17567567567568,
+      "ber_percent": 32.611287758346585,
+      "true_positive_percent": 70.58823529411765,
+      "true_negative_percent": 64.1891891891892,
       "confusion_matrix": [
         [
-          261,
-          35
+          190,
+          106
         ],
         [
-          10,
-          7
+          5,
+          12
         ]
       ],
-      "pr_auc_median": 0.18381142908273457,
-      "pr_auc_ci_low": 0.08509052996829482,
-      "pr_auc_ci_high": 0.38453822928206594,
-      "roc_auc_median": 0.6655902225755167,
-      "roc_auc_ci_low": 0.5150958863275039,
-      "roc_auc_ci_high": 0.8044614467408585,
-      "ber_percent_median": 35.66176470588236,
-      "ber_percent_ci_low": 23.217160174880767,
-      "ber_percent_ci_high": 46.5818759936407
+      "pr_auc_median": 0.22428588260211238,
+      "pr_auc_ci_low": 0.10190716428617429,
+      "pr_auc_ci_high": 0.4442840868711483,
+      "roc_auc_median": 0.718054451510334,
+      "roc_auc_ci_low": 0.5806612678855326,
+      "roc_auc_ci_high": 0.8489840023847376,
+      "ber_percent_median": 32.44236883942766,
+      "ber_percent_ci_low": 21.52225755166932,
+      "ber_percent_ci_high": 44.21129769475357
     },
     {
       "pipeline": "pls_enet",
-      "pr_auc": 0.14911908440911392,
-      "roc_auc": 0.6617647058823529,
-      "f0_5_threshold": 0.03145422711355678,
-      "f0_5_ber_percent": 39.20906200317965,
-      "f0_5_true_positive_percent": 41.17647058823529,
-      "f0_5_true_negative_percent": 80.4054054054054,
+      "pr_auc": 0.17040764904994282,
+      "roc_auc": 0.7101550079491256,
+      "f0_5_threshold": 0.5152271135567784,
+      "f0_5_ber_percent": 39.924483306836244,
+      "f0_5_true_positive_percent": 23.52941176470588,
+      "f0_5_true_negative_percent": 96.62162162162163,
       "f0_5_confusion_matrix": [
         [
-          238,
-          58
+          286,
+          10
         ],
         [
-          10,
-          7
+          13,
+          4
         ]
       ],
-      "f0_5_fbeta": 0.1263537906137184,
-      "f2_threshold": 0.03145422711355678,
-      "f2_ber_percent": 39.20906200317965,
-      "f2_true_positive_percent": 41.17647058823529,
-      "f2_true_negative_percent": 80.4054054054054,
+      "f0_5_fbeta": 0.273972602739726,
+      "f2_threshold": 0.010485742871435718,
+      "f2_ber_percent": 36.43680445151034,
+      "f2_true_positive_percent": 47.05882352941176,
+      "f2_true_negative_percent": 80.06756756756756,
       "f2_confusion_matrix": [
         [
-          238,
-          58
+          237,
+          59
         ],
         [
-          10,
-          7
+          9,
+          8
         ]
       ],
-      "f2_fbeta": 0.2631578947368421,
-      "f4_threshold": 0.03145422711355678,
-      "f4_ber_percent": 39.20906200317965,
-      "f4_true_positive_percent": 41.17647058823529,
-      "f4_true_negative_percent": 80.4054054054054,
+      "f2_fbeta": 0.2962962962962963,
+      "f4_threshold": 0.002497748874437219,
+      "f4_ber_percent": 30.822734499205083,
+      "f4_true_positive_percent": 64.70588235294117,
+      "f4_true_negative_percent": 73.64864864864865,
       "f4_confusion_matrix": [
         [
-          238,
-          58
+          218,
+          78
         ],
         [
-          10,
-          7
+          6,
+          11
         ]
       ],
-      "f4_fbeta": 0.35311572700296734,
-      "ber_threshold": 0.03145422711355678,
-      "ber_ber_percent": 39.20906200317965,
-      "ber_true_positive_percent": 41.17647058823529,
-      "ber_true_negative_percent": 80.4054054054054,
+      "f4_fbeta": 0.518005540166205,
+      "ber_threshold": 0.010485742871435718,
+      "ber_ber_percent": 36.43680445151034,
+      "ber_true_positive_percent": 47.05882352941176,
+      "ber_true_negative_percent": 80.06756756756756,
       "ber_confusion_matrix": [
         [
-          238,
-          58
+          237,
+          59
         ],
         [
-          10,
-          7
+          9,
+          8
         ]
       ],
-      "ber_percent": 39.20906200317965,
-      "true_positive_percent": 41.17647058823529,
-      "true_negative_percent": 80.4054054054054,
+      "ber_percent": 36.43680445151034,
+      "true_positive_percent": 47.05882352941176,
+      "true_negative_percent": 80.06756756756756,
       "confusion_matrix": [
         [
-          238,
-          58
+          237,
+          59
         ],
         [
-          10,
-          7
+          9,
+          8
         ]
       ],
-      "pr_auc_median": 0.1628022663335696,
-      "pr_auc_ci_low": 0.0769239160773384,
-      "pr_auc_ci_high": 0.3526357507571884,
-      "roc_auc_median": 0.6575914149443561,
-      "roc_auc_ci_low": 0.5231443759936406,
-      "roc_auc_ci_high": 0.7938195548489666,
-      "ber_percent_median": 39.54689984101749,
-      "ber_percent_ci_low": 27.444356120826708,
-      "ber_percent_ci_high": 50.29809220985692
+      "pr_auc_median": 0.18151854299481218,
+      "pr_auc_ci_low": 0.09044331539872981,
+      "pr_auc_ci_high": 0.37559047125296635,
+      "roc_auc_median": 0.7073728139904611,
+      "roc_auc_ci_low": 0.586635532591415,
+      "roc_auc_ci_high": 0.8311233108108108,
+      "ber_percent_median": 36.77464228934817,
+      "ber_percent_ci_low": 24.66365262321146,
+      "ber_percent_ci_high": 48.04103736089029
     },
     {
       "pipeline": "hsic_bayes",
-      "pr_auc": 0.14416965612000904,
-      "roc_auc": 0.7043918918918919,
-      "f0_5_threshold": 0.07588744372186093,
-      "f0_5_ber_percent": 40.26232114467408,
-      "f0_5_true_positive_percent": 23.52941176470588,
-      "f0_5_true_negative_percent": 95.94594594594594,
+      "pr_auc": 0.14771946684634227,
+      "roc_auc": 0.6713036565977741,
+      "f0_5_threshold": 0.15626663331665835,
+      "f0_5_ber_percent": 50.168918918918926,
+      "f0_5_true_positive_percent": 0.0,
+      "f0_5_true_negative_percent": 99.66216216216216,
       "f0_5_confusion_matrix": [
         [
-          284,
-          12
+          295,
+          1
         ],
         [
-          13,
-          4
+          17,
+          0
         ]
       ],
-      "f0_5_fbeta": 0.24691358024691357,
-      "f2_threshold": 0.07588744372186093,
-      "f2_ber_percent": 40.26232114467408,
-      "f2_true_positive_percent": 23.52941176470588,
-      "f2_true_negative_percent": 95.94594594594594,
+      "f0_5_fbeta": 0.0,
+      "f2_threshold": 0.0728919459729865,
+      "f2_ber_percent": 35.42329093799682,
+      "f2_true_positive_percent": 47.05882352941176,
+      "f2_true_negative_percent": 82.0945945945946,
       "f2_confusion_matrix": [
         [
-          284,
-          12
+          243,
+          53
         ],
         [
-          13,
-          4
+          9,
+          8
         ]
       ],
-      "f2_fbeta": 0.23809523809523808,
-      "f4_threshold": 0.001,
+      "f2_fbeta": 0.31007751937984496,
+      "f4_threshold": 0.016476738369184594,
       "f4_ber_percent": 50.0,
       "f4_true_positive_percent": 100.0,
       "f4_true_negative_percent": 0.0,
@@ -961,48 +475,220 @@
         ]
       ],
       "f4_fbeta": 0.49401709401709404,
-      "ber_threshold": 0.07588744372186093,
-      "ber_ber_percent": 40.26232114467408,
-      "ber_true_positive_percent": 23.52941176470588,
-      "ber_true_negative_percent": 95.94594594594594,
+      "ber_threshold": 0.0728919459729865,
+      "ber_ber_percent": 35.42329093799682,
+      "ber_true_positive_percent": 47.05882352941176,
+      "ber_true_negative_percent": 82.0945945945946,
       "ber_confusion_matrix": [
         [
-          284,
-          12
+          243,
+          53
         ],
         [
-          13,
-          4
+          9,
+          8
         ]
       ],
-      "ber_percent": 40.26232114467408,
-      "true_positive_percent": 23.52941176470588,
-      "true_negative_percent": 95.94594594594594,
+      "ber_percent": 35.42329093799682,
+      "true_positive_percent": 47.05882352941176,
+      "true_negative_percent": 82.0945945945946,
       "confusion_matrix": [
         [
-          284,
-          12
+          243,
+          53
         ],
         [
-          13,
-          4
+          9,
+          8
         ]
       ],
-      "pr_auc_median": 0.15481028331742813,
-      "pr_auc_ci_low": 0.08375570133886237,
-      "pr_auc_ci_high": 0.2941597673025329,
-      "roc_auc_median": 0.7057829888712241,
-      "roc_auc_ci_low": 0.59181240063593,
-      "roc_auc_ci_high": 0.8221557034976152,
-      "ber_percent_median": 40.43124006359301,
-      "ber_percent_ci_low": 30.594197138314794,
-      "ber_percent_ci_high": 49.4279113672496
+      "pr_auc_median": 0.1594016356922075,
+      "pr_auc_ci_low": 0.08219011530889776,
+      "pr_auc_ci_high": 0.30341165263918085,
+      "roc_auc_median": 0.6698628775834659,
+      "roc_auc_ci_low": 0.5339999006359301,
+      "roc_auc_ci_high": 0.8118069356120827,
+      "ber_percent_median": 35.42329093799682,
+      "ber_percent_ci_low": 23.489666136724964,
+      "ber_percent_ci_high": 46.8543819554849
+    },
+    {
+      "pipeline": "pls_bayes",
+      "pr_auc": 0.14019373504110438,
+      "roc_auc": 0.747714626391097,
+      "f0_5_threshold": 0.14877788894447225,
+      "f0_5_ber_percent": 36.575914149443555,
+      "f0_5_true_positive_percent": 35.294117647058826,
+      "f0_5_true_negative_percent": 91.55405405405406,
+      "f0_5_confusion_matrix": [
+        [
+          271,
+          25
+        ],
+        [
+          11,
+          6
+        ]
+      ],
+      "f0_5_fbeta": 0.2127659574468085,
+      "f2_threshold": 0.02246773386693347,
+      "f2_ber_percent": 30.41534181240063,
+      "f2_true_positive_percent": 70.58823529411765,
+      "f2_true_negative_percent": 68.58108108108108,
+      "f2_confusion_matrix": [
+        [
+          203,
+          93
+        ],
+        [
+          5,
+          12
+        ]
+      ],
+      "f2_fbeta": 0.3468208092485549,
+      "f4_threshold": 0.001,
+      "f4_ber_percent": 29.600556438791735,
+      "f4_true_positive_percent": 82.35294117647058,
+      "f4_true_negative_percent": 58.445945945945944,
+      "f4_confusion_matrix": [
+        [
+          173,
+          123
+        ],
+        [
+          3,
+          14
+        ]
+      ],
+      "f4_fbeta": 0.5819070904645477,
+      "ber_threshold": 0.02246773386693347,
+      "ber_ber_percent": 30.41534181240063,
+      "ber_true_positive_percent": 70.58823529411765,
+      "ber_true_negative_percent": 68.58108108108108,
+      "ber_confusion_matrix": [
+        [
+          203,
+          93
+        ],
+        [
+          5,
+          12
+        ]
+      ],
+      "ber_percent": 30.41534181240063,
+      "true_positive_percent": 70.58823529411765,
+      "true_negative_percent": 68.58108108108108,
+      "confusion_matrix": [
+        [
+          203,
+          93
+        ],
+        [
+          5,
+          12
+        ]
+      ],
+      "pr_auc_median": 0.15086650840165317,
+      "pr_auc_ci_low": 0.08881779387162399,
+      "pr_auc_ci_high": 0.2779755857049008,
+      "roc_auc_median": 0.74806240063593,
+      "roc_auc_ci_low": 0.6281721979332273,
+      "roc_auc_ci_high": 0.8613051470588236,
+      "ber_percent_median": 30.246422893481718,
+      "ber_percent_ci_low": 19.39586645468998,
+      "ber_percent_ci_high": 42.517885532591414
+    },
+    {
+      "pipeline": "rfsel_enet",
+      "pr_auc": 0.14006662693549654,
+      "roc_auc": 0.6695151033386327,
+      "f0_5_threshold": 0.22366533266633318,
+      "f0_5_ber_percent": 47.56558028616852,
+      "f0_5_true_positive_percent": 5.88235294117647,
+      "f0_5_true_negative_percent": 98.98648648648648,
+      "f0_5_confusion_matrix": [
+        [
+          293,
+          3
+        ],
+        [
+          16,
+          1
+        ]
+      ],
+      "f0_5_fbeta": 0.15151515151515152,
+      "f2_threshold": 0.042936968484242125,
+      "f2_ber_percent": 38.493640699523056,
+      "f2_true_positive_percent": 58.82352941176471,
+      "f2_true_negative_percent": 64.1891891891892,
+      "f2_confusion_matrix": [
+        [
+          190,
+          106
+        ],
+        [
+          7,
+          10
+        ]
+      ],
+      "f2_fbeta": 0.2717391304347826,
+      "f4_threshold": 0.0249639819909955,
+      "f4_ber_percent": 42.39864864864865,
+      "f4_true_positive_percent": 100.0,
+      "f4_true_negative_percent": 15.202702702702704,
+      "f4_confusion_matrix": [
+        [
+          45,
+          251
+        ],
+        [
+          0,
+          17
+        ]
+      ],
+      "f4_fbeta": 0.5351851851851852,
+      "ber_threshold": 0.042936968484242125,
+      "ber_ber_percent": 38.493640699523056,
+      "ber_true_positive_percent": 58.82352941176471,
+      "ber_true_negative_percent": 64.1891891891892,
+      "ber_confusion_matrix": [
+        [
+          190,
+          106
+        ],
+        [
+          7,
+          10
+        ]
+      ],
+      "ber_percent": 38.493640699523056,
+      "true_positive_percent": 58.82352941176471,
+      "true_negative_percent": 64.1891891891892,
+      "confusion_matrix": [
+        [
+          190,
+          106
+        ],
+        [
+          7,
+          10
+        ]
+      ],
+      "pr_auc_median": 0.14962937300000373,
+      "pr_auc_ci_low": 0.07612302076332102,
+      "pr_auc_ci_high": 0.3412634380613245,
+      "roc_auc_median": 0.6693163751987281,
+      "roc_auc_ci_low": 0.5428830484896661,
+      "roc_auc_ci_high": 0.7852171104928457,
+      "ber_percent_median": 38.493640699523056,
+      "ber_percent_ci_low": 27.472426470588232,
+      "ber_percent_ci_high": 51.78283982511923
     },
     {
       "pipeline": "rfsel_bayes",
-      "pr_auc": 0.14359902607182928,
-      "roc_auc": 0.7472178060413354,
-      "f0_5_threshold": 0.1298064032016008,
+      "pr_auc": 0.13748646865196226,
+      "roc_auc": 0.7442368839427662,
+      "f0_5_threshold": 0.1847238619309655,
       "f0_5_ber_percent": 47.734499205087445,
       "f0_5_true_positive_percent": 5.88235294117647,
       "f0_5_true_negative_percent": 98.64864864864865,
@@ -1017,416 +703,330 @@
         ]
       ],
       "f0_5_fbeta": 0.13513513513513514,
-      "f2_threshold": 0.10584242121060532,
-      "f2_ber_percent": 44.962241653418126,
-      "f2_true_positive_percent": 11.76470588235294,
-      "f2_true_negative_percent": 98.3108108108108,
-      "f2_confusion_matrix": [
-        [
-          291,
-          5
-        ],
-        [
-          15,
-          2
-        ]
-      ],
-      "f2_fbeta": 0.13333333333333333,
-      "f4_threshold": 0.0409399699849925,
-      "f4_ber_percent": 33.42607313195549,
-      "f4_true_positive_percent": 58.82352941176471,
-      "f4_true_negative_percent": 74.32432432432432,
-      "f4_confusion_matrix": [
-        [
-          220,
-          76
-        ],
-        [
-          7,
-          10
-        ]
-      ],
-      "f4_fbeta": 0.4748603351955307,
-      "ber_threshold": 0.10584242121060532,
-      "ber_ber_percent": 44.962241653418126,
-      "ber_true_positive_percent": 11.76470588235294,
-      "ber_true_negative_percent": 98.3108108108108,
-      "ber_confusion_matrix": [
-        [
-          291,
-          5
-        ],
-        [
-          15,
-          2
-        ]
-      ],
-      "ber_percent": 44.962241653418126,
-      "true_positive_percent": 11.76470588235294,
-      "true_negative_percent": 98.3108108108108,
-      "confusion_matrix": [
-        [
-          291,
-          5
-        ],
-        [
-          15,
-          2
-        ]
-      ],
-      "pr_auc_median": 0.15395768494120732,
-      "pr_auc_ci_low": 0.08445167138320075,
-      "pr_auc_ci_high": 0.31805807694621846,
-      "roc_auc_median": 0.74935413354531,
-      "roc_auc_ci_low": 0.6364268680445151,
-      "roc_auc_ci_high": 0.8380589228934817,
-      "ber_percent_median": 45.131160572337045,
-      "ber_percent_ci_low": 36.13448926868045,
-      "ber_percent_ci_high": 51.182432432432435
-    },
-    {
-      "pipeline": "rfsel_enet",
-      "pr_auc": 0.13984702039535052,
-      "roc_auc": 0.7561605723370428,
-      "f0_5_threshold": 0.224663831915958,
-      "f0_5_ber_percent": 50.50675675675676,
-      "f0_5_true_positive_percent": 0.0,
-      "f0_5_true_negative_percent": 98.98648648648648,
-      "f0_5_confusion_matrix": [
-        [
-          293,
-          3
-        ],
-        [
-          17,
-          0
-        ]
-      ],
-      "f0_5_fbeta": 0.0,
-      "f2_threshold": 0.15476888444222112,
-      "f2_ber_percent": 43.879173290938,
+      "f2_threshold": 0.0654032016008004,
+      "f2_ber_percent": 44.55484896661367,
       "f2_true_positive_percent": 17.647058823529413,
-      "f2_true_negative_percent": 94.5945945945946,
+      "f2_true_negative_percent": 93.24324324324324,
       "f2_confusion_matrix": [
         [
-          280,
-          16
+          276,
+          20
         ],
         [
           14,
           3
         ]
       ],
-      "f2_fbeta": 0.1724137931034483,
-      "f4_threshold": 0.04743021510755378,
-      "f4_ber_percent": 28.487678855325914,
-      "f4_true_positive_percent": 76.47058823529412,
-      "f4_true_negative_percent": 66.55405405405406,
+      "f2_fbeta": 0.16483516483516483,
+      "f4_threshold": 0.02746023011505753,
+      "f4_ber_percent": 31.329491255961848,
+      "f4_true_positive_percent": 64.70588235294117,
+      "f4_true_negative_percent": 72.63513513513513,
       "f4_confusion_matrix": [
         [
-          197,
-          99
+          215,
+          81
         ],
         [
-          4,
-          13
+          6,
+          11
         ]
       ],
-      "f4_fbeta": 0.5755208333333334,
-      "ber_threshold": 0.06989644822411206,
-      "ber_ber_percent": 30.62400635930047,
-      "ber_true_positive_percent": 52.94117647058824,
-      "ber_true_negative_percent": 85.8108108108108,
+      "f4_fbeta": 0.5137362637362637,
+      "ber_threshold": 0.0654032016008004,
+      "ber_ber_percent": 44.55484896661367,
+      "ber_true_positive_percent": 17.647058823529413,
+      "ber_true_negative_percent": 93.24324324324324,
       "ber_confusion_matrix": [
         [
-          254,
-          42
+          276,
+          20
+        ],
+        [
+          14,
+          3
+        ]
+      ],
+      "ber_percent": 44.55484896661367,
+      "true_positive_percent": 17.647058823529413,
+      "true_negative_percent": 93.24324324324324,
+      "confusion_matrix": [
+        [
+          276,
+          20
+        ],
+        [
+          14,
+          3
+        ]
+      ],
+      "pr_auc_median": 0.14892159775147829,
+      "pr_auc_ci_low": 0.08742718559816447,
+      "pr_auc_ci_high": 0.2947867455264081,
+      "roc_auc_median": 0.7468203497615262,
+      "roc_auc_ci_low": 0.6384911565977743,
+      "roc_auc_ci_high": 0.8413280007949125,
+      "ber_percent_median": 44.723767885532595,
+      "ber_percent_ci_low": 34.20931041335454,
+      "ber_percent_ci_high": 53.044763513513516
+    },
+    {
+      "pipeline": "hsic_rf",
+      "pr_auc": 0.10753270119657203,
+      "roc_auc": 0.5902225755166932,
+      "f0_5_threshold": 0.2326518259129565,
+      "f0_5_ber_percent": 45.806836248012715,
+      "f0_5_true_positive_percent": 11.76470588235294,
+      "f0_5_true_negative_percent": 96.62162162162163,
+      "f0_5_confusion_matrix": [
+        [
+          286,
+          10
+        ],
+        [
+          15,
+          2
+        ]
+      ],
+      "f0_5_fbeta": 0.15384615384615385,
+      "f2_threshold": 0.06889794897448726,
+      "f2_ber_percent": 46.174483306836244,
+      "f2_true_positive_percent": 23.52941176470588,
+      "f2_true_negative_percent": 84.12162162162163,
+      "f2_confusion_matrix": [
+        [
+          249,
+          47
+        ],
+        [
+          13,
+          4
+        ]
+      ],
+      "f2_fbeta": 0.16806722689075632,
+      "f4_threshold": 0.03794447223611806,
+      "f4_ber_percent": 44.3064387917329,
+      "f4_true_positive_percent": 52.94117647058824,
+      "f4_true_negative_percent": 58.445945945945944,
+      "f4_confusion_matrix": [
+        [
+          173,
+          123
         ],
         [
           8,
           9
         ]
       ],
-      "ber_percent": 43.879173290938,
-      "true_positive_percent": 17.647058823529413,
-      "true_negative_percent": 94.5945945945946,
-      "confusion_matrix": [
-        [
-          280,
-          16
-        ],
-        [
-          14,
-          3
-        ]
-      ],
-      "pr_auc_median": 0.15337785673936227,
-      "pr_auc_ci_low": 0.09488179247345495,
-      "pr_auc_ci_high": 0.2732095170411588,
-      "roc_auc_median": 0.7583465818759936,
-      "roc_auc_ci_low": 0.6222923290937997,
-      "roc_auc_ci_high": 0.8627906399046105,
-      "ber_percent_median": 44.21701112877584,
-      "ber_percent_ci_low": 34.37996820349761,
-      "ber_percent_ci_high": 52.36486486486487
-    },
-    {
-      "pipeline": "hsic_rf",
-      "pr_auc": 0.1063446161723095,
-      "roc_auc": 0.6521263910969792,
-      "f0_5_threshold": 0.3754372186093047,
-      "f0_5_ber_percent": 50.33783783783784,
-      "f0_5_true_positive_percent": 0.0,
-      "f0_5_true_negative_percent": 99.32432432432432,
-      "f0_5_confusion_matrix": [
-        [
-          294,
-          2
-        ],
-        [
-          17,
-          0
-        ]
-      ],
-      "f0_5_fbeta": 0.0,
-      "f2_threshold": 0.040440720360180094,
-      "f2_ber_percent": 41.19634340222576,
-      "f2_true_positive_percent": 58.82352941176471,
-      "f2_true_negative_percent": 58.78378378378378,
-      "f2_confusion_matrix": [
-        [
-          174,
-          122
-        ],
-        [
-          7,
-          10
-        ]
-      ],
-      "f2_fbeta": 0.25,
-      "f4_threshold": 0.017974487243621814,
-      "f4_ber_percent": 43.95866454689984,
-      "f4_true_positive_percent": 82.35294117647058,
-      "f4_true_negative_percent": 29.72972972972973,
-      "f4_confusion_matrix": [
-        [
-          88,
-          208
-        ],
-        [
-          3,
-          14
-        ]
-      ],
-      "f4_fbeta": 0.4817813765182186,
-      "ber_threshold": 0.017974487243621814,
-      "ber_ber_percent": 43.95866454689984,
-      "ber_true_positive_percent": 82.35294117647058,
-      "ber_true_negative_percent": 29.72972972972973,
+      "f4_fbeta": 0.3787128712871287,
+      "ber_threshold": 0.052422711355677845,
+      "ber_ber_percent": 43.60095389507155,
+      "ber_true_positive_percent": 41.17647058823529,
+      "ber_true_negative_percent": 71.62162162162163,
       "ber_confusion_matrix": [
         [
-          88,
-          208
+          212,
+          84
         ],
         [
-          3,
-          14
+          10,
+          7
         ]
       ],
-      "ber_percent": 41.19634340222576,
-      "true_positive_percent": 58.82352941176471,
-      "true_negative_percent": 58.78378378378378,
+      "ber_percent": 46.174483306836244,
+      "true_positive_percent": 23.52941176470588,
+      "true_negative_percent": 84.12162162162163,
       "confusion_matrix": [
         [
-          174,
-          122
+          249,
+          47
         ],
         [
-          7,
-          10
+          13,
+          4
         ]
       ],
-      "pr_auc_median": 0.11753116735853372,
-      "pr_auc_ci_low": 0.06766136154563535,
-      "pr_auc_ci_high": 0.25254529244147955,
-      "roc_auc_median": 0.6558525437201908,
-      "roc_auc_ci_low": 0.5256036367249604,
-      "roc_auc_ci_high": 0.7805370627980922,
-      "ber_percent_median": 41.12678855325914,
-      "ber_percent_ci_low": 29.49945349761527,
-      "ber_percent_ci_high": 52.793869236883936
-    },
-    {
-      "pipeline": "rfsel_rf",
-      "pr_auc": 0.09270455889751866,
-      "roc_auc": 0.6724960254372019,
-      "f0_5_threshold": 0.1283086543271636,
-      "f0_5_ber_percent": 45.061605723370434,
-      "f0_5_true_positive_percent": 17.647058823529413,
-      "f0_5_true_negative_percent": 92.22972972972973,
-      "f0_5_confusion_matrix": [
-        [
-          273,
-          23
-        ],
-        [
-          14,
-          3
-        ]
-      ],
-      "f0_5_fbeta": 0.12396694214876033,
-      "f2_threshold": 0.04493396698349175,
-      "f2_ber_percent": 46.06518282988872,
-      "f2_true_positive_percent": 47.05882352941176,
-      "f2_true_negative_percent": 60.810810810810814,
-      "f2_confusion_matrix": [
-        [
-          180,
-          116
-        ],
-        [
-          9,
-          8
-        ]
-      ],
-      "f2_fbeta": 0.20833333333333334,
-      "f4_threshold": 0.03744522261130566,
-      "f4_ber_percent": 46.06518282988872,
-      "f4_true_positive_percent": 47.05882352941176,
-      "f4_true_negative_percent": 60.810810810810814,
-      "f4_confusion_matrix": [
-        [
-          180,
-          116
-        ],
-        [
-          9,
-          8
-        ]
-      ],
-      "f4_fbeta": 0.3434343434343434,
-      "ber_threshold": 0.03744522261130566,
-      "ber_ber_percent": 46.06518282988872,
-      "ber_true_positive_percent": 47.05882352941176,
-      "ber_true_negative_percent": 60.810810810810814,
-      "ber_confusion_matrix": [
-        [
-          180,
-          116
-        ],
-        [
-          9,
-          8
-        ]
-      ],
-      "ber_percent": 46.06518282988872,
-      "true_positive_percent": 47.05882352941176,
-      "true_negative_percent": 60.810810810810814,
-      "confusion_matrix": [
-        [
-          180,
-          116
-        ],
-        [
-          9,
-          8
-        ]
-      ],
-      "pr_auc_median": 0.09827431815711754,
-      "pr_auc_ci_low": 0.06852709943170364,
-      "pr_auc_ci_high": 0.17544742680208603,
-      "roc_auc_median": 0.6760731319554849,
-      "roc_auc_ci_low": 0.5819132551669316,
-      "roc_auc_ci_high": 0.7698827503974562,
-      "ber_percent_median": 45.72734499205087,
-      "ber_percent_ci_low": 33.62480127186009,
-      "ber_percent_ci_high": 58.16772655007949
+      "pr_auc_median": 0.11975643095046923,
+      "pr_auc_ci_low": 0.05699032502224028,
+      "pr_auc_ci_high": 0.29036094659538253,
+      "roc_auc_median": 0.5912658982511925,
+      "roc_auc_ci_low": 0.45482412559618457,
+      "roc_auc_ci_high": 0.7245851550079491,
+      "ber_percent_median": 46.34340222575517,
+      "ber_percent_ci_low": 35.99537957074722,
+      "ber_percent_ci_high": 55.171154610492835
     },
     {
       "pipeline": "hsic_enet",
-      "pr_auc": 0.057121171986352526,
-      "roc_auc": 0.48281001589825123,
-      "f0_5_threshold": 0.08786943471735868,
-      "f0_5_ber_percent": 50.67567567567568,
-      "f0_5_true_positive_percent": 0.0,
-      "f0_5_true_negative_percent": 98.64864864864865,
+      "pr_auc": 0.10378175435089522,
+      "roc_auc": 0.6705087440381557,
+      "f0_5_threshold": 0.11732516258129065,
+      "f0_5_ber_percent": 46.65143084260731,
+      "f0_5_true_positive_percent": 11.76470588235294,
+      "f0_5_true_negative_percent": 94.93243243243244,
       "f0_5_confusion_matrix": [
         [
-          292,
-          4
+          281,
+          15
         ],
         [
-          17,
-          0
+          15,
+          2
         ]
       ],
-      "f0_5_fbeta": 0.0,
-      "f2_threshold": 0.064903951975988,
-      "f2_ber_percent": 50.67567567567568,
-      "f2_true_positive_percent": 0.0,
-      "f2_true_negative_percent": 98.64864864864865,
+      "f0_5_fbeta": 0.11764705882352941,
+      "f2_threshold": 0.07389044522261132,
+      "f2_ber_percent": 44.723767885532595,
+      "f2_true_positive_percent": 17.647058823529413,
+      "f2_true_negative_percent": 92.9054054054054,
       "f2_confusion_matrix": [
         [
-          292,
-          4
+          275,
+          21
         ],
         [
-          17,
-          0
+          14,
+          3
         ]
       ],
-      "f2_fbeta": 0.0,
-      "f4_threshold": 0.05541820910455228,
-      "f4_ber_percent": 50.8445945945946,
-      "f4_true_positive_percent": 0.0,
-      "f4_true_negative_percent": 98.3108108108108,
+      "f2_fbeta": 0.16304347826086957,
+      "f4_threshold": 0.03444972486243122,
+      "f4_ber_percent": 41.38513513513513,
+      "f4_true_positive_percent": 100.0,
+      "f4_true_negative_percent": 17.22972972972973,
       "f4_confusion_matrix": [
         [
-          291,
-          5
+          51,
+          245
         ],
         [
-          17,
-          0
+          0,
+          17
         ]
       ],
-      "f4_fbeta": 0.0,
-      "ber_threshold": 0.05541820910455228,
-      "ber_ber_percent": 50.8445945945946,
-      "ber_true_positive_percent": 0.0,
-      "ber_true_negative_percent": 98.3108108108108,
+      "f4_fbeta": 0.5411985018726592,
+      "ber_threshold": 0.07389044522261132,
+      "ber_ber_percent": 44.723767885532595,
+      "ber_true_positive_percent": 17.647058823529413,
+      "ber_true_negative_percent": 92.9054054054054,
       "ber_confusion_matrix": [
         [
-          291,
-          5
+          275,
+          21
         ],
         [
-          17,
-          0
+          14,
+          3
         ]
       ],
-      "ber_percent": 50.67567567567568,
-      "true_positive_percent": 0.0,
-      "true_negative_percent": 98.64864864864865,
+      "ber_percent": 44.723767885532595,
+      "true_positive_percent": 17.647058823529413,
+      "true_negative_percent": 92.9054054054054,
       "confusion_matrix": [
         [
-          292,
-          4
+          275,
+          21
         ],
         [
-          17,
-          0
+          14,
+          3
         ]
       ],
-      "pr_auc_median": 0.059849465854019256,
-      "pr_auc_ci_low": 0.046245337685601726,
-      "pr_auc_ci_high": 0.10020420045438781,
-      "roc_auc_median": 0.48385333863275043,
-      "roc_auc_ci_low": 0.3570250397456281,
-      "roc_auc_ci_high": 0.6091166534181238,
-      "ber_percent_median": 50.67567567567568,
-      "ber_percent_ci_low": 50.168918918918926,
-      "ber_percent_ci_high": 51.35135135135135
+      "pr_auc_median": 0.11332611431961129,
+      "pr_auc_ci_low": 0.06728977400561631,
+      "pr_auc_ci_high": 0.211879497559806,
+      "roc_auc_median": 0.6713533386327504,
+      "roc_auc_ci_low": 0.5549483306836248,
+      "roc_auc_ci_high": 0.7760557432432431,
+      "ber_percent_median": 44.89268680445151,
+      "ber_percent_ci_low": 35.22456279809221,
+      "ber_percent_ci_high": 53.20945945945945
+    },
+    {
+      "pipeline": "rfsel_rf",
+      "pr_auc": 0.08782339144622521,
+      "roc_auc": 0.6321542130365659,
+      "f0_5_threshold": 0.32451375687843925,
+      "f0_5_ber_percent": 45.806836248012715,
+      "f0_5_true_positive_percent": 11.76470588235294,
+      "f0_5_true_negative_percent": 96.62162162162163,
+      "f0_5_confusion_matrix": [
+        [
+          286,
+          10
+        ],
+        [
+          15,
+          2
+        ]
+      ],
+      "f0_5_fbeta": 0.15384615384615385,
+      "f2_threshold": 0.054918959479739876,
+      "f2_ber_percent": 44.78338632750398,
+      "f2_true_positive_percent": 41.17647058823529,
+      "f2_true_negative_percent": 69.25675675675676,
+      "f2_confusion_matrix": [
+        [
+          205,
+          91
+        ],
+        [
+          10,
+          7
+        ]
+      ],
+      "f2_fbeta": 0.21084337349397592,
+      "f4_threshold": 0.006491745872936469,
+      "f4_ber_percent": 45.945945945945944,
+      "f4_true_positive_percent": 100.0,
+      "f4_true_negative_percent": 8.108108108108109,
+      "f4_confusion_matrix": [
+        [
+          24,
+          272
+        ],
+        [
+          0,
+          17
+        ]
+      ],
+      "f4_fbeta": 0.5151515151515151,
+      "ber_threshold": 0.054918959479739876,
+      "ber_ber_percent": 44.78338632750398,
+      "ber_true_positive_percent": 41.17647058823529,
+      "ber_true_negative_percent": 69.25675675675676,
+      "ber_confusion_matrix": [
+        [
+          205,
+          91
+        ],
+        [
+          10,
+          7
+        ]
+      ],
+      "ber_percent": 44.78338632750398,
+      "true_positive_percent": 41.17647058823529,
+      "true_negative_percent": 69.25675675675676,
+      "confusion_matrix": [
+        [
+          205,
+          91
+        ],
+        [
+          10,
+          7
+        ]
+      ],
+      "pr_auc_median": 0.09192710097251997,
+      "pr_auc_ci_low": 0.06056187254683,
+      "pr_auc_ci_high": 0.19131457178037045,
+      "roc_auc_median": 0.6353338632750398,
+      "roc_auc_ci_low": 0.5241231120826709,
+      "roc_auc_ci_high": 0.7442965023847377,
+      "ber_percent_median": 44.78338632750398,
+      "ber_percent_ci_low": 32.68084260731319,
+      "ber_percent_ci_high": 56.142438394276624
     }
   ],
   "holdout_random": [
@@ -2219,12 +1819,12 @@
       "n_flagged_q": 3,
       "n_flagged_both": 3,
       "n_flagged_either": 41,
-      "global_pr_auc": 0.057121171986352526,
-      "global_roc_auc": 0.48281001589825123,
-      "conditional_pr_auc": 0.06308565543191212,
-      "conditional_roc_auc": 0.49365234375,
-      "conditional_pr_auc_ci_low": 0.05082476361955014,
-      "conditional_pr_auc_ci_high": 0.11315664021276033
+      "global_pr_auc": 0.10378175435089522,
+      "global_roc_auc": 0.6705087440381557,
+      "conditional_pr_auc": 0.13518147735696148,
+      "conditional_roc_auc": 0.684814453125,
+      "conditional_pr_auc_ci_low": 0.07869111957204261,
+      "conditional_pr_auc_ci_high": 0.30825166608735166
     },
     {
       "pipeline": "hsic_rf",
@@ -2239,12 +1839,12 @@
       "n_flagged_q": 3,
       "n_flagged_both": 3,
       "n_flagged_either": 41,
-      "global_pr_auc": 0.1063446161723095,
-      "global_roc_auc": 0.6521263910969792,
-      "conditional_pr_auc": 0.13499841804350657,
-      "conditional_roc_auc": 0.6788330078125,
-      "conditional_pr_auc_ci_low": 0.07840344647392528,
-      "conditional_pr_auc_ci_high": 0.3291758425046777
+      "global_pr_auc": 0.10753270119657203,
+      "global_roc_auc": 0.5902225755166932,
+      "conditional_pr_auc": 0.177183732537453,
+      "conditional_roc_auc": 0.6126708984375,
+      "conditional_pr_auc_ci_low": 0.06804324382349052,
+      "conditional_pr_auc_ci_high": 0.37438807148815356
     },
     {
       "pipeline": "hsic_bayes",
@@ -2259,12 +1859,12 @@
       "n_flagged_q": 3,
       "n_flagged_both": 3,
       "n_flagged_either": 41,
-      "global_pr_auc": 0.14416965612000904,
-      "global_roc_auc": 0.7043918918918919,
-      "conditional_pr_auc": 0.20042667653305876,
-      "conditional_roc_auc": 0.7376708984375,
-      "conditional_pr_auc_ci_low": 0.10538456025942079,
-      "conditional_pr_auc_ci_high": 0.4114241994396386
+      "global_pr_auc": 0.14771946684634227,
+      "global_roc_auc": 0.6713036565977741,
+      "conditional_pr_auc": 0.20858520749897758,
+      "conditional_roc_auc": 0.7117919921875,
+      "conditional_pr_auc_ci_low": 0.10605290466056873,
+      "conditional_pr_auc_ci_high": 0.4135739290620194
     },
     {
       "pipeline": "rfsel_enet",
@@ -2279,12 +1879,12 @@
       "n_flagged_q": 3,
       "n_flagged_both": 3,
       "n_flagged_either": 41,
-      "global_pr_auc": 0.13984702039535052,
-      "global_roc_auc": 0.7561605723370428,
-      "conditional_pr_auc": 0.18615897802874598,
-      "conditional_roc_auc": 0.8006591796875,
-      "conditional_pr_auc_ci_low": 0.12086549059175378,
-      "conditional_pr_auc_ci_high": 0.3662143025877568
+      "global_pr_auc": 0.14006662693549654,
+      "global_roc_auc": 0.6695151033386327,
+      "conditional_pr_auc": 0.2409281879740396,
+      "conditional_roc_auc": 0.69140625,
+      "conditional_pr_auc_ci_low": 0.09587964863532135,
+      "conditional_pr_auc_ci_high": 0.46786176873970775
     },
     {
       "pipeline": "rfsel_rf",
@@ -2299,12 +1899,12 @@
       "n_flagged_q": 3,
       "n_flagged_both": 3,
       "n_flagged_either": 41,
-      "global_pr_auc": 0.09270455889751866,
-      "global_roc_auc": 0.6724960254372019,
-      "conditional_pr_auc": 0.10634610089930449,
-      "conditional_roc_auc": 0.6871337890625,
-      "conditional_pr_auc_ci_low": 0.07703061331464267,
-      "conditional_pr_auc_ci_high": 0.20002964021286396
+      "global_pr_auc": 0.08782339144622521,
+      "global_roc_auc": 0.6321542130365659,
+      "conditional_pr_auc": 0.10384955065237778,
+      "conditional_roc_auc": 0.642333984375,
+      "conditional_pr_auc_ci_low": 0.06649234322294864,
+      "conditional_pr_auc_ci_high": 0.22678159188290267
     },
     {
       "pipeline": "rfsel_bayes",
@@ -2319,12 +1919,12 @@
       "n_flagged_q": 3,
       "n_flagged_both": 3,
       "n_flagged_either": 41,
-      "global_pr_auc": 0.14359902607182928,
-      "global_roc_auc": 0.7472178060413354,
-      "conditional_pr_auc": 0.2327290702598111,
-      "conditional_roc_auc": 0.7716064453125,
-      "conditional_pr_auc_ci_low": 0.10883764909683387,
-      "conditional_pr_auc_ci_high": 0.4298334571197812
+      "global_pr_auc": 0.13748646865196226,
+      "global_roc_auc": 0.7442368839427662,
+      "conditional_pr_auc": 0.22093188128608002,
+      "conditional_roc_auc": 0.7674560546875,
+      "conditional_pr_auc_ci_low": 0.10578961510079384,
+      "conditional_pr_auc_ci_high": 0.4068091943872086
     },
     {
       "pipeline": "pls_enet",
@@ -2339,12 +1939,12 @@
       "n_flagged_q": 3,
       "n_flagged_both": 3,
       "n_flagged_either": 41,
-      "global_pr_auc": 0.14911908440911392,
-      "global_roc_auc": 0.6617647058823529,
-      "conditional_pr_auc": 0.1802784005867697,
-      "conditional_roc_auc": 0.677001953125,
-      "conditional_pr_auc_ci_low": 0.0779363718379456,
-      "conditional_pr_auc_ci_high": 0.4123619742517722
+      "global_pr_auc": 0.17040764904994282,
+      "global_roc_auc": 0.7101550079491256,
+      "conditional_pr_auc": 0.2006339981029521,
+      "conditional_roc_auc": 0.7244873046875,
+      "conditional_pr_auc_ci_low": 0.09632560143940272,
+      "conditional_pr_auc_ci_high": 0.4458502140023002
     },
     {
       "pipeline": "pls_rf",
@@ -2359,12 +1959,12 @@
       "n_flagged_q": 3,
       "n_flagged_both": 3,
       "n_flagged_either": 41,
-      "global_pr_auc": 0.17504727289883845,
-      "global_roc_auc": 0.6632551669316376,
-      "conditional_pr_auc": 0.24662485230868947,
-      "conditional_roc_auc": 0.6907958984375,
-      "conditional_pr_auc_ci_low": 0.0955473309590337,
-      "conditional_pr_auc_ci_high": 0.4593251766994533
+      "global_pr_auc": 0.21039457426036012,
+      "global_roc_auc": 0.7172098569157392,
+      "conditional_pr_auc": 0.2985158404817838,
+      "conditional_roc_auc": 0.7420654296875,
+      "conditional_pr_auc_ci_low": 0.11375388236433608,
+      "conditional_pr_auc_ci_high": 0.522386149693165
     },
     {
       "pipeline": "pls_bayes",
@@ -2379,12 +1979,12 @@
       "n_flagged_q": 3,
       "n_flagged_both": 3,
       "n_flagged_either": 41,
-      "global_pr_auc": 0.1815303984993727,
-      "global_roc_auc": 0.706379173290938,
-      "conditional_pr_auc": 0.2008211005798322,
-      "conditional_roc_auc": 0.7183837890625,
-      "conditional_pr_auc_ci_low": 0.08915133783785115,
-      "conditional_pr_auc_ci_high": 0.390659596321756
+      "global_pr_auc": 0.14019373504110438,
+      "global_roc_auc": 0.747714626391097,
+      "conditional_pr_auc": 0.165569933854216,
+      "conditional_roc_auc": 0.764404296875,
+      "conditional_pr_auc_ci_low": 0.10021476860078267,
+      "conditional_pr_auc_ci_high": 0.35162421608775724
     }
   ],
   "holdout_conditional_random": [
@@ -2575,648 +2175,648 @@
       "coverage": 1.0,
       "n_kept": 313,
       "n_fails_kept": 17,
-      "pr_auc": 0.057121171986352526,
-      "roc_auc": 0.48281001589825123
+      "pr_auc": 0.10378175435089522,
+      "roc_auc": 0.6705087440381557
     },
     {
       "pipeline": "hsic_rf",
       "coverage": 1.0,
       "n_kept": 313,
       "n_fails_kept": 17,
-      "pr_auc": 0.1063446161723095,
-      "roc_auc": 0.6521263910969792
+      "pr_auc": 0.10753270119657203,
+      "roc_auc": 0.5902225755166932
     },
     {
       "pipeline": "hsic_bayes",
       "coverage": 1.0,
       "n_kept": 313,
       "n_fails_kept": 17,
-      "pr_auc": 0.14416965612000904,
-      "roc_auc": 0.7043918918918919
+      "pr_auc": 0.14771946684634227,
+      "roc_auc": 0.6713036565977741
     },
     {
       "pipeline": "rfsel_enet",
       "coverage": 1.0,
       "n_kept": 313,
       "n_fails_kept": 17,
-      "pr_auc": 0.13984702039535052,
-      "roc_auc": 0.7561605723370428
+      "pr_auc": 0.14006662693549654,
+      "roc_auc": 0.6695151033386327
     },
     {
       "pipeline": "rfsel_rf",
       "coverage": 1.0,
       "n_kept": 313,
       "n_fails_kept": 17,
-      "pr_auc": 0.09270455889751866,
-      "roc_auc": 0.6724960254372019
+      "pr_auc": 0.08782339144622521,
+      "roc_auc": 0.6321542130365659
     },
     {
       "pipeline": "rfsel_bayes",
       "coverage": 1.0,
       "n_kept": 313,
       "n_fails_kept": 17,
-      "pr_auc": 0.14359902607182928,
-      "roc_auc": 0.7472178060413354
+      "pr_auc": 0.13748646865196226,
+      "roc_auc": 0.7442368839427662
     },
     {
       "pipeline": "pls_enet",
       "coverage": 1.0,
       "n_kept": 313,
       "n_fails_kept": 17,
-      "pr_auc": 0.14911908440911392,
-      "roc_auc": 0.6617647058823529
+      "pr_auc": 0.17040764904994282,
+      "roc_auc": 0.7101550079491256
     },
     {
       "pipeline": "pls_rf",
       "coverage": 1.0,
       "n_kept": 313,
       "n_fails_kept": 17,
-      "pr_auc": 0.17504727289883845,
-      "roc_auc": 0.6632551669316376
+      "pr_auc": 0.21039457426036012,
+      "roc_auc": 0.7172098569157392
     },
     {
       "pipeline": "pls_bayes",
       "coverage": 1.0,
       "n_kept": 313,
       "n_fails_kept": 17,
-      "pr_auc": 0.1815303984993727,
-      "roc_auc": 0.706379173290938
+      "pr_auc": 0.14019373504110438,
+      "roc_auc": 0.747714626391097
     },
     {
       "pipeline": "hsic_enet",
       "coverage": 0.99,
       "n_kept": 310,
       "n_fails_kept": 17,
-      "pr_auc": 0.05868950844937658,
-      "roc_auc": 0.4870507930134511
+      "pr_auc": 0.11672820205988796,
+      "roc_auc": 0.6771732583818509
     },
     {
       "pipeline": "hsic_rf",
       "coverage": 0.99,
       "n_kept": 310,
       "n_fails_kept": 17,
-      "pr_auc": 0.12433695652921681,
-      "roc_auc": 0.6584019273238305
+      "pr_auc": 0.16473642228015306,
+      "roc_auc": 0.5958642842802649
     },
     {
       "pipeline": "hsic_bayes",
       "coverage": 0.99,
       "n_kept": 310,
       "n_fails_kept": 17,
-      "pr_auc": 0.17209309354331864,
-      "roc_auc": 0.7114033326641237
+      "pr_auc": 0.17791952318667875,
+      "roc_auc": 0.677976309977916
     },
     {
       "pipeline": "rfsel_enet",
       "coverage": 0.99,
       "n_kept": 310,
       "n_fails_kept": 17,
-      "pr_auc": 0.16733488968141577,
-      "roc_auc": 0.7639028307568761
+      "pr_auc": 0.2240779453646055,
+      "roc_auc": 0.676370206785786
     },
     {
       "pipeline": "rfsel_rf",
       "coverage": 0.99,
       "n_kept": 310,
       "n_fails_kept": 17,
-      "pr_auc": 0.09782906043235305,
-      "roc_auc": 0.6787793615739811
+      "pr_auc": 0.0980663250696492,
+      "roc_auc": 0.6384260188717125
     },
     {
       "pipeline": "rfsel_bayes",
       "coverage": 0.99,
       "n_kept": 310,
       "n_fails_kept": 17,
-      "pr_auc": 0.21492096954698325,
-      "roc_auc": 0.7548685003011443
+      "pr_auc": 0.19768609674264126,
+      "roc_auc": 0.7518570568159005
     },
     {
       "pipeline": "pls_enet",
       "coverage": 0.99,
       "n_kept": 310,
       "n_fails_kept": 17,
-      "pr_auc": 0.17003415845263128,
-      "roc_auc": 0.6654286287893997
+      "pr_auc": 0.1884971976346146,
+      "roc_auc": 0.7127082915077294
     },
     {
       "pipeline": "pls_rf",
       "coverage": 0.99,
       "n_kept": 310,
       "n_fails_kept": 17,
-      "pr_auc": 0.23032547437125578,
-      "roc_auc": 0.6681389279261192
+      "pr_auc": 0.28038296899371623,
+      "roc_auc": 0.7233487251555912
     },
     {
       "pipeline": "pls_bayes",
       "coverage": 0.99,
       "n_kept": 310,
       "n_fails_kept": 17,
-      "pr_auc": 0.19018240741468034,
-      "roc_auc": 0.7108010439670749
+      "pr_auc": 0.15655324489257455,
+      "roc_auc": 0.7520578197149168
     },
     {
       "pipeline": "hsic_enet",
       "coverage": 0.95,
       "n_kept": 297,
       "n_fails_kept": 17,
-      "pr_auc": 0.060800289303796544,
-      "roc_auc": 0.4877100840336134
+      "pr_auc": 0.11968246836466571,
+      "roc_auc": 0.6704831932773109
     },
     {
       "pipeline": "hsic_rf",
       "coverage": 0.95,
       "n_kept": 297,
       "n_fails_kept": 17,
-      "pr_auc": 0.1276777738887911,
-      "roc_auc": 0.6568277310924371
+      "pr_auc": 0.1674125896448462,
+      "roc_auc": 0.59390756302521
     },
     {
       "pipeline": "hsic_bayes",
       "coverage": 0.95,
       "n_kept": 297,
       "n_fails_kept": 17,
-      "pr_auc": 0.18968871685054534,
-      "roc_auc": 0.7165966386554622
+      "pr_auc": 0.19683119117908315,
+      "roc_auc": 0.6830882352941177
     },
     {
       "pipeline": "rfsel_enet",
       "coverage": 0.95,
       "n_kept": 297,
       "n_fails_kept": 17,
-      "pr_auc": 0.17374155722553172,
-      "roc_auc": 0.7639705882352942
+      "pr_auc": 0.2269655008740536,
+      "roc_auc": 0.6746848739495798
     },
     {
       "pipeline": "rfsel_rf",
       "coverage": 0.95,
       "n_kept": 297,
       "n_fails_kept": 17,
-      "pr_auc": 0.10099894353285342,
-      "roc_auc": 0.6764705882352942
+      "pr_auc": 0.10035475344281931,
+      "roc_auc": 0.6361344537815126
     },
     {
       "pipeline": "rfsel_bayes",
       "coverage": 0.95,
       "n_kept": 297,
       "n_fails_kept": 17,
-      "pr_auc": 0.21724343445534583,
-      "roc_auc": 0.7513655462184874
+      "pr_auc": 0.20099912864192843,
+      "roc_auc": 0.7502100840336133
     },
     {
       "pipeline": "pls_enet",
       "coverage": 0.95,
       "n_kept": 297,
       "n_fails_kept": 17,
-      "pr_auc": 0.1714016358683888,
-      "roc_auc": 0.6625000000000001
+      "pr_auc": 0.1904459904579222,
+      "roc_auc": 0.7094537815126051
     },
     {
       "pipeline": "pls_rf",
       "coverage": 0.95,
       "n_kept": 297,
       "n_fails_kept": 17,
-      "pr_auc": 0.2333857558220957,
-      "roc_auc": 0.6661764705882354
+      "pr_auc": 0.28276161373397896,
+      "roc_auc": 0.7195378151260503
     },
     {
       "pipeline": "pls_bayes",
       "coverage": 0.95,
       "n_kept": 297,
       "n_fails_kept": 17,
-      "pr_auc": 0.1910121395708617,
-      "roc_auc": 0.7043067226890756
+      "pr_auc": 0.15778723090373376,
+      "roc_auc": 0.7467436974789915
     },
     {
       "pipeline": "hsic_enet",
       "coverage": 0.9,
       "n_kept": 282,
       "n_fails_kept": 16,
-      "pr_auc": 0.061405306450702635,
-      "roc_auc": 0.49353853383458646
+      "pr_auc": 0.13234406558644027,
+      "roc_auc": 0.6929041353383459
     },
     {
       "pipeline": "hsic_rf",
       "coverage": 0.9,
       "n_kept": 282,
       "n_fails_kept": 16,
-      "pr_auc": 0.1337193922046779,
-      "roc_auc": 0.6829182330827068
+      "pr_auc": 0.17486917449956932,
+      "roc_auc": 0.6118421052631579
     },
     {
       "pipeline": "hsic_bayes",
       "coverage": 0.9,
       "n_kept": 282,
       "n_fails_kept": 16,
-      "pr_auc": 0.19913307788214646,
-      "roc_auc": 0.7393092105263158
+      "pr_auc": 0.2073962303516877,
+      "roc_auc": 0.7133458646616542
     },
     {
       "pipeline": "rfsel_enet",
       "coverage": 0.9,
       "n_kept": 282,
       "n_fails_kept": 16,
-      "pr_auc": 0.18596114252896057,
-      "roc_auc": 0.8065084586466167
+      "pr_auc": 0.23929604895396256,
+      "roc_auc": 0.6966635338345865
     },
     {
       "pipeline": "rfsel_rf",
       "coverage": 0.9,
       "n_kept": 282,
       "n_fails_kept": 16,
-      "pr_auc": 0.1037835672573807,
-      "roc_auc": 0.68796992481203
+      "pr_auc": 0.10197182093600418,
+      "roc_auc": 0.6441494360902256
     },
     {
       "pipeline": "rfsel_bayes",
       "coverage": 0.9,
       "n_kept": 282,
       "n_fails_kept": 16,
-      "pr_auc": 0.23135039963138745,
-      "roc_auc": 0.7754934210526316
+      "pr_auc": 0.21992471598980867,
+      "roc_auc": 0.7713815789473684
     },
     {
       "pipeline": "pls_enet",
       "coverage": 0.9,
       "n_kept": 282,
       "n_fails_kept": 16,
-      "pr_auc": 0.17918749271807782,
-      "roc_auc": 0.6802161654135339
+      "pr_auc": 0.19967910018164753,
+      "roc_auc": 0.7280310150375939
     },
     {
       "pipeline": "pls_rf",
       "coverage": 0.9,
       "n_kept": 282,
       "n_fails_kept": 16,
-      "pr_auc": 0.24590186594469488,
-      "roc_auc": 0.6971334586466165
+      "pr_auc": 0.29761430490186197,
+      "roc_auc": 0.7453007518796992
     },
     {
       "pipeline": "pls_bayes",
       "coverage": 0.9,
       "n_kept": 282,
       "n_fails_kept": 16,
-      "pr_auc": 0.19977132148114837,
-      "roc_auc": 0.7234492481203008
+      "pr_auc": 0.1645158145225459,
+      "roc_auc": 0.7687969924812029
     },
     {
       "pipeline": "hsic_enet",
       "coverage": 0.85,
       "n_kept": 266,
       "n_fails_kept": 15,
-      "pr_auc": 0.06281031455513907,
-      "roc_auc": 0.5054448871181939
+      "pr_auc": 0.11102323599038727,
+      "roc_auc": 0.6707835325365207
     },
     {
       "pipeline": "hsic_rf",
       "coverage": 0.85,
       "n_kept": 266,
       "n_fails_kept": 15,
-      "pr_auc": 0.10151141728932131,
-      "roc_auc": 0.6602921646746348
+      "pr_auc": 0.1350964976116097,
+      "roc_auc": 0.5851261620185924
     },
     {
       "pipeline": "hsic_bayes",
       "coverage": 0.85,
       "n_kept": 266,
       "n_fails_kept": 15,
-      "pr_auc": 0.1703711684059235,
-      "roc_auc": 0.7197875166002656
+      "pr_auc": 0.17128720105506176,
+      "roc_auc": 0.6926958831341302
     },
     {
       "pipeline": "rfsel_enet",
       "coverage": 0.85,
       "n_kept": 266,
       "n_fails_kept": 15,
-      "pr_auc": 0.1448101142859748,
-      "roc_auc": 0.7877822045152723
+      "pr_auc": 0.16085145649218646,
+      "roc_auc": 0.6691899070385126
     },
     {
       "pipeline": "rfsel_rf",
       "coverage": 0.85,
       "n_kept": 266,
       "n_fails_kept": 15,
-      "pr_auc": 0.09443054778051063,
-      "roc_auc": 0.6658698539176627
+      "pr_auc": 0.07802912315178455,
+      "roc_auc": 0.6154050464807437
     },
     {
       "pipeline": "rfsel_bayes",
       "coverage": 0.85,
       "n_kept": 266,
       "n_fails_kept": 15,
-      "pr_auc": 0.1528977997327998,
-      "roc_auc": 0.7572377158034529
+      "pr_auc": 0.14480614061518582,
+      "roc_auc": 0.754050464807437
     },
     {
       "pipeline": "pls_enet",
       "coverage": 0.85,
       "n_kept": 266,
       "n_fails_kept": 15,
-      "pr_auc": 0.14444552338152294,
-      "roc_auc": 0.6601593625498009
+      "pr_auc": 0.19103759138846857,
+      "roc_auc": 0.7110225763612218
     },
     {
       "pipeline": "pls_rf",
       "coverage": 0.85,
       "n_kept": 266,
       "n_fails_kept": 15,
-      "pr_auc": 0.23554878269985258,
-      "roc_auc": 0.6763612217795485
+      "pr_auc": 0.24310869062725882,
+      "roc_auc": 0.7294820717131474
     },
     {
       "pipeline": "pls_bayes",
       "coverage": 0.85,
       "n_kept": 266,
       "n_fails_kept": 15,
-      "pr_auc": 0.1880881173025652,
-      "roc_auc": 0.702257636122178
+      "pr_auc": 0.14840781682160878,
+      "roc_auc": 0.749535192563081
     },
     {
       "pipeline": "hsic_enet",
       "coverage": 0.8,
       "n_kept": 250,
       "n_fails_kept": 14,
-      "pr_auc": 0.06413547713282344,
-      "roc_auc": 0.5128631961259079
+      "pr_auc": 0.11382987559505023,
+      "roc_auc": 0.6554176755447941
     },
     {
       "pipeline": "hsic_rf",
       "coverage": 0.8,
       "n_kept": 250,
       "n_fails_kept": 14,
-      "pr_auc": 0.10735253448678703,
-      "roc_auc": 0.6720641646489104
+      "pr_auc": 0.1407873122575664,
+      "roc_auc": 0.5823244552058111
     },
     {
       "pipeline": "hsic_bayes",
       "coverage": 0.8,
       "n_kept": 250,
       "n_fails_kept": 14,
-      "pr_auc": 0.17917403050716332,
-      "roc_auc": 0.7431900726392252
+      "pr_auc": 0.17999614220366283,
+      "roc_auc": 0.7092917675544793
     },
     {
       "pipeline": "rfsel_enet",
       "coverage": 0.8,
       "n_kept": 250,
       "n_fails_kept": 14,
-      "pr_auc": 0.13896016065616112,
-      "roc_auc": 0.7754237288135594
+      "pr_auc": 0.16693304758078312,
+      "roc_auc": 0.662681598062954
     },
     {
       "pipeline": "rfsel_rf",
       "coverage": 0.8,
       "n_kept": 250,
       "n_fails_kept": 14,
-      "pr_auc": 0.09525496596016214,
-      "roc_auc": 0.6561743341404358
+      "pr_auc": 0.07541677834394378,
+      "roc_auc": 0.5971549636803875
     },
     {
       "pipeline": "rfsel_bayes",
       "coverage": 0.8,
       "n_kept": 250,
       "n_fails_kept": 14,
-      "pr_auc": 0.1586827405789516,
-      "roc_auc": 0.7566585956416465
+      "pr_auc": 0.14944043666737553,
+      "roc_auc": 0.7527239709443099
     },
     {
       "pipeline": "pls_enet",
       "coverage": 0.8,
       "n_kept": 250,
       "n_fails_kept": 14,
-      "pr_auc": 0.14520365015101855,
-      "roc_auc": 0.648456416464891
+      "pr_auc": 0.19673219637505351,
+      "roc_auc": 0.7038438256658596
     },
     {
       "pipeline": "pls_rf",
       "coverage": 0.8,
       "n_kept": 250,
       "n_fails_kept": 14,
-      "pr_auc": 0.23638312451585317,
-      "roc_auc": 0.6632869249394673
+      "pr_auc": 0.25564603386876594,
+      "roc_auc": 0.7286622276029056
     },
     {
       "pipeline": "pls_bayes",
       "coverage": 0.8,
       "n_kept": 250,
       "n_fails_kept": 14,
-      "pr_auc": 0.19416957966199622,
-      "roc_auc": 0.6946125907990315
+      "pr_auc": 0.1501281517063937,
+      "roc_auc": 0.7437953995157385
     },
     {
       "pipeline": "hsic_enet",
       "coverage": 0.7,
       "n_kept": 219,
       "n_fails_kept": 13,
-      "pr_auc": 0.07250889756200045,
-      "roc_auc": 0.5259522031366691
+      "pr_auc": 0.10193222895104485,
+      "roc_auc": 0.6368558625840179
     },
     {
       "pipeline": "hsic_rf",
       "coverage": 0.7,
       "n_kept": 219,
       "n_fails_kept": 13,
-      "pr_auc": 0.13145590528486967,
-      "roc_auc": 0.6994025392083645
+      "pr_auc": 0.15943215230903227,
+      "roc_auc": 0.6194921583271098
     },
     {
       "pipeline": "hsic_bayes",
       "coverage": 0.7,
       "n_kept": 219,
       "n_fails_kept": 13,
-      "pr_auc": 0.22244321791833105,
-      "roc_auc": 0.7458924570575056
+      "pr_auc": 0.22933427101462267,
+      "roc_auc": 0.705563853622106
     },
     {
       "pipeline": "rfsel_enet",
       "coverage": 0.7,
       "n_kept": 219,
       "n_fails_kept": 13,
-      "pr_auc": 0.14036261594456276,
-      "roc_auc": 0.7690440627333831
+      "pr_auc": 0.15700343333928496,
+      "roc_auc": 0.640403286034354
     },
     {
       "pipeline": "rfsel_rf",
       "coverage": 0.7,
       "n_kept": 219,
       "n_fails_kept": 13,
-      "pr_auc": 0.11307702963626515,
-      "roc_auc": 0.6766243465272592
+      "pr_auc": 0.08725921788610128,
+      "roc_auc": 0.6170649738610904
     },
     {
       "pipeline": "rfsel_bayes",
       "coverage": 0.7,
       "n_kept": 219,
       "n_fails_kept": 13,
-      "pr_auc": 0.2440051437746154,
-      "roc_auc": 0.7580283793876027
+      "pr_auc": 0.1835387297752884,
+      "roc_auc": 0.7468259895444361
     },
     {
       "pipeline": "pls_enet",
       "coverage": 0.7,
       "n_kept": 219,
       "n_fails_kept": 13,
-      "pr_auc": 0.16844597230025318,
-      "roc_auc": 0.6732636295743092
-    },
-    {
-      "pipeline": "pls_rf",
-      "coverage": 0.7,
-      "n_kept": 219,
-      "n_fails_kept": 13,
-      "pr_auc": 0.26048527085378803,
-      "roc_auc": 0.6753174010455564
-    },
-    {
-      "pipeline": "pls_bayes",
-      "coverage": 0.7,
-      "n_kept": 219,
-      "n_fails_kept": 13,
-      "pr_auc": 0.22779996894580282,
+      "pr_auc": 0.2373732511515245,
       "roc_auc": 0.7285287528005975
     },
     {
+      "pipeline": "pls_rf",
+      "coverage": 0.7,
+      "n_kept": 219,
+      "n_fails_kept": 13,
+      "pr_auc": 0.28906572530748287,
+      "roc_auc": 0.7684839432412248
+    },
+    {
+      "pipeline": "pls_bayes",
+      "coverage": 0.7,
+      "n_kept": 219,
+      "n_fails_kept": 13,
+      "pr_auc": 0.1824754802626246,
+      "roc_auc": 0.7845407020164301
+    },
+    {
       "pipeline": "hsic_enet",
       "coverage": 0.6,
       "n_kept": 188,
       "n_fails_kept": 11,
-      "pr_auc": 0.08089337389302753,
-      "roc_auc": 0.551874678993323
+      "pr_auc": 0.08215372482769001,
+      "roc_auc": 0.5821777092963534
     },
     {
       "pipeline": "hsic_rf",
       "coverage": 0.6,
       "n_kept": 188,
       "n_fails_kept": 11,
-      "pr_auc": 0.11554079035510352,
-      "roc_auc": 0.7010785824345146
+      "pr_auc": 0.0901370101573575,
+      "roc_auc": 0.6217257318952234
     },
     {
       "pipeline": "hsic_bayes",
       "coverage": 0.6,
       "n_kept": 188,
       "n_fails_kept": 11,
-      "pr_auc": 0.25172769019472085,
-      "roc_auc": 0.7277863379558295
+      "pr_auc": 0.2627466078058963,
+      "roc_auc": 0.6910631741140216
     },
     {
       "pipeline": "rfsel_enet",
       "coverage": 0.6,
       "n_kept": 188,
       "n_fails_kept": 11,
-      "pr_auc": 0.11631645537250862,
-      "roc_auc": 0.7298407806882383
+      "pr_auc": 0.11725734428826867,
+      "roc_auc": 0.5839753466872111
     },
     {
       "pipeline": "rfsel_rf",
       "coverage": 0.6,
       "n_kept": 188,
       "n_fails_kept": 11,
-      "pr_auc": 0.09357600395188426,
-      "roc_auc": 0.6612737544940935
+      "pr_auc": 0.09074938666420998,
+      "roc_auc": 0.6114535182331793
     },
     {
       "pipeline": "rfsel_bayes",
       "coverage": 0.6,
       "n_kept": 188,
       "n_fails_kept": 11,
-      "pr_auc": 0.20297694874127997,
-      "roc_auc": 0.7244478685156652
+      "pr_auc": 0.13684146176757012,
+      "roc_auc": 0.7039034411915769
     },
     {
       "pipeline": "pls_enet",
       "coverage": 0.6,
       "n_kept": 188,
       "n_fails_kept": 11,
-      "pr_auc": 0.1220747140350592,
-      "roc_auc": 0.6710323574730354
+      "pr_auc": 0.19617313755051716,
+      "roc_auc": 0.7303543913713405
     },
     {
       "pipeline": "pls_rf",
       "coverage": 0.6,
       "n_kept": 188,
       "n_fails_kept": 11,
-      "pr_auc": 0.1977300958925717,
-      "roc_auc": 0.6692347200821778
+      "pr_auc": 0.21226495447741395,
+      "roc_auc": 0.7318952234206473
     },
     {
       "pipeline": "pls_bayes",
       "coverage": 0.6,
       "n_kept": 188,
       "n_fails_kept": 11,
-      "pr_auc": 0.14842217713613512,
-      "roc_auc": 0.7044170518746791
+      "pr_auc": 0.1439502148399634,
+      "roc_auc": 0.7542372881355932
     },
     {
       "pipeline": "hsic_enet",
       "coverage": 0.5,
       "n_kept": 156,
       "n_fails_kept": 8,
-      "pr_auc": 0.07801381323572996,
-      "roc_auc": 0.5122466216216216
+      "pr_auc": 0.0916072557660812,
+      "roc_auc": 0.6216216216216216
     },
     {
       "pipeline": "hsic_rf",
       "coverage": 0.5,
       "n_kept": 156,
       "n_fails_kept": 8,
-      "pr_auc": 0.08375643607896813,
-      "roc_auc": 0.6321790540540541
+      "pr_auc": 0.06856894654491529,
+      "roc_auc": 0.5481418918918919
     },
     {
       "pipeline": "hsic_bayes",
       "coverage": 0.5,
       "n_kept": 156,
       "n_fails_kept": 8,
-      "pr_auc": 0.20416111241799315,
-      "roc_auc": 0.7314189189189189
+      "pr_auc": 0.22033468559837727,
+      "roc_auc": 0.676097972972973
     },
     {
       "pipeline": "rfsel_enet",
       "coverage": 0.5,
       "n_kept": 156,
       "n_fails_kept": 8,
-      "pr_auc": 0.09440311945431887,
-      "roc_auc": 0.6879222972972974
+      "pr_auc": 0.13285862307037904,
+      "roc_auc": 0.6233108108108107
     },
     {
       "pipeline": "rfsel_rf",
       "coverage": 0.5,
       "n_kept": 156,
       "n_fails_kept": 8,
-      "pr_auc": 0.09355562552864419,
-      "roc_auc": 0.6735641891891891
+      "pr_auc": 0.09971063060367205,
+      "roc_auc": 0.622043918918919
     },
     {
       "pipeline": "rfsel_bayes",
       "coverage": 0.5,
       "n_kept": 156,
       "n_fails_kept": 8,
-      "pr_auc": 0.21526414700756807,
-      "roc_auc": 0.6980574324324323
+      "pr_auc": 0.12114089977861303,
+      "roc_auc": 0.6908783783783784
     },
     {
       "pipeline": "pls_enet",
       "coverage": 0.5,
       "n_kept": 156,
       "n_fails_kept": 8,
-      "pr_auc": 0.10525075414781297,
-      "roc_auc": 0.6228885135135135
+      "pr_auc": 0.23513986013986016,
+      "roc_auc": 0.6887668918918919
     },
     {
       "pipeline": "pls_rf",
       "coverage": 0.5,
       "n_kept": 156,
       "n_fails_kept": 8,
-      "pr_auc": 0.21850922410632037,
-      "roc_auc": 0.6224662162162162
+      "pr_auc": 0.22670446293092494,
+      "roc_auc": 0.7018581081081081
     },
     {
       "pipeline": "pls_bayes",
       "coverage": 0.5,
       "n_kept": 156,
       "n_fails_kept": 8,
-      "pr_auc": 0.11430860805860807,
-      "roc_auc": 0.6592060810810811
+      "pr_auc": 0.12630229610715524,
+      "roc_auc": 0.7246621621621621
     }
   ],
   "risk_coverage_random": [
@@ -3867,6 +3467,332 @@
       "n_fails_kept": 6,
       "pr_auc": 0.08832237829258305,
       "roc_auc": 0.6109271523178808
+    }
+  ],
+  "time_decay_sweep": [
+    {
+      "pipeline": "hsic_enet",
+      "decay_lambda": 0.0,
+      "pr_auc": 0.10378175435089522,
+      "roc_auc": 0.6705087440381557
+    },
+    {
+      "pipeline": "hsic_enet",
+      "decay_lambda": 0.25,
+      "pr_auc": 0.10413740817519596,
+      "roc_auc": 0.6760731319554849
+    },
+    {
+      "pipeline": "hsic_enet",
+      "decay_lambda": 0.5,
+      "pr_auc": 0.10267846604632738,
+      "roc_auc": 0.6481518282988872
+    },
+    {
+      "pipeline": "hsic_enet",
+      "decay_lambda": 1.0,
+      "pr_auc": 0.09608458926590602,
+      "roc_auc": 0.6241057233704292
+    },
+    {
+      "pipeline": "hsic_enet",
+      "decay_lambda": 2.0,
+      "pr_auc": 0.08873458281606314,
+      "roc_auc": 0.5743243243243243
+    },
+    {
+      "pipeline": "hsic_enet",
+      "decay_lambda": 4.0,
+      "pr_auc": 0.10235017710741445,
+      "roc_auc": 0.6015500794912559
+    },
+    {
+      "pipeline": "hsic_rf",
+      "decay_lambda": 0.0,
+      "pr_auc": 0.10753270119657203,
+      "roc_auc": 0.5902225755166932
+    },
+    {
+      "pipeline": "hsic_rf",
+      "decay_lambda": 0.25,
+      "pr_auc": 0.10798206006424675,
+      "roc_auc": 0.5817766295707472
+    },
+    {
+      "pipeline": "hsic_rf",
+      "decay_lambda": 0.5,
+      "pr_auc": 0.10193217132533412,
+      "roc_auc": 0.5632949125596185
+    },
+    {
+      "pipeline": "hsic_rf",
+      "decay_lambda": 1.0,
+      "pr_auc": 0.10055910564601589,
+      "roc_auc": 0.5802861685214626
+    },
+    {
+      "pipeline": "hsic_rf",
+      "decay_lambda": 2.0,
+      "pr_auc": 0.09743716429033861,
+      "roc_auc": 0.5813791732909379
+    },
+    {
+      "pipeline": "hsic_rf",
+      "decay_lambda": 4.0,
+      "pr_auc": 0.08906923080312215,
+      "roc_auc": 0.5119236883942766
+    },
+    {
+      "pipeline": "hsic_bayes",
+      "decay_lambda": 0.0,
+      "pr_auc": 0.14771946684634227,
+      "roc_auc": 0.6713036565977741
+    },
+    {
+      "pipeline": "hsic_bayes",
+      "decay_lambda": 0.25,
+      "pr_auc": 0.14416965612000904,
+      "roc_auc": 0.7043918918918919
+    },
+    {
+      "pipeline": "hsic_bayes",
+      "decay_lambda": 0.5,
+      "pr_auc": 0.12722166673919788,
+      "roc_auc": 0.6582869634340223
+    },
+    {
+      "pipeline": "hsic_bayes",
+      "decay_lambda": 1.0,
+      "pr_auc": 0.13684121355269413,
+      "roc_auc": 0.656597774244833
+    },
+    {
+      "pipeline": "hsic_bayes",
+      "decay_lambda": 2.0,
+      "pr_auc": 0.13199240903788187,
+      "roc_auc": 0.6877980922098571
+    },
+    {
+      "pipeline": "hsic_bayes",
+      "decay_lambda": 4.0,
+      "pr_auc": 0.14868469343328672,
+      "roc_auc": 0.6527225755166932
+    },
+    {
+      "pipeline": "rfsel_enet",
+      "decay_lambda": 0.0,
+      "pr_auc": 0.14006662693549654,
+      "roc_auc": 0.6695151033386327
+    },
+    {
+      "pipeline": "rfsel_enet",
+      "decay_lambda": 0.25,
+      "pr_auc": 0.1327685943048591,
+      "roc_auc": 0.6697138314785374
+    },
+    {
+      "pipeline": "rfsel_enet",
+      "decay_lambda": 0.5,
+      "pr_auc": 0.1541586607330552,
+      "roc_auc": 0.6688195548489666
+    },
+    {
+      "pipeline": "rfsel_enet",
+      "decay_lambda": 1.0,
+      "pr_auc": 0.15872729251541542,
+      "roc_auc": 0.6902821939586645
+    },
+    {
+      "pipeline": "rfsel_enet",
+      "decay_lambda": 2.0,
+      "pr_auc": 0.15790291323014896,
+      "roc_auc": 0.6537162162162163
+    },
+    {
+      "pipeline": "rfsel_enet",
+      "decay_lambda": 4.0,
+      "pr_auc": 0.15227525619153853,
+      "roc_auc": 0.674781399046105
+    },
+    {
+      "pipeline": "rfsel_rf",
+      "decay_lambda": 0.0,
+      "pr_auc": 0.08782339144622521,
+      "roc_auc": 0.6321542130365659
+    },
+    {
+      "pipeline": "rfsel_rf",
+      "decay_lambda": 0.25,
+      "pr_auc": 0.08924843862582335,
+      "roc_auc": 0.6595786963434023
+    },
+    {
+      "pipeline": "rfsel_rf",
+      "decay_lambda": 0.5,
+      "pr_auc": 0.09541639893475427,
+      "roc_auc": 0.6597774244833068
+    },
+    {
+      "pipeline": "rfsel_rf",
+      "decay_lambda": 1.0,
+      "pr_auc": 0.1025996701046729,
+      "roc_auc": 0.6904809220985691
+    },
+    {
+      "pipeline": "rfsel_rf",
+      "decay_lambda": 2.0,
+      "pr_auc": 0.11509948831107436,
+      "roc_auc": 0.7002186009538951
+    },
+    {
+      "pipeline": "rfsel_rf",
+      "decay_lambda": 4.0,
+      "pr_auc": 0.10313874145135107,
+      "roc_auc": 0.6927662957074723
+    },
+    {
+      "pipeline": "rfsel_bayes",
+      "decay_lambda": 0.0,
+      "pr_auc": 0.13748646865196226,
+      "roc_auc": 0.7442368839427662
+    },
+    {
+      "pipeline": "rfsel_bayes",
+      "decay_lambda": 0.25,
+      "pr_auc": 0.12995664205269183,
+      "roc_auc": 0.7303259141494436
+    },
+    {
+      "pipeline": "rfsel_bayes",
+      "decay_lambda": 0.5,
+      "pr_auc": 0.14359902607182928,
+      "roc_auc": 0.7472178060413354
+    },
+    {
+      "pipeline": "rfsel_bayes",
+      "decay_lambda": 1.0,
+      "pr_auc": 0.14658299154358073,
+      "roc_auc": 0.7362877583465819
+    },
+    {
+      "pipeline": "rfsel_bayes",
+      "decay_lambda": 2.0,
+      "pr_auc": 0.13914269373010374,
+      "roc_auc": 0.750993640699523
+    },
+    {
+      "pipeline": "rfsel_bayes",
+      "decay_lambda": 4.0,
+      "pr_auc": 0.1688422032999539,
+      "roc_auc": 0.7769276629570748
+    },
+    {
+      "pipeline": "pls_enet",
+      "decay_lambda": 0.0,
+      "pr_auc": 0.17040764904994282,
+      "roc_auc": 0.7101550079491256
+    },
+    {
+      "pipeline": "pls_enet",
+      "decay_lambda": 0.25,
+      "pr_auc": 0.16059390945001983,
+      "roc_auc": 0.7094594594594594
+    },
+    {
+      "pipeline": "pls_enet",
+      "decay_lambda": 0.5,
+      "pr_auc": 0.15925712514130022,
+      "roc_auc": 0.7082670906200318
+    },
+    {
+      "pipeline": "pls_enet",
+      "decay_lambda": 1.0,
+      "pr_auc": 0.15196188666663737,
+      "roc_auc": 0.6853139904610493
+    },
+    {
+      "pipeline": "pls_enet",
+      "decay_lambda": 2.0,
+      "pr_auc": 0.16159506130177512,
+      "roc_auc": 0.7012122416534181
+    },
+    {
+      "pipeline": "pls_enet",
+      "decay_lambda": 4.0,
+      "pr_auc": 0.18199807041484642,
+      "roc_auc": 0.6867050874403815
+    },
+    {
+      "pipeline": "pls_rf",
+      "decay_lambda": 0.0,
+      "pr_auc": 0.21039457426036012,
+      "roc_auc": 0.7172098569157392
+    },
+    {
+      "pipeline": "pls_rf",
+      "decay_lambda": 0.25,
+      "pr_auc": 0.20884985158289082,
+      "roc_auc": 0.723370429252782
+    },
+    {
+      "pipeline": "pls_rf",
+      "decay_lambda": 0.5,
+      "pr_auc": 0.2012278077799075,
+      "roc_auc": 0.7054848966613673
+    },
+    {
+      "pipeline": "pls_rf",
+      "decay_lambda": 1.0,
+      "pr_auc": 0.21973066446106798,
+      "roc_auc": 0.7112480127186009
+    },
+    {
+      "pipeline": "pls_rf",
+      "decay_lambda": 2.0,
+      "pr_auc": 0.20811455379274954,
+      "roc_auc": 0.7061804451510334
+    },
+    {
+      "pipeline": "pls_rf",
+      "decay_lambda": 4.0,
+      "pr_auc": 0.1865987006196804,
+      "roc_auc": 0.7172098569157392
+    },
+    {
+      "pipeline": "pls_bayes",
+      "decay_lambda": 0.0,
+      "pr_auc": 0.14019373504110438,
+      "roc_auc": 0.747714626391097
+    },
+    {
+      "pipeline": "pls_bayes",
+      "decay_lambda": 0.25,
+      "pr_auc": 0.13770041801461697,
+      "roc_auc": 0.7305246422893481
+    },
+    {
+      "pipeline": "pls_bayes",
+      "decay_lambda": 0.5,
+      "pr_auc": 0.1357084672863364,
+      "roc_auc": 0.7250596184419713
+    },
+    {
+      "pipeline": "pls_bayes",
+      "decay_lambda": 1.0,
+      "pr_auc": 0.1347342442547922,
+      "roc_auc": 0.7262519872813991
+    },
+    {
+      "pipeline": "pls_bayes",
+      "decay_lambda": 2.0,
+      "pr_auc": 0.15312842064777007,
+      "roc_auc": 0.72068759936407
+    },
+    {
+      "pipeline": "pls_bayes",
+      "decay_lambda": 4.0,
+      "pr_auc": 0.1815303984993727,
+      "roc_auc": 0.706379173290938
     }
   ],
   "gate_reports": {
@@ -5603,12 +5529,12 @@
             "n_flagged_q": 5,
             "n_flagged_both": 3,
             "n_flagged_either": 13,
-            "global_pr_auc": 0.057121171986352526,
-            "global_roc_auc": 0.48281001589825123,
-            "conditional_pr_auc": 0.05807170722072022,
-            "conditional_roc_auc": 0.4940580985915493,
-            "conditional_pr_auc_ci_low": 0.04474823806790506,
-            "conditional_pr_auc_ci_high": 0.09849844857202181
+            "global_pr_auc": 0.10378175435089522,
+            "global_roc_auc": 0.6705087440381557,
+            "conditional_pr_auc": 0.12501857066525202,
+            "conditional_roc_auc": 0.7029049295774648,
+            "conditional_pr_auc_ci_low": 0.07446715597317027,
+            "conditional_pr_auc_ci_high": 0.27100836816670726
           },
           {
             "pipeline": "hsic_rf",
@@ -5623,12 +5549,12 @@
             "n_flagged_q": 5,
             "n_flagged_both": 3,
             "n_flagged_either": 13,
-            "global_pr_auc": 0.1063446161723095,
-            "global_roc_auc": 0.6521263910969792,
-            "conditional_pr_auc": 0.13126939744567184,
-            "conditional_roc_auc": 0.6912411971830986,
-            "conditional_pr_auc_ci_low": 0.07315788383650727,
-            "conditional_pr_auc_ci_high": 0.30629883460334373
+            "global_pr_auc": 0.10753270119657203,
+            "global_roc_auc": 0.5902225755166932,
+            "conditional_pr_auc": 0.17260228243490183,
+            "conditional_roc_auc": 0.617737676056338,
+            "conditional_pr_auc_ci_low": 0.05879310413396806,
+            "conditional_pr_auc_ci_high": 0.3555443362959388
           },
           {
             "pipeline": "hsic_bayes",
@@ -5643,12 +5569,12 @@
             "n_flagged_q": 5,
             "n_flagged_both": 3,
             "n_flagged_either": 13,
-            "global_pr_auc": 0.14416965612000904,
-            "global_roc_auc": 0.7043918918918919,
-            "conditional_pr_auc": 0.19515184778951788,
-            "conditional_roc_auc": 0.7378961267605634,
-            "conditional_pr_auc_ci_low": 0.09999384819503927,
-            "conditional_pr_auc_ci_high": 0.4162851207599042
+            "global_pr_auc": 0.14771946684634227,
+            "global_roc_auc": 0.6713036565977741,
+            "conditional_pr_auc": 0.20436643175478103,
+            "conditional_roc_auc": 0.7114876760563381,
+            "conditional_pr_auc_ci_low": 0.10008756396950291,
+            "conditional_pr_auc_ci_high": 0.4298974415272609
           },
           {
             "pipeline": "rfsel_enet",
@@ -5663,12 +5589,12 @@
             "n_flagged_q": 5,
             "n_flagged_both": 3,
             "n_flagged_either": 13,
-            "global_pr_auc": 0.13984702039535052,
-            "global_roc_auc": 0.7561605723370428,
-            "conditional_pr_auc": 0.18087709736098706,
-            "conditional_roc_auc": 0.8082086267605635,
-            "conditional_pr_auc_ci_low": 0.11368105709258683,
-            "conditional_pr_auc_ci_high": 0.3538579758978913
+            "global_pr_auc": 0.14006662693549654,
+            "global_roc_auc": 0.6695151033386327,
+            "conditional_pr_auc": 0.23548801120409613,
+            "conditional_roc_auc": 0.6977332746478874,
+            "conditional_pr_auc_ci_low": 0.09142802902634212,
+            "conditional_pr_auc_ci_high": 0.4562963539545456
           },
           {
             "pipeline": "rfsel_rf",
@@ -5683,12 +5609,12 @@
             "n_flagged_q": 5,
             "n_flagged_both": 3,
             "n_flagged_either": 13,
-            "global_pr_auc": 0.09270455889751866,
-            "global_roc_auc": 0.6724960254372019,
-            "conditional_pr_auc": 0.10008980296217487,
-            "conditional_roc_auc": 0.6897007042253521,
-            "conditional_pr_auc_ci_low": 0.06912109943649054,
-            "conditional_pr_auc_ci_high": 0.198730635173944
+            "global_pr_auc": 0.08782339144622521,
+            "global_roc_auc": 0.6321542130365659,
+            "conditional_pr_auc": 0.09950642531867188,
+            "conditional_roc_auc": 0.6500880281690141,
+            "conditional_pr_auc_ci_low": 0.06083472219512251,
+            "conditional_pr_auc_ci_high": 0.22769154366158265
           },
           {
             "pipeline": "rfsel_bayes",
@@ -5703,12 +5629,12 @@
             "n_flagged_q": 5,
             "n_flagged_both": 3,
             "n_flagged_either": 13,
-            "global_pr_auc": 0.14359902607182928,
-            "global_roc_auc": 0.7472178060413354,
-            "conditional_pr_auc": 0.22777919852965675,
-            "conditional_roc_auc": 0.7804797535211268,
-            "conditional_pr_auc_ci_low": 0.10543667751811142,
-            "conditional_pr_auc_ci_high": 0.4368959744483049
+            "global_pr_auc": 0.13748646865196226,
+            "global_roc_auc": 0.7442368839427662,
+            "conditional_pr_auc": 0.21018083018433614,
+            "conditional_roc_auc": 0.7764084507042253,
+            "conditional_pr_auc_ci_low": 0.10109136629822259,
+            "conditional_pr_auc_ci_high": 0.401946023866057
           },
           {
             "pipeline": "pls_enet",
@@ -5723,12 +5649,12 @@
             "n_flagged_q": 5,
             "n_flagged_both": 3,
             "n_flagged_either": 13,
-            "global_pr_auc": 0.14911908440911392,
-            "global_roc_auc": 0.6617647058823529,
-            "conditional_pr_auc": 0.17680085376937776,
-            "conditional_roc_auc": 0.682218309859155,
-            "conditional_pr_auc_ci_low": 0.08254769594886183,
-            "conditional_pr_auc_ci_high": 0.4095422726905917
+            "global_pr_auc": 0.17040764904994282,
+            "global_roc_auc": 0.7101550079491256,
+            "conditional_pr_auc": 0.19755088506356258,
+            "conditional_roc_auc": 0.7325044014084507,
+            "conditional_pr_auc_ci_low": 0.09941775558437424,
+            "conditional_pr_auc_ci_high": 0.4440019864372924
           },
           {
             "pipeline": "pls_rf",
@@ -5743,12 +5669,12 @@
             "n_flagged_q": 5,
             "n_flagged_both": 3,
             "n_flagged_either": 13,
-            "global_pr_auc": 0.17504727289883845,
-            "global_roc_auc": 0.6632551669316376,
-            "conditional_pr_auc": 0.24423046461592687,
-            "conditional_roc_auc": 0.7019146126760563,
-            "conditional_pr_auc_ci_low": 0.09582939065876249,
-            "conditional_pr_auc_ci_high": 0.4498290025333637
+            "global_pr_auc": 0.21039457426036012,
+            "global_roc_auc": 0.7172098569157392,
+            "conditional_pr_auc": 0.2968649989368186,
+            "conditional_roc_auc": 0.7519806338028169,
+            "conditional_pr_auc_ci_low": 0.13137083357200335,
+            "conditional_pr_auc_ci_high": 0.5027566048419053
           },
           {
             "pipeline": "pls_bayes",
@@ -5763,12 +5689,12 @@
             "n_flagged_q": 5,
             "n_flagged_both": 3,
             "n_flagged_either": 13,
-            "global_pr_auc": 0.1815303984993727,
-            "global_roc_auc": 0.706379173290938,
-            "conditional_pr_auc": 0.19864063398427625,
-            "conditional_roc_auc": 0.7327244718309859,
-            "conditional_pr_auc_ci_low": 0.09059649916811478,
-            "conditional_pr_auc_ci_high": 0.3906057127107799
+            "global_pr_auc": 0.14019373504110438,
+            "global_roc_auc": 0.747714626391097,
+            "conditional_pr_auc": 0.1634850830252558,
+            "conditional_roc_auc": 0.7772887323943662,
+            "conditional_pr_auc_ci_low": 0.10082071854219254,
+            "conditional_pr_auc_ci_high": 0.3510630128612558
           }
         ],
         "risk_coverage": [
@@ -5777,648 +5703,648 @@
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.057121171986352526,
-            "roc_auc": 0.48281001589825123
+            "pr_auc": 0.10378175435089522,
+            "roc_auc": 0.6705087440381557
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.1063446161723095,
-            "roc_auc": 0.6521263910969792
+            "pr_auc": 0.10753270119657203,
+            "roc_auc": 0.5902225755166932
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.14416965612000904,
-            "roc_auc": 0.7043918918918919
+            "pr_auc": 0.14771946684634227,
+            "roc_auc": 0.6713036565977741
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.13984702039535052,
-            "roc_auc": 0.7561605723370428
+            "pr_auc": 0.14006662693549654,
+            "roc_auc": 0.6695151033386327
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.09270455889751866,
-            "roc_auc": 0.6724960254372019
+            "pr_auc": 0.08782339144622521,
+            "roc_auc": 0.6321542130365659
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.14359902607182928,
-            "roc_auc": 0.7472178060413354
+            "pr_auc": 0.13748646865196226,
+            "roc_auc": 0.7442368839427662
           },
           {
             "pipeline": "pls_enet",
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.14911908440911392,
-            "roc_auc": 0.6617647058823529
+            "pr_auc": 0.17040764904994282,
+            "roc_auc": 0.7101550079491256
           },
           {
             "pipeline": "pls_rf",
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.17504727289883845,
-            "roc_auc": 0.6632551669316376
+            "pr_auc": 0.21039457426036012,
+            "roc_auc": 0.7172098569157392
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.1815303984993727,
-            "roc_auc": 0.706379173290938
+            "pr_auc": 0.14019373504110438,
+            "roc_auc": 0.747714626391097
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.05868950844937658,
-            "roc_auc": 0.4870507930134511
+            "pr_auc": 0.11672820205988796,
+            "roc_auc": 0.6771732583818509
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.12433695652921681,
-            "roc_auc": 0.6584019273238305
+            "pr_auc": 0.16473642228015306,
+            "roc_auc": 0.5958642842802649
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.17209309354331864,
-            "roc_auc": 0.7114033326641237
+            "pr_auc": 0.17791952318667875,
+            "roc_auc": 0.677976309977916
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.16733488968141577,
-            "roc_auc": 0.7639028307568761
+            "pr_auc": 0.2240779453646055,
+            "roc_auc": 0.676370206785786
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.09782906043235305,
-            "roc_auc": 0.6787793615739811
+            "pr_auc": 0.0980663250696492,
+            "roc_auc": 0.6384260188717125
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.21492096954698325,
-            "roc_auc": 0.7548685003011443
+            "pr_auc": 0.19768609674264126,
+            "roc_auc": 0.7518570568159005
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.17003415845263128,
-            "roc_auc": 0.6654286287893997
+            "pr_auc": 0.1884971976346146,
+            "roc_auc": 0.7127082915077294
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.23032547437125578,
-            "roc_auc": 0.6681389279261192
+            "pr_auc": 0.28038296899371623,
+            "roc_auc": 0.7233487251555912
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.19018240741468034,
-            "roc_auc": 0.7108010439670749
+            "pr_auc": 0.15655324489257455,
+            "roc_auc": 0.7520578197149168
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 16,
-            "pr_auc": 0.05947760084398328,
-            "roc_auc": 0.4991103202846975
+            "pr_auc": 0.09984162647576168,
+            "roc_auc": 0.665702846975089
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 16,
-            "pr_auc": 0.09719037393058552,
-            "roc_auc": 0.6476868327402135
+            "pr_auc": 0.12877452702727332,
+            "roc_auc": 0.5785142348754448
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 16,
-            "pr_auc": 0.14810115470685353,
-            "roc_auc": 0.6949510676156584
+            "pr_auc": 0.14877349633517928,
+            "roc_auc": 0.6586966192170818
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 16,
-            "pr_auc": 0.1292091697045718,
-            "roc_auc": 0.7487766903914591
+            "pr_auc": 0.15117567706028395,
+            "roc_auc": 0.6584741992882561
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 16,
-            "pr_auc": 0.09209922188757838,
-            "roc_auc": 0.6660364768683275
+            "pr_auc": 0.07621141519053734,
+            "roc_auc": 0.6179937722419929
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 16,
-            "pr_auc": 0.14357529876553451,
-            "roc_auc": 0.7438834519572954
+            "pr_auc": 0.1344870984738285,
+            "roc_auc": 0.7411032028469751
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 16,
-            "pr_auc": 0.13926950689550477,
-            "roc_auc": 0.6530249110320285
+            "pr_auc": 0.1835016922281073,
+            "roc_auc": 0.7032918149466193
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 16,
-            "pr_auc": 0.22207926134372996,
-            "roc_auc": 0.6555827402135231
+            "pr_auc": 0.23113771516633266,
+            "roc_auc": 0.713411921708185
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 16,
-            "pr_auc": 0.1804984127238634,
-            "roc_auc": 0.6989546263345197
+            "pr_auc": 0.14269328572948747,
+            "roc_auc": 0.7403247330960854
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 14,
-            "pr_auc": 0.05835894266289331,
-            "roc_auc": 0.5131929637526652
+            "pr_auc": 0.10309931115879392,
+            "roc_auc": 0.6759061833688699
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 14,
-            "pr_auc": 0.10253000446852276,
-            "roc_auc": 0.6852345415778252
+            "pr_auc": 0.13532682536361018,
+            "roc_auc": 0.5886194029850746
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 14,
-            "pr_auc": 0.17227872518808834,
-            "roc_auc": 0.7440031982942431
+            "pr_auc": 0.1746273434243027,
+            "roc_auc": 0.7096215351812366
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 14,
-            "pr_auc": 0.13340402670012116,
-            "roc_auc": 0.7867803837953091
+            "pr_auc": 0.16133925995015436,
+            "roc_auc": 0.6733742004264391
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 14,
-            "pr_auc": 0.08837570136740765,
-            "roc_auc": 0.6609808102345416
+            "pr_auc": 0.07044645941824444,
+            "roc_auc": 0.6078091684434969
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 14,
-            "pr_auc": 0.1530470832460426,
-            "roc_auc": 0.7682569296375267
+            "pr_auc": 0.1442817430662175,
+            "roc_auc": 0.7643923240938166
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 14,
-            "pr_auc": 0.14075603558444397,
-            "roc_auc": 0.6557835820895522
+            "pr_auc": 0.19314824337011,
+            "roc_auc": 0.7140191897654584
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 14,
-            "pr_auc": 0.23336578974592762,
-            "roc_auc": 0.6783049040511727
+            "pr_auc": 0.25249567753652213,
+            "roc_auc": 0.7388059701492538
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 14,
-            "pr_auc": 0.19155692366883262,
-            "roc_auc": 0.7137526652452025
+            "pr_auc": 0.14785811423570244,
+            "roc_auc": 0.761860341151386
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 13,
-            "pr_auc": 0.059999631910024984,
-            "roc_auc": 0.5234113712374583
+            "pr_auc": 0.09130195114174329,
+            "roc_auc": 0.6546062633019155
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 13,
-            "pr_auc": 0.0807112678997241,
-            "roc_auc": 0.6675281240498632
+            "pr_auc": 0.060689519530743474,
+            "roc_auc": 0.5633931286105199
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 13,
-            "pr_auc": 0.18248160383710255,
-            "roc_auc": 0.7564609303739738
+            "pr_auc": 0.1853501181183166,
+            "roc_auc": 0.7228640924293098
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 13,
-            "pr_auc": 0.13148786538567228,
-            "roc_auc": 0.7813925205229554
+            "pr_auc": 0.163128342046944,
+            "roc_auc": 0.6594709638187899
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 13,
-            "pr_auc": 0.07231445269457176,
-            "roc_auc": 0.6363636363636364
+            "pr_auc": 0.06486131948539696,
+            "roc_auc": 0.5810276679841897
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 13,
-            "pr_auc": 0.1803427797580497,
-            "roc_auc": 0.7715110975980541
+            "pr_auc": 0.1578389994041495,
+            "roc_auc": 0.7629978716935238
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 13,
-            "pr_auc": 0.14851860040793913,
-            "roc_auc": 0.6748251748251748
+            "pr_auc": 0.20515126538076192,
+            "roc_auc": 0.7370021283064762
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 13,
-            "pr_auc": 0.24748535770962715,
-            "roc_auc": 0.6977804803891761
+            "pr_auc": 0.2530948514161686,
+            "roc_auc": 0.7233201581027668
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 13,
-            "pr_auc": 0.1984928794678143,
-            "roc_auc": 0.7082699908786865
+            "pr_auc": 0.14462500314221988,
+            "roc_auc": 0.7502280328367286
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 12,
-            "pr_auc": 0.06352742042504879,
-            "roc_auc": 0.5360644257703081
+            "pr_auc": 0.08595528669468677,
+            "roc_auc": 0.6283263305322129
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 12,
-            "pr_auc": 0.08777737607599051,
-            "roc_auc": 0.6860994397759104
+            "pr_auc": 0.06625863187628256,
+            "roc_auc": 0.5873599439775911
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 12,
-            "pr_auc": 0.16237311941225724,
-            "roc_auc": 0.742296918767507
+            "pr_auc": 0.16861523913649012,
+            "roc_auc": 0.7048319327731092
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 12,
-            "pr_auc": 0.12103741554743992,
-            "roc_auc": 0.7720588235294117
+            "pr_auc": 0.11167680152820354,
+            "roc_auc": 0.6292016806722689
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 12,
-            "pr_auc": 0.07533684599525332,
-            "roc_auc": 0.6505602240896359
+            "pr_auc": 0.07163908375875395,
+            "roc_auc": 0.6020658263305322
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 12,
-            "pr_auc": 0.1441213187671033,
-            "roc_auc": 0.754201680672269
+            "pr_auc": 0.125221029215755,
+            "roc_auc": 0.7435224089635855
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 12,
-            "pr_auc": 0.10209595959595959,
-            "roc_auc": 0.64968487394958
+            "pr_auc": 0.169064963359081,
+            "roc_auc": 0.7127100840336135
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 12,
-            "pr_auc": 0.17540064195726912,
-            "roc_auc": 0.6755952380952381
+            "pr_auc": 0.18178501595508645,
+            "roc_auc": 0.7051820728291318
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 12,
-            "pr_auc": 0.1235051046322633,
-            "roc_auc": 0.6867997198879552
+            "pr_auc": 0.11847004380093036,
+            "roc_auc": 0.7330182072829132
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.7,
             "n_kept": 219,
             "n_fails_kept": 11,
-            "pr_auc": 0.0689952529655207,
-            "roc_auc": 0.5238199300699301
+            "pr_auc": 0.17880060623280408,
+            "roc_auc": 0.6689248251748252
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.7,
             "n_kept": 219,
             "n_fails_kept": 11,
-            "pr_auc": 0.08663496889985692,
-            "roc_auc": 0.6728583916083916
+            "pr_auc": 0.06878148741724431,
+            "roc_auc": 0.5712412587412588
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.7,
             "n_kept": 219,
             "n_fails_kept": 11,
-            "pr_auc": 0.16949405096180487,
-            "roc_auc": 0.7296765734265733
+            "pr_auc": 0.17887480574980574,
+            "roc_auc": 0.6912150349650349
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.7,
             "n_kept": 219,
             "n_fails_kept": 11,
-            "pr_auc": 0.11447227280152754,
-            "roc_auc": 0.7515297202797202
+            "pr_auc": 0.13790949728023294,
+            "roc_auc": 0.6247814685314685
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.7,
             "n_kept": 219,
             "n_fails_kept": 11,
-            "pr_auc": 0.07480138833460452,
-            "roc_auc": 0.6236888111888113
+            "pr_auc": 0.07596499337023768,
+            "roc_auc": 0.5762674825174825
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.7,
             "n_kept": 219,
             "n_fails_kept": 11,
-            "pr_auc": 0.20286370195461106,
-            "roc_auc": 0.7462849650349651
+            "pr_auc": 0.13360737702842967,
+            "roc_auc": 0.7279283216783217
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.7,
             "n_kept": 219,
             "n_fails_kept": 11,
-            "pr_auc": 0.117829780812408,
-            "roc_auc": 0.6501311188811189
+            "pr_auc": 0.26047079806657236,
+            "roc_auc": 0.704326923076923
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.7,
             "n_kept": 219,
             "n_fails_kept": 11,
-            "pr_auc": 0.19613396555340654,
-            "roc_auc": 0.6748251748251748
+            "pr_auc": 0.20824487990711665,
+            "roc_auc": 0.7082604895104895
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.7,
             "n_kept": 219,
             "n_fails_kept": 11,
-            "pr_auc": 0.13795659528376406,
-            "roc_auc": 0.6728583916083916
+            "pr_auc": 0.13230786138025036,
+            "roc_auc": 0.7296765734265734
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 9,
-            "pr_auc": 0.07076335799740055,
-            "roc_auc": 0.5012414649286158
+            "pr_auc": 0.08226945776172838,
+            "roc_auc": 0.6315952824332712
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 9,
-            "pr_auc": 0.08740277347083125,
-            "roc_auc": 0.6679081315952824
+            "pr_auc": 0.06785544328197282,
+            "roc_auc": 0.5782122905027933
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 9,
-            "pr_auc": 0.18149398635913708,
-            "roc_auc": 0.7420856610800743
+            "pr_auc": 0.1952157598499062,
+            "roc_auc": 0.6908752327746741
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 9,
-            "pr_auc": 0.09840867301585035,
-            "roc_auc": 0.7216014897579143
+            "pr_auc": 0.12021045523417556,
+            "roc_auc": 0.6080074487895718
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 9,
-            "pr_auc": 0.08355613840710632,
-            "roc_auc": 0.6548727498448169
+            "pr_auc": 0.07981485214415533,
+            "roc_auc": 0.6005586592178771
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 9,
-            "pr_auc": 0.19858136650058317,
-            "roc_auc": 0.7026691495965238
+            "pr_auc": 0.11063623175533648,
+            "roc_auc": 0.681253879577902
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 9,
-            "pr_auc": 0.09982660324205678,
-            "roc_auc": 0.6365611421477344
+            "pr_auc": 0.21966115051221433,
+            "roc_auc": 0.6989447548106765
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 9,
-            "pr_auc": 0.20403565758332592,
-            "roc_auc": 0.648975791433892
+            "pr_auc": 0.21396883656873278,
+            "roc_auc": 0.7256362507759155
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 9,
-            "pr_auc": 0.11404411367653021,
-            "roc_auc": 0.675356921166977
+            "pr_auc": 0.12728846201851177,
+            "roc_auc": 0.7433271260086902
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 7,
-            "pr_auc": 0.07264957264957266,
-            "roc_auc": 0.46931927133269413
+            "pr_auc": 0.086364851400938,
+            "roc_auc": 0.5949185043144775
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 7,
-            "pr_auc": 0.08097877380957615,
-            "roc_auc": 0.6418983700862896
+            "pr_auc": 0.06417329790622026,
+            "roc_auc": 0.5896452540747843
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 7,
-            "pr_auc": 0.09393939393939393,
-            "roc_auc": 0.6893576222435283
+            "pr_auc": 0.10969924812030074,
+            "roc_auc": 0.62464046021093
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 7,
-            "pr_auc": 0.0903635908802968,
-            "roc_auc": 0.7023010546500479
+            "pr_auc": 0.12472906403940887,
+            "roc_auc": 0.5508149568552253
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 7,
-            "pr_auc": 0.05988747962742179,
-            "roc_auc": 0.6073825503355704
+            "pr_auc": 0.04752160008472431,
+            "roc_auc": 0.5378715244487057
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 7,
-            "pr_auc": 0.08433915215485283,
-            "roc_auc": 0.6735378715244488
+            "pr_auc": 0.07174558349778334,
+            "roc_auc": 0.6347075743048897
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 7,
-            "pr_auc": 0.0798886714033979,
-            "roc_auc": 0.5627996164908917
+            "pr_auc": 0.20195502172246357,
+            "roc_auc": 0.6289549376797698
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 7,
-            "pr_auc": 0.19285121757021845,
-            "roc_auc": 0.5714285714285714
+            "pr_auc": 0.21090385387919455,
+            "roc_auc": 0.6706615532118888
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 7,
-            "pr_auc": 0.06864385910818044,
-            "roc_auc": 0.5997123681687441
+            "pr_auc": 0.08309392987964417,
+            "roc_auc": 0.6888782358581016
           }
         ]
       },
@@ -6454,12 +6380,12 @@
             "n_flagged_q": 3,
             "n_flagged_both": 3,
             "n_flagged_either": 41,
-            "global_pr_auc": 0.057121171986352526,
-            "global_roc_auc": 0.48281001589825123,
-            "conditional_pr_auc": 0.06308565543191212,
-            "conditional_roc_auc": 0.49365234375,
-            "conditional_pr_auc_ci_low": 0.05082476361955014,
-            "conditional_pr_auc_ci_high": 0.11315664021276033
+            "global_pr_auc": 0.10378175435089522,
+            "global_roc_auc": 0.6705087440381557,
+            "conditional_pr_auc": 0.13518147735696148,
+            "conditional_roc_auc": 0.684814453125,
+            "conditional_pr_auc_ci_low": 0.07869111957204261,
+            "conditional_pr_auc_ci_high": 0.30825166608735166
           },
           {
             "pipeline": "hsic_rf",
@@ -6474,12 +6400,12 @@
             "n_flagged_q": 3,
             "n_flagged_both": 3,
             "n_flagged_either": 41,
-            "global_pr_auc": 0.1063446161723095,
-            "global_roc_auc": 0.6521263910969792,
-            "conditional_pr_auc": 0.13499841804350657,
-            "conditional_roc_auc": 0.6788330078125,
-            "conditional_pr_auc_ci_low": 0.07840344647392528,
-            "conditional_pr_auc_ci_high": 0.3291758425046777
+            "global_pr_auc": 0.10753270119657203,
+            "global_roc_auc": 0.5902225755166932,
+            "conditional_pr_auc": 0.177183732537453,
+            "conditional_roc_auc": 0.6126708984375,
+            "conditional_pr_auc_ci_low": 0.06804324382349052,
+            "conditional_pr_auc_ci_high": 0.37438807148815356
           },
           {
             "pipeline": "hsic_bayes",
@@ -6494,12 +6420,12 @@
             "n_flagged_q": 3,
             "n_flagged_both": 3,
             "n_flagged_either": 41,
-            "global_pr_auc": 0.14416965612000904,
-            "global_roc_auc": 0.7043918918918919,
-            "conditional_pr_auc": 0.20042667653305876,
-            "conditional_roc_auc": 0.7376708984375,
-            "conditional_pr_auc_ci_low": 0.10538456025942079,
-            "conditional_pr_auc_ci_high": 0.4114241994396386
+            "global_pr_auc": 0.14771946684634227,
+            "global_roc_auc": 0.6713036565977741,
+            "conditional_pr_auc": 0.20858520749897758,
+            "conditional_roc_auc": 0.7117919921875,
+            "conditional_pr_auc_ci_low": 0.10605290466056873,
+            "conditional_pr_auc_ci_high": 0.4135739290620194
           },
           {
             "pipeline": "rfsel_enet",
@@ -6514,12 +6440,12 @@
             "n_flagged_q": 3,
             "n_flagged_both": 3,
             "n_flagged_either": 41,
-            "global_pr_auc": 0.13984702039535052,
-            "global_roc_auc": 0.7561605723370428,
-            "conditional_pr_auc": 0.18615897802874598,
-            "conditional_roc_auc": 0.8006591796875,
-            "conditional_pr_auc_ci_low": 0.12086549059175378,
-            "conditional_pr_auc_ci_high": 0.3662143025877568
+            "global_pr_auc": 0.14006662693549654,
+            "global_roc_auc": 0.6695151033386327,
+            "conditional_pr_auc": 0.2409281879740396,
+            "conditional_roc_auc": 0.69140625,
+            "conditional_pr_auc_ci_low": 0.09587964863532135,
+            "conditional_pr_auc_ci_high": 0.46786176873970775
           },
           {
             "pipeline": "rfsel_rf",
@@ -6534,12 +6460,12 @@
             "n_flagged_q": 3,
             "n_flagged_both": 3,
             "n_flagged_either": 41,
-            "global_pr_auc": 0.09270455889751866,
-            "global_roc_auc": 0.6724960254372019,
-            "conditional_pr_auc": 0.10634610089930449,
-            "conditional_roc_auc": 0.6871337890625,
-            "conditional_pr_auc_ci_low": 0.07703061331464267,
-            "conditional_pr_auc_ci_high": 0.20002964021286396
+            "global_pr_auc": 0.08782339144622521,
+            "global_roc_auc": 0.6321542130365659,
+            "conditional_pr_auc": 0.10384955065237778,
+            "conditional_roc_auc": 0.642333984375,
+            "conditional_pr_auc_ci_low": 0.06649234322294864,
+            "conditional_pr_auc_ci_high": 0.22678159188290267
           },
           {
             "pipeline": "rfsel_bayes",
@@ -6554,12 +6480,12 @@
             "n_flagged_q": 3,
             "n_flagged_both": 3,
             "n_flagged_either": 41,
-            "global_pr_auc": 0.14359902607182928,
-            "global_roc_auc": 0.7472178060413354,
-            "conditional_pr_auc": 0.2327290702598111,
-            "conditional_roc_auc": 0.7716064453125,
-            "conditional_pr_auc_ci_low": 0.10883764909683387,
-            "conditional_pr_auc_ci_high": 0.4298334571197812
+            "global_pr_auc": 0.13748646865196226,
+            "global_roc_auc": 0.7442368839427662,
+            "conditional_pr_auc": 0.22093188128608002,
+            "conditional_roc_auc": 0.7674560546875,
+            "conditional_pr_auc_ci_low": 0.10578961510079384,
+            "conditional_pr_auc_ci_high": 0.4068091943872086
           },
           {
             "pipeline": "pls_enet",
@@ -6574,12 +6500,12 @@
             "n_flagged_q": 3,
             "n_flagged_both": 3,
             "n_flagged_either": 41,
-            "global_pr_auc": 0.14911908440911392,
-            "global_roc_auc": 0.6617647058823529,
-            "conditional_pr_auc": 0.1802784005867697,
-            "conditional_roc_auc": 0.677001953125,
-            "conditional_pr_auc_ci_low": 0.0779363718379456,
-            "conditional_pr_auc_ci_high": 0.4123619742517722
+            "global_pr_auc": 0.17040764904994282,
+            "global_roc_auc": 0.7101550079491256,
+            "conditional_pr_auc": 0.2006339981029521,
+            "conditional_roc_auc": 0.7244873046875,
+            "conditional_pr_auc_ci_low": 0.09632560143940272,
+            "conditional_pr_auc_ci_high": 0.4458502140023002
           },
           {
             "pipeline": "pls_rf",
@@ -6594,12 +6520,12 @@
             "n_flagged_q": 3,
             "n_flagged_both": 3,
             "n_flagged_either": 41,
-            "global_pr_auc": 0.17504727289883845,
-            "global_roc_auc": 0.6632551669316376,
-            "conditional_pr_auc": 0.24662485230868947,
-            "conditional_roc_auc": 0.6907958984375,
-            "conditional_pr_auc_ci_low": 0.0955473309590337,
-            "conditional_pr_auc_ci_high": 0.4593251766994533
+            "global_pr_auc": 0.21039457426036012,
+            "global_roc_auc": 0.7172098569157392,
+            "conditional_pr_auc": 0.2985158404817838,
+            "conditional_roc_auc": 0.7420654296875,
+            "conditional_pr_auc_ci_low": 0.11375388236433608,
+            "conditional_pr_auc_ci_high": 0.522386149693165
           },
           {
             "pipeline": "pls_bayes",
@@ -6614,12 +6540,12 @@
             "n_flagged_q": 3,
             "n_flagged_both": 3,
             "n_flagged_either": 41,
-            "global_pr_auc": 0.1815303984993727,
-            "global_roc_auc": 0.706379173290938,
-            "conditional_pr_auc": 0.2008211005798322,
-            "conditional_roc_auc": 0.7183837890625,
-            "conditional_pr_auc_ci_low": 0.08915133783785115,
-            "conditional_pr_auc_ci_high": 0.390659596321756
+            "global_pr_auc": 0.14019373504110438,
+            "global_roc_auc": 0.747714626391097,
+            "conditional_pr_auc": 0.165569933854216,
+            "conditional_roc_auc": 0.764404296875,
+            "conditional_pr_auc_ci_low": 0.10021476860078267,
+            "conditional_pr_auc_ci_high": 0.35162421608775724
           }
         ],
         "risk_coverage": [
@@ -6628,648 +6554,648 @@
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.057121171986352526,
-            "roc_auc": 0.48281001589825123
+            "pr_auc": 0.10378175435089522,
+            "roc_auc": 0.6705087440381557
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.1063446161723095,
-            "roc_auc": 0.6521263910969792
+            "pr_auc": 0.10753270119657203,
+            "roc_auc": 0.5902225755166932
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.14416965612000904,
-            "roc_auc": 0.7043918918918919
+            "pr_auc": 0.14771946684634227,
+            "roc_auc": 0.6713036565977741
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.13984702039535052,
-            "roc_auc": 0.7561605723370428
+            "pr_auc": 0.14006662693549654,
+            "roc_auc": 0.6695151033386327
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.09270455889751866,
-            "roc_auc": 0.6724960254372019
+            "pr_auc": 0.08782339144622521,
+            "roc_auc": 0.6321542130365659
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.14359902607182928,
-            "roc_auc": 0.7472178060413354
+            "pr_auc": 0.13748646865196226,
+            "roc_auc": 0.7442368839427662
           },
           {
             "pipeline": "pls_enet",
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.14911908440911392,
-            "roc_auc": 0.6617647058823529
+            "pr_auc": 0.17040764904994282,
+            "roc_auc": 0.7101550079491256
           },
           {
             "pipeline": "pls_rf",
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.17504727289883845,
-            "roc_auc": 0.6632551669316376
+            "pr_auc": 0.21039457426036012,
+            "roc_auc": 0.7172098569157392
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.1815303984993727,
-            "roc_auc": 0.706379173290938
+            "pr_auc": 0.14019373504110438,
+            "roc_auc": 0.747714626391097
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.05868950844937658,
-            "roc_auc": 0.4870507930134511
+            "pr_auc": 0.11672820205988796,
+            "roc_auc": 0.6771732583818509
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.12433695652921681,
-            "roc_auc": 0.6584019273238305
+            "pr_auc": 0.16473642228015306,
+            "roc_auc": 0.5958642842802649
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.17209309354331864,
-            "roc_auc": 0.7114033326641237
+            "pr_auc": 0.17791952318667875,
+            "roc_auc": 0.677976309977916
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.16733488968141577,
-            "roc_auc": 0.7639028307568761
+            "pr_auc": 0.2240779453646055,
+            "roc_auc": 0.676370206785786
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.09782906043235305,
-            "roc_auc": 0.6787793615739811
+            "pr_auc": 0.0980663250696492,
+            "roc_auc": 0.6384260188717125
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.21492096954698325,
-            "roc_auc": 0.7548685003011443
+            "pr_auc": 0.19768609674264126,
+            "roc_auc": 0.7518570568159005
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.17003415845263128,
-            "roc_auc": 0.6654286287893997
+            "pr_auc": 0.1884971976346146,
+            "roc_auc": 0.7127082915077294
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.23032547437125578,
-            "roc_auc": 0.6681389279261192
+            "pr_auc": 0.28038296899371623,
+            "roc_auc": 0.7233487251555912
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.19018240741468034,
-            "roc_auc": 0.7108010439670749
+            "pr_auc": 0.15655324489257455,
+            "roc_auc": 0.7520578197149168
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 17,
-            "pr_auc": 0.060800289303796544,
-            "roc_auc": 0.4877100840336134
+            "pr_auc": 0.11968246836466571,
+            "roc_auc": 0.6704831932773109
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 17,
-            "pr_auc": 0.1276777738887911,
-            "roc_auc": 0.6568277310924371
+            "pr_auc": 0.1674125896448462,
+            "roc_auc": 0.59390756302521
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 17,
-            "pr_auc": 0.18968871685054534,
-            "roc_auc": 0.7165966386554622
+            "pr_auc": 0.19683119117908315,
+            "roc_auc": 0.6830882352941177
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 17,
-            "pr_auc": 0.17374155722553172,
-            "roc_auc": 0.7639705882352942
+            "pr_auc": 0.2269655008740536,
+            "roc_auc": 0.6746848739495798
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 17,
-            "pr_auc": 0.10099894353285342,
-            "roc_auc": 0.6764705882352942
+            "pr_auc": 0.10035475344281931,
+            "roc_auc": 0.6361344537815126
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 17,
-            "pr_auc": 0.21724343445534583,
-            "roc_auc": 0.7513655462184874
+            "pr_auc": 0.20099912864192843,
+            "roc_auc": 0.7502100840336133
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 17,
-            "pr_auc": 0.1714016358683888,
-            "roc_auc": 0.6625000000000001
+            "pr_auc": 0.1904459904579222,
+            "roc_auc": 0.7094537815126051
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 17,
-            "pr_auc": 0.2333857558220957,
-            "roc_auc": 0.6661764705882354
+            "pr_auc": 0.28276161373397896,
+            "roc_auc": 0.7195378151260503
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 17,
-            "pr_auc": 0.1910121395708617,
-            "roc_auc": 0.7043067226890756
+            "pr_auc": 0.15778723090373376,
+            "roc_auc": 0.7467436974789915
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 16,
-            "pr_auc": 0.061405306450702635,
-            "roc_auc": 0.49353853383458646
+            "pr_auc": 0.13234406558644027,
+            "roc_auc": 0.6929041353383459
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 16,
-            "pr_auc": 0.1337193922046779,
-            "roc_auc": 0.6829182330827068
+            "pr_auc": 0.17486917449956932,
+            "roc_auc": 0.6118421052631579
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 16,
-            "pr_auc": 0.19913307788214646,
-            "roc_auc": 0.7393092105263158
+            "pr_auc": 0.2073962303516877,
+            "roc_auc": 0.7133458646616542
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 16,
-            "pr_auc": 0.18596114252896057,
-            "roc_auc": 0.8065084586466167
+            "pr_auc": 0.23929604895396256,
+            "roc_auc": 0.6966635338345865
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 16,
-            "pr_auc": 0.1037835672573807,
-            "roc_auc": 0.68796992481203
+            "pr_auc": 0.10197182093600418,
+            "roc_auc": 0.6441494360902256
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 16,
-            "pr_auc": 0.23135039963138745,
-            "roc_auc": 0.7754934210526316
+            "pr_auc": 0.21992471598980867,
+            "roc_auc": 0.7713815789473684
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 16,
-            "pr_auc": 0.17918749271807782,
-            "roc_auc": 0.6802161654135339
+            "pr_auc": 0.19967910018164753,
+            "roc_auc": 0.7280310150375939
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 16,
-            "pr_auc": 0.24590186594469488,
-            "roc_auc": 0.6971334586466165
+            "pr_auc": 0.29761430490186197,
+            "roc_auc": 0.7453007518796992
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 16,
-            "pr_auc": 0.19977132148114837,
-            "roc_auc": 0.7234492481203008
+            "pr_auc": 0.1645158145225459,
+            "roc_auc": 0.7687969924812029
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 15,
-            "pr_auc": 0.06281031455513907,
-            "roc_auc": 0.5054448871181939
+            "pr_auc": 0.11102323599038727,
+            "roc_auc": 0.6707835325365207
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 15,
-            "pr_auc": 0.10151141728932131,
-            "roc_auc": 0.6602921646746348
+            "pr_auc": 0.1350964976116097,
+            "roc_auc": 0.5851261620185924
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 15,
-            "pr_auc": 0.1703711684059235,
-            "roc_auc": 0.7197875166002656
+            "pr_auc": 0.17128720105506176,
+            "roc_auc": 0.6926958831341302
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 15,
-            "pr_auc": 0.1448101142859748,
-            "roc_auc": 0.7877822045152723
+            "pr_auc": 0.16085145649218646,
+            "roc_auc": 0.6691899070385126
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 15,
-            "pr_auc": 0.09443054778051063,
-            "roc_auc": 0.6658698539176627
+            "pr_auc": 0.07802912315178455,
+            "roc_auc": 0.6154050464807437
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 15,
-            "pr_auc": 0.1528977997327998,
-            "roc_auc": 0.7572377158034529
+            "pr_auc": 0.14480614061518582,
+            "roc_auc": 0.754050464807437
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 15,
-            "pr_auc": 0.14444552338152294,
-            "roc_auc": 0.6601593625498009
+            "pr_auc": 0.19103759138846857,
+            "roc_auc": 0.7110225763612218
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 15,
-            "pr_auc": 0.23554878269985258,
-            "roc_auc": 0.6763612217795485
+            "pr_auc": 0.24310869062725882,
+            "roc_auc": 0.7294820717131474
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 15,
-            "pr_auc": 0.1880881173025652,
-            "roc_auc": 0.702257636122178
+            "pr_auc": 0.14840781682160878,
+            "roc_auc": 0.749535192563081
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 14,
-            "pr_auc": 0.06413547713282344,
-            "roc_auc": 0.5128631961259079
+            "pr_auc": 0.11382987559505023,
+            "roc_auc": 0.6554176755447941
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 14,
-            "pr_auc": 0.10735253448678703,
-            "roc_auc": 0.6720641646489104
+            "pr_auc": 0.1407873122575664,
+            "roc_auc": 0.5823244552058111
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 14,
-            "pr_auc": 0.17917403050716332,
-            "roc_auc": 0.7431900726392252
+            "pr_auc": 0.17999614220366283,
+            "roc_auc": 0.7092917675544793
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 14,
-            "pr_auc": 0.13896016065616112,
-            "roc_auc": 0.7754237288135594
+            "pr_auc": 0.16693304758078312,
+            "roc_auc": 0.662681598062954
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 14,
-            "pr_auc": 0.09525496596016214,
-            "roc_auc": 0.6561743341404358
+            "pr_auc": 0.07541677834394378,
+            "roc_auc": 0.5971549636803875
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 14,
-            "pr_auc": 0.1586827405789516,
-            "roc_auc": 0.7566585956416465
+            "pr_auc": 0.14944043666737553,
+            "roc_auc": 0.7527239709443099
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 14,
-            "pr_auc": 0.14520365015101855,
-            "roc_auc": 0.648456416464891
+            "pr_auc": 0.19673219637505351,
+            "roc_auc": 0.7038438256658596
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 14,
-            "pr_auc": 0.23638312451585317,
-            "roc_auc": 0.6632869249394673
+            "pr_auc": 0.25564603386876594,
+            "roc_auc": 0.7286622276029056
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 14,
-            "pr_auc": 0.19416957966199622,
-            "roc_auc": 0.6946125907990315
+            "pr_auc": 0.1501281517063937,
+            "roc_auc": 0.7437953995157385
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.7,
             "n_kept": 219,
             "n_fails_kept": 13,
-            "pr_auc": 0.07250889756200045,
-            "roc_auc": 0.5259522031366691
+            "pr_auc": 0.10193222895104485,
+            "roc_auc": 0.6368558625840179
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.7,
             "n_kept": 219,
             "n_fails_kept": 13,
-            "pr_auc": 0.13145590528486967,
-            "roc_auc": 0.6994025392083645
+            "pr_auc": 0.15943215230903227,
+            "roc_auc": 0.6194921583271098
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.7,
             "n_kept": 219,
             "n_fails_kept": 13,
-            "pr_auc": 0.22244321791833105,
-            "roc_auc": 0.7458924570575056
+            "pr_auc": 0.22933427101462267,
+            "roc_auc": 0.705563853622106
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.7,
             "n_kept": 219,
             "n_fails_kept": 13,
-            "pr_auc": 0.14036261594456276,
-            "roc_auc": 0.7690440627333831
+            "pr_auc": 0.15700343333928496,
+            "roc_auc": 0.640403286034354
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.7,
             "n_kept": 219,
             "n_fails_kept": 13,
-            "pr_auc": 0.11307702963626515,
-            "roc_auc": 0.6766243465272592
+            "pr_auc": 0.08725921788610128,
+            "roc_auc": 0.6170649738610904
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.7,
             "n_kept": 219,
             "n_fails_kept": 13,
-            "pr_auc": 0.2440051437746154,
-            "roc_auc": 0.7580283793876027
+            "pr_auc": 0.1835387297752884,
+            "roc_auc": 0.7468259895444361
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.7,
             "n_kept": 219,
             "n_fails_kept": 13,
-            "pr_auc": 0.16844597230025318,
-            "roc_auc": 0.6732636295743092
-          },
-          {
-            "pipeline": "pls_rf",
-            "coverage": 0.7,
-            "n_kept": 219,
-            "n_fails_kept": 13,
-            "pr_auc": 0.26048527085378803,
-            "roc_auc": 0.6753174010455564
-          },
-          {
-            "pipeline": "pls_bayes",
-            "coverage": 0.7,
-            "n_kept": 219,
-            "n_fails_kept": 13,
-            "pr_auc": 0.22779996894580282,
+            "pr_auc": 0.2373732511515245,
             "roc_auc": 0.7285287528005975
           },
           {
+            "pipeline": "pls_rf",
+            "coverage": 0.7,
+            "n_kept": 219,
+            "n_fails_kept": 13,
+            "pr_auc": 0.28906572530748287,
+            "roc_auc": 0.7684839432412248
+          },
+          {
+            "pipeline": "pls_bayes",
+            "coverage": 0.7,
+            "n_kept": 219,
+            "n_fails_kept": 13,
+            "pr_auc": 0.1824754802626246,
+            "roc_auc": 0.7845407020164301
+          },
+          {
             "pipeline": "hsic_enet",
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 11,
-            "pr_auc": 0.08089337389302753,
-            "roc_auc": 0.551874678993323
+            "pr_auc": 0.08215372482769001,
+            "roc_auc": 0.5821777092963534
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 11,
-            "pr_auc": 0.11554079035510352,
-            "roc_auc": 0.7010785824345146
+            "pr_auc": 0.0901370101573575,
+            "roc_auc": 0.6217257318952234
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 11,
-            "pr_auc": 0.25172769019472085,
-            "roc_auc": 0.7277863379558295
+            "pr_auc": 0.2627466078058963,
+            "roc_auc": 0.6910631741140216
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 11,
-            "pr_auc": 0.11631645537250862,
-            "roc_auc": 0.7298407806882383
+            "pr_auc": 0.11725734428826867,
+            "roc_auc": 0.5839753466872111
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 11,
-            "pr_auc": 0.09357600395188426,
-            "roc_auc": 0.6612737544940935
+            "pr_auc": 0.09074938666420998,
+            "roc_auc": 0.6114535182331793
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 11,
-            "pr_auc": 0.20297694874127997,
-            "roc_auc": 0.7244478685156652
+            "pr_auc": 0.13684146176757012,
+            "roc_auc": 0.7039034411915769
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 11,
-            "pr_auc": 0.1220747140350592,
-            "roc_auc": 0.6710323574730354
+            "pr_auc": 0.19617313755051716,
+            "roc_auc": 0.7303543913713405
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 11,
-            "pr_auc": 0.1977300958925717,
-            "roc_auc": 0.6692347200821778
+            "pr_auc": 0.21226495447741395,
+            "roc_auc": 0.7318952234206473
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 11,
-            "pr_auc": 0.14842217713613512,
-            "roc_auc": 0.7044170518746791
+            "pr_auc": 0.1439502148399634,
+            "roc_auc": 0.7542372881355932
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 8,
-            "pr_auc": 0.07801381323572996,
-            "roc_auc": 0.5122466216216216
+            "pr_auc": 0.0916072557660812,
+            "roc_auc": 0.6216216216216216
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 8,
-            "pr_auc": 0.08375643607896813,
-            "roc_auc": 0.6321790540540541
+            "pr_auc": 0.06856894654491529,
+            "roc_auc": 0.5481418918918919
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 8,
-            "pr_auc": 0.20416111241799315,
-            "roc_auc": 0.7314189189189189
+            "pr_auc": 0.22033468559837727,
+            "roc_auc": 0.676097972972973
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 8,
-            "pr_auc": 0.09440311945431887,
-            "roc_auc": 0.6879222972972974
+            "pr_auc": 0.13285862307037904,
+            "roc_auc": 0.6233108108108107
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 8,
-            "pr_auc": 0.09355562552864419,
-            "roc_auc": 0.6735641891891891
+            "pr_auc": 0.09971063060367205,
+            "roc_auc": 0.622043918918919
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 8,
-            "pr_auc": 0.21526414700756807,
-            "roc_auc": 0.6980574324324323
+            "pr_auc": 0.12114089977861303,
+            "roc_auc": 0.6908783783783784
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 8,
-            "pr_auc": 0.10525075414781297,
-            "roc_auc": 0.6228885135135135
+            "pr_auc": 0.23513986013986016,
+            "roc_auc": 0.6887668918918919
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 8,
-            "pr_auc": 0.21850922410632037,
-            "roc_auc": 0.6224662162162162
+            "pr_auc": 0.22670446293092494,
+            "roc_auc": 0.7018581081081081
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 8,
-            "pr_auc": 0.11430860805860807,
-            "roc_auc": 0.6592060810810811
+            "pr_auc": 0.12630229610715524,
+            "roc_auc": 0.7246621621621621
           }
         ]
       }

@@ -102,13 +102,6 @@ def cv_leaderboard_df(payload: dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def cv_leaderboard_blocked_df(payload: dict[str, Any]) -> pd.DataFrame:
-    rows = payload.get("leaderboard_blocked") or []
-    if not rows:
-        return pd.DataFrame()
-    return pd.DataFrame(rows)
-
-
 HOLDOUT_VIEW_KEYS: dict[str, str] = {
     "temporal": "holdout",
     "random": "holdout_random",
@@ -124,13 +117,14 @@ def holdout_df(payload: dict[str, Any], key: str = "holdout") -> pd.DataFrame:
 
 
 def holdout_comparison_df(payload: dict[str, Any]) -> pd.DataFrame:
-    """Two rows per model (one per track): that track's CV PR-AUC vs holdout PR-AUC.
+    """Two rows per model (one per track): in-distribution CV PR-AUC vs holdout PR-AUC.
 
-    The same unified grid runs on both tracks; interpolation rows use stratified CV +
-    random holdout, extrapolation rows use blocked time CV + temporal holdout.
+    Tuning happens once on the stratified CV, so both tracks share that
+    in-distribution CV PR-AUC as the reference. Interpolation rows compare it to
+    the random holdout; extrapolation rows compare it to the temporal holdout
+    (the drift gap).
     """
     cv_df = cv_leaderboard_df(payload)
-    cv_blocked_df = cv_leaderboard_blocked_df(payload)
 
     def _metric_map(key: str, metric: str) -> dict[str, float]:
         rows = payload.get(key) or []
@@ -143,11 +137,6 @@ def holdout_comparison_df(payload: dict[str, Any]) -> pd.DataFrame:
     random_pr = _metric_map("holdout_random", "pr_auc")
     temporal_pr = _metric_map("holdout", "pr_auc")
     cv_pr = dict(zip(cv_df.get("pipeline", []), cv_df.get("mean_pr_auc", [])))
-    cv_blocked_pr = (
-        dict(zip(cv_blocked_df.get("pipeline", []), cv_blocked_df.get("mean_pr_auc", [])))
-        if not cv_blocked_df.empty
-        else {}
-    )
 
     out_rows = []
     for pipeline in cv_pr:
@@ -159,12 +148,12 @@ def holdout_comparison_df(payload: dict[str, Any]) -> pd.DataFrame:
                 "holdout_pr_auc": random_pr.get(pipeline),
             }
         )
-    for pipeline in cv_blocked_pr:
+    for pipeline in cv_pr:
         out_rows.append(
             {
                 "pipeline": pipeline,
                 "track": "extrapolation",
-                "cv_pr_auc": cv_blocked_pr.get(pipeline),
+                "cv_pr_auc": cv_pr.get(pipeline),
                 "holdout_pr_auc": temporal_pr.get(pipeline),
             }
         )
@@ -284,10 +273,20 @@ def t2_gate_meta(payload: dict[str, Any]) -> dict[str, Any]:
     return process_gate_meta(payload)
 
 
-def time_decay_meta(payload: dict[str, Any]) -> dict[str, Any]:
-    """Per-model tuned decay lambda + search (extrapolation path)."""
-    meta = payload.get("time_decay")
-    return dict(meta) if isinstance(meta, dict) else {}
+def time_decay_sweep_df(payload: dict[str, Any], metric: str = "pr_auc") -> pd.DataFrame:
+    """Temporal-holdout diagnostic sweep: one row per (pipeline, decay_lambda).
+
+    ``metric`` selects which score column (``pr_auc`` / ``roc_auc``) to surface
+    alongside ``pipeline`` and ``decay_lambda``; lambda=0 is the headline model.
+    """
+    rows = payload.get("time_decay_sweep") or []
+    if not rows:
+        return pd.DataFrame()
+    df = pd.DataFrame(rows)
+    keep = [c for c in ("pipeline", "decay_lambda", metric) if c in df.columns]
+    if "pipeline" not in keep or "decay_lambda" not in keep or metric not in keep:
+        return pd.DataFrame()
+    return df[keep].sort_values(["pipeline", "decay_lambda"]).reset_index(drop=True)
 
 
 HOLDOUT_AUC_DISPLAY_COLS = [

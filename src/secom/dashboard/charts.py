@@ -1103,6 +1103,62 @@ def fig_risk_coverage(
     return _sized(fig, height=440, margin=dict(l=56, r=48, t=72, b=48))
 
 
+def fig_time_decay_sweep(
+    df: pd.DataFrame,
+    *,
+    metric: str = "pr_auc",
+    title: str = "Temporal holdout vs time-decay λ",
+) -> go.Figure:
+    """One line per pipeline of temporal-holdout metric vs decay λ.
+
+    λ=0 is the headline (unweighted) operating point, marked with a dashed line;
+    points to the right show whether recency weighting would help the forward
+    holdout. ``metric`` is ``"pr_auc"`` or ``"roc_auc"``.
+    """
+    fig = go.Figure()
+    if df is None or df.empty or metric not in df.columns:
+        return _sized(
+            fig.update_layout(title=dict(text=title)),
+            height=440,
+            margin=dict(l=56, r=48, t=72, b=48),
+        )
+
+    metric_label = "PR-AUC" if metric == "pr_auc" else "ROC-AUC"
+    pipelines = sorted(df["pipeline"].unique())
+    for i, name in enumerate(pipelines):
+        sub = df[df["pipeline"] == name].sort_values("decay_lambda")
+        fig.add_trace(
+            go.Scatter(
+                x=sub["decay_lambda"],
+                y=sub[metric],
+                mode="lines+markers",
+                name=name,
+                line=dict(color=C[i % len(C)], width=2.5),
+                marker=dict(size=6),
+                hovertemplate=(
+                    f"{name}<br>λ=%{{x:.2f}}<br>{metric_label}=%{{y:.3f}}<extra></extra>"
+                ),
+            )
+        )
+
+    fig.add_vline(
+        x=0.0,
+        line_dash="dash",
+        line_color=C_BLUE,
+        annotation_text="λ=0 (headline)",
+        annotation_position="top",
+    )
+    fig.update_layout(
+        title=dict(text=title),
+        xaxis_title="Time-decay λ (recency weighting)",
+        yaxis_title=f"Temporal holdout {metric_label}",
+        xaxis=dict(gridcolor="rgba(200, 200, 200, 0.15)"),
+        yaxis=dict(gridcolor="rgba(200, 200, 200, 0.15)"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+    )
+    return _sized(fig, height=440, margin=dict(l=56, r=48, t=72, b=48))
+
+
 def fig_sensor_histogram(
     df: pd.DataFrame,
     sensor: str,

@@ -8,7 +8,6 @@ import numpy as np
 
 from secom.pipelines import (
     MODEL_IDS,
-    TUNED_BLOCKED_PARAMS_DIR,
     TUNED_PARAMS_DIR,
 )
 
@@ -37,10 +36,6 @@ def tuned_params_path(model_id: str, base_dir: Path = TUNED_PARAMS_DIR) -> Path:
     return base_dir / f"{model_id}.json"
 
 
-def tuned_blocked_params_path(model_id: str) -> Path:
-    return tuned_params_path(model_id, TUNED_BLOCKED_PARAMS_DIR)
-
-
 def load_tuned_params(model_id: str, base_dir: Path = TUNED_PARAMS_DIR) -> dict:
     path = tuned_params_path(model_id, base_dir)
     if not path.exists():
@@ -48,10 +43,6 @@ def load_tuned_params(model_id: str, base_dir: Path = TUNED_PARAMS_DIR) -> dict:
             f"Missing {path}. Run tuning/{model_id}.ipynb or tuning/tune_all.ipynb."
         )
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def load_tuned_blocked_params(model_id: str) -> dict:
-    return load_tuned_params(model_id, TUNED_BLOCKED_PARAMS_DIR)
 
 
 def load_all_tuned_params(
@@ -72,11 +63,6 @@ def load_all_tuned_params(
             + f". Expected JSON files under {base_dir}/"
         )
     return {model_id: load_tuned_params(model_id, base_dir) for model_id in model_ids}
-
-
-def load_all_tuned_blocked_params(model_ids=MODEL_IDS) -> dict[str, dict]:
-    """Load blocked-tuned (temporal protocol) params (all 9 by default)."""
-    return load_all_tuned_params(TUNED_BLOCKED_PARAMS_DIR, model_ids=model_ids)
 
 
 def fitted_base_classifier(pipeline) -> object:

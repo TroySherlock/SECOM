@@ -15,10 +15,11 @@ DEFAULT_TRACK = "extrapolation"
 
 
 def _pr_curve(block: dict | None) -> PRCurve | None:
-    if not block:
+    recall = (block or {}).get("recall") or []
+    if not recall:
         return None
     return PRCurve(
-        recall=np.asarray(block.get("recall", []), dtype=float),
+        recall=np.asarray(recall, dtype=float),
         precision=np.asarray(block.get("precision", []), dtype=float),
         baseline=float(block.get("baseline", 0.0)),
     )
@@ -29,8 +30,9 @@ def load_pr_curves(
     model_id: str, track: str = DEFAULT_TRACK
 ) -> tuple[PRCurve | None, PRCurve | None, tuple[float, float] | None]:
     """Frozen CV-OOF + holdout PR curves and a BER operating point on the chosen
-    protocol (extrapolation: blocked CV + temporal holdout; interpolation:
-    stratified CV + random holdout)."""
+    protocol. Interpolation has a stratified CV-OOF curve plus the random
+    holdout; extrapolation has no temporal CV, so ``cv_curve`` is ``None`` and the
+    deep-dive shows a holdout-only (temporal) PR curve."""
     pr = report_entry(track, model_id).get("pr_curve") or {}
     cv_curve = _pr_curve(pr.get("cv"))
     ho_curve = _pr_curve(pr.get("holdout"))

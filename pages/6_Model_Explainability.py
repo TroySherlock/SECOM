@@ -39,9 +39,9 @@ def main() -> None:
     st.title("Model explainability")
     st.caption(
         "Global drivers (top 15 features) and per-wafer breakdowns on the chosen track's "
-        "holdout — extrapolation uses the **latest 20%** of wafers by measurement time "
-        "(blocked-tuned hyperparameters + time-decay weighting); interpolation uses the "
-        "random stratified holdout (in-distribution)."
+        "holdout. Both tracks use the single in-distribution-tuned hyperparameters refit "
+        "unweighted; extrapolation scores the **latest 20%** of wafers by measurement time, "
+        "interpolation the random stratified holdout (in-distribution)."
     )
 
     track_label = st.radio(

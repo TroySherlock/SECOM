@@ -38,9 +38,9 @@ def main() -> None:
         ["CV leaderboard (5×2)", "Holdout", "Deep-dive"]
     )
     with tab_cv:
-        render_cv_leaderboard(payload, blocked=False)
+        render_cv_leaderboard(payload)
     with tab_holdout:
-        render_holdout_validation(payload, blocked=False)
+        render_holdout_validation(payload, track="interpolation")
     with tab_model:
         render_model_deepdive(payload, track="interpolation")
 

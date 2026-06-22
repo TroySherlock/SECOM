@@ -12,7 +12,7 @@ from sklearn.base import clone
 
 from secom.dashboard.data import model_info
 from secom.metrics import pr_curve_points, threshold_pr_point
-from secom.pipelines import RANDOM_SEED, time_decay_weights
+from secom.pipelines import RANDOM_SEED
 from secom.tuning.registry import fit_pipeline_weighted
 from secom.utils import fitted_base_classifier
 
@@ -26,27 +26,15 @@ def collect_cv_oof_proba(
     X_train: pd.DataFrame,
     y_train: pd.Series,
     cv,
-    *,
-    train_ts: pd.Series | None = None,
-    decay_lambda: float = 0.0,
 ) -> tuple[pd.Series, np.ndarray]:
-    """Out-of-fold positive-class probabilities over ``cv`` (decay-weighted fits).
-
-    Earliest blocked-CV train rows may have no OOF score (expanding window), so
-    only scored rows are returned.
-    """
+    """Out-of-fold positive-class probabilities over ``cv`` (in-distribution)."""
     proba = np.full(len(y_train), np.nan)
     for train_idx, val_idx in cv.split(X_train, y_train):
-        weights = (
-            time_decay_weights(train_ts.iloc[train_idx], decay_lambda)
-            if (decay_lambda and train_ts is not None)
-            else None
-        )
         fold_pipe, _ = fit_pipeline_weighted(
             clone(pipeline),
             X_train.iloc[train_idx],
             y_train.iloc[train_idx],
-            weights,
+            None,
         )
         proba[val_idx] = fold_pipe.predict_proba(X_train.iloc[val_idx])[:, 1]
     mask = ~np.isnan(proba)
@@ -56,25 +44,33 @@ def collect_cv_oof_proba(
 
 # --- PR-curve payload --------------------------------------------------------
 def pr_curve_payload(
-    y_cv: pd.Series,
-    score_cv: np.ndarray,
+    y_cv: pd.Series | None,
+    score_cv: np.ndarray | None,
     y_ho: pd.Series,
     score_ho: np.ndarray,
     ber_threshold: float | None = None,
 ) -> dict:
-    """JSON-serializable CV + holdout PR curves and a BER operating point."""
-    cv = pr_curve_points(y_cv, score_cv)
+    """JSON-serializable CV + holdout PR curves and a BER operating point.
+
+    ``y_cv``/``score_cv`` may be ``None`` (e.g. the temporal track has no CV), in
+    which case the ``cv`` branch is empty and only the holdout curve is stored.
+    """
+    if y_cv is None or score_cv is None or len(y_cv) == 0:
+        cv_block = {"recall": [], "precision": [], "baseline": 0.0}
+    else:
+        cv = pr_curve_points(y_cv, score_cv)
+        cv_block = {
+            "recall": cv.recall.tolist(),
+            "precision": cv.precision.tolist(),
+            "baseline": float(cv.baseline),
+        }
     ho = pr_curve_points(y_ho, score_ho)
     ber_point = None
     if ber_threshold is not None:
         recall, precision = threshold_pr_point(y_ho, score_ho, float(ber_threshold))
         ber_point = [float(recall), float(precision)]
     return {
-        "cv": {
-            "recall": cv.recall.tolist(),
-            "precision": cv.precision.tolist(),
-            "baseline": float(cv.baseline),
-        },
+        "cv": cv_block,
         "holdout": {
             "recall": ho.recall.tolist(),
             "precision": ho.precision.tolist(),

@@ -1,4 +1,4 @@
-"""Extrapolation track: forward-in-time test (blocked CV + temporal holdout)."""
+"""Extrapolation track: forward-in-time test (in-dist-tuned, temporal holdout)."""
 from __future__ import annotations
 
 import streamlit as st
@@ -12,18 +12,18 @@ from secom.dashboard.data import (
 )
 from secom.dashboard.model_views import (
     load_payload,
-    render_cv_leaderboard,
     render_holdout_validation,
     render_model_deepdive,
+    render_time_decay_sweep,
 )
 
 
 def main() -> None:
     st.title("Extrapolation — forward-in-time test")
     st.caption(
-        "The hard, honest case: blocked time CV with local stratification and a temporal forward "
-        "holdout (latest 20% by measurement time), with exponential time-decay sample weighting. "
-        "Models trained on the past are scored on a later, drifted regime — the realistic fab "
+        "The hard, honest case: every model is tuned once in-distribution, then refit on the "
+        "temporal train and scored on a forward holdout (latest 20% by measurement time). "
+        "Models trained on the past meet a later, drifted regime — the realistic fab "
         "deployment setting."
     )
 
@@ -34,11 +34,12 @@ def main() -> None:
         return
 
     render_blue_note(
-        "**Forward view.** Blocked time CV (expanding window with a warm-up minimum train size) "
-        "for tuning, temporal forward holdout for reporting, optional exponential time-decay "
-        "weighting. The drop from the Interpolation page is the cost of drift; selection-based "
-        "models that lock onto era-specific sensors degrade most here. All holdout metrics are "
-        f"reporting-only (`holdout_is_reporting_only={payload.get('holdout_is_reporting_only', True)}`)."
+        "**Forward view.** Hyperparameters come from the single in-distribution 5×2 stratified "
+        "CV (no separate temporal tuning — blocked CV collapsed to one noisy fold, so it was "
+        "dropped). The headline holdout is unweighted; the **Time-decay sweep** tab shows whether "
+        "recency weighting would help. The drop from the Interpolation page is the cost of drift; "
+        "selection-based models that lock onto era-specific sensors degrade most here. All holdout "
+        f"metrics are reporting-only (`holdout_is_reporting_only={payload.get('holdout_is_reporting_only', True)}`)."
     )
 
     st.subheader("Cost of drift — interpolation minus extrapolation holdout")
@@ -74,24 +75,24 @@ def main() -> None:
 
     comparison_df = holdout_comparison_df(payload)
     if not comparison_df.empty:
-        with st.expander("Per-model detail — CV vs holdout PR-AUC (both tracks)", expanded=False):
+        with st.expander("Per-model detail — in-dist CV vs holdout PR-AUC (both tracks)", expanded=False):
             st.dataframe(comparison_df, width="stretch", hide_index=True)
             st.caption(
-                "Each model under its own track. `cv_pr_auc` is that track's CV (stratified for "
-                "interpolation, blocked time CV for extrapolation); `holdout_pr_auc` is the matching "
-                "holdout (random vs temporal forward). The interpolation-minus-extrapolation gap is "
-                "the drift penalty."
+                "Each model under its own track. `cv_pr_auc` is the shared in-distribution 5×2 "
+                "stratified CV reference; `holdout_pr_auc` is the matching holdout (random for "
+                "interpolation, temporal forward for extrapolation). The "
+                "interpolation-minus-extrapolation gap is the drift penalty."
             )
 
-    tab_cv, tab_holdout, tab_model = st.tabs(
-        ["CV leaderboard (blocked)", "Holdout", "Deep-dive"]
+    tab_holdout, tab_model, tab_sweep = st.tabs(
+        ["Holdout", "Deep-dive", "Time-decay sweep"]
     )
-    with tab_cv:
-        render_cv_leaderboard(payload, blocked=True)
     with tab_holdout:
-        render_holdout_validation(payload, blocked=True)
+        render_holdout_validation(payload, track="extrapolation")
     with tab_model:
         render_model_deepdive(payload, track="extrapolation")
+    with tab_sweep:
+        render_time_decay_sweep(payload)
 
 
 main()

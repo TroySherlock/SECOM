@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Benchmark the unified model grid on both evaluation protocols.
 
-Every cell (hsic_* / rfsel_* / pls_* x enet/rf/bayes) is scored on both:
-  - interpolation: stratified CV + random holdout, from data/processed/tuned/<model_id>.json
-  - extrapolation: blocked CV + temporal holdout + time-decay, from
-    data/processed/tuned_blocked/<model_id>.json
+Every cell (hsic_* / rfsel_* / pls_* x enet/rf/bayes) is tuned once on the
+in-distribution stratified CV (data/processed/tuned/<model_id>.json) and scored on:
+  - interpolation: stratified CV + random holdout
+  - extrapolation: a forward temporal holdout of the same in-distribution params
+    (unweighted), plus a time-decay-vs-lambda diagnostic sweep on that holdout
 
 Use --model ID to benchmark a single cell; subset runs merge into the existing
 benchmark JSON instead of overwriting it.
@@ -21,8 +22,6 @@ import pandas as pd
 from sklearn.base import clone
 from sklearn.metrics import (
     average_precision_score,
-    balanced_accuracy_score,
-    recall_score,
     roc_auc_score,
 )
 from sklearn.model_selection import cross_validate
@@ -46,7 +45,6 @@ from secom.artifacts import (
     collect_holdout_artifacts,
     save_pipeline_artifacts,
 )
-from secom.cv import make_blocked_time_cv
 from secom.gates import BayesGate, EFAGate
 from secom.reporting import (
     collect_cv_oof_proba,
@@ -60,7 +58,7 @@ from secom.pipelines import (
     REPORT_CACHE_PATH,
     CV_N_JOBS,
     CV_SCORING,
-    DECAY_LAMBDA_DEFAULT,
+    DECAY_LAMBDA_GRID,
     RANDOM_SEED,
     RF_MAX_DEPTH,
     RF_N_ESTIMATORS,
@@ -74,8 +72,6 @@ from secom.pipelines import (
     TEST_SIZE,
     TIMESTAMP_COL,
     TUNED_PARAMS_DIR,
-    TUNED_BLOCKED_PARAMS_DIR,
-    WEIGHTING_MODEL_IDS,
     clear_pipeline_cache,
     feature_columns,
     holdout_split_summary,
@@ -87,7 +83,6 @@ from secom.pipelines import (
 )
 from secom.utils import (
     json_safe,
-    load_all_tuned_blocked_params,
     load_all_tuned_params,
     score_row_from_cv_result,
 )
@@ -101,19 +96,15 @@ HOLDOUT_SORT_COL = "pr_auc"
 RANKING = "descending_higher_is_better"
 
 CV_PROTOCOL_IN_DIST = "repeated_stratified_5x2"
-CV_PROTOCOL_EXTRAP = "blocked_time_local_strat"
 
 
 def build_benchmark_pipelines(
     tuned: dict[str, dict] | None = None,
     *,
-    extrapolation: bool = False,
     model_ids=None,
 ) -> dict[str, Pipeline]:
     if tuned is None:
-        tuned = (
-            load_all_tuned_blocked_params() if extrapolation else load_all_tuned_params()
-        )
+        tuned = load_all_tuned_params()
     if model_ids is None:
         model_ids = list(tuned.keys())
     pipelines: dict[str, Pipeline] = {}
@@ -122,31 +113,6 @@ def build_benchmark_pipelines(
             raise KeyError(f"Missing tuned payload for {model_id}")
         pipelines[model_id] = build_tuned_pipeline(model_id, tuned[model_id])
     return pipelines
-
-
-def _model_decay_lambda(name: str, tuned: dict[str, dict] | None) -> float:
-    """Tuned decay lambda for a weight-capable model; 0 otherwise."""
-    if name not in WEIGHTING_MODEL_IDS:
-        return 0.0
-    return float((tuned or {}).get(name, {}).get("decay_lambda", DECAY_LAMBDA_DEFAULT))
-
-
-def _holdout_sample_weights(
-    name: str,
-    tuned: dict[str, dict] | None,
-    train_timestamps: pd.Series | None,
-) -> np.ndarray | None:
-    """Time-decay sample weights for a full-train fit (None if unweighted).
-
-    Returns ``None`` when there is no weighting so lambda=0 reproduces the
-    unweighted fit exactly and weight-incapable heads are never weighted.
-    """
-    if train_timestamps is None:
-        return None
-    decay_lambda = _model_decay_lambda(name, tuned)
-    if not decay_lambda:
-        return None
-    return time_decay_weights(train_timestamps, decay_lambda)
 
 
 def run_pipeline_benchmark(
@@ -203,97 +169,60 @@ def run_pipeline_benchmark(
     return leaderboard.reset_index(drop=True)
 
 
-def run_weighted_blocked_leaderboard(
+def run_time_decay_sweep(
     pipelines: dict,
-    X: pd.DataFrame,
-    y: pd.Series,
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
     train_timestamps: pd.Series,
-    cv,
-    tuned_blocked: dict[str, dict] | None = None,
+    X_test: pd.DataFrame,
+    y_test: pd.Series,
     *,
+    grid=DECAY_LAMBDA_GRID,
     show_progress: bool = True,
 ) -> pd.DataFrame:
-    """Blocked-CV leaderboard with per-fold time-decay weights.
+    """Temporal-holdout PR/ROC vs time-decay lambda (diagnostic, not tuned).
 
-    Mirrors ``cross_validate`` over ``CV_SCORING`` but fits each fold with
-    time-decay sample weights computed from that fold's own train rows, so it
-    matches the deployment-time weighted fit. Unweighted cells (lambda=0)
-    reproduce the plain blocked-CV numbers exactly.
+    For each model and lambda, refit on the full temporal train with recency
+    weights and score the forward holdout. ``lambda=0`` reproduces the headline
+    unweighted holdout, so the sweep shows whether recency weighting would help.
     """
-    splits = list(cv.split(X, y))
+    grid = [float(x) for x in grid]
     rows = []
     if show_progress:
-        print(f"Weighted blocked CV: {len(pipelines)} pipelines x {len(splits)} folds")
-
+        print(f"Time-decay sweep: {len(pipelines)} pipelines x {len(grid)} lambdas")
     for name, pipeline in pipelines.items():
-        decay_lambda = _model_decay_lambda(name, tuned_blocked)
-        per_fold: dict[str, list[float]] = {
-            "balanced_accuracy": [],
-            "true_positive_rate": [],
-            "true_negative_rate": [],
-            "roc_auc": [],
-            "pr_auc": [],
-        }
-        for train_idx, val_idx in splits:
-            weights = None
-            if decay_lambda and name in WEIGHTING_MODEL_IDS:
-                weights = time_decay_weights(
-                    train_timestamps.iloc[train_idx], decay_lambda
-                )
-            fold_pipe, threshold = fit_pipeline_weighted(
-                clone(pipeline), X.iloc[train_idx], y.iloc[train_idx], weights
+        for decay_lambda in grid:
+            weights = (
+                time_decay_weights(train_timestamps, decay_lambda)
+                if decay_lambda
+                else None
             )
-            y_val = y.iloc[val_idx]
-            proba = fold_pipe.predict_proba(X.iloc[val_idx])[:, 1]
-            y_pred = (
-                predict_with_threshold(proba, threshold)
-                if threshold is not None
-                else fold_pipe.predict(X.iloc[val_idx])
+            fitted, _ = fit_pipeline_weighted(
+                clone(pipeline), X_train, y_train, weights
             )
-            per_fold["balanced_accuracy"].append(
-                float(balanced_accuracy_score(y_val, y_pred))
+            proba = fitted.predict_proba(X_test)[:, 1]
+            rows.append(
+                {
+                    "pipeline": name,
+                    "decay_lambda": decay_lambda,
+                    "pr_auc": float(average_precision_score(y_test, proba)),
+                    "roc_auc": float(roc_auc_score(y_test, proba)),
+                }
             )
-            per_fold["true_positive_rate"].append(
-                float(recall_score(y_val, y_pred, zero_division=0))
-            )
-            per_fold["true_negative_rate"].append(
-                float(recall_score(y_val, y_pred, pos_label=0, zero_division=0))
-            )
-            per_fold["roc_auc"].append(float(roc_auc_score(y_val, proba)))
-            per_fold["pr_auc"].append(float(average_precision_score(y_val, proba)))
-
-        result = {f"test_{k}": np.asarray(v) for k, v in per_fold.items()}
-        row = {"pipeline": name, **score_row_from_cv_result(result)}
-        rows.append(row)
         if show_progress:
-            print(
-                f"  {name}: mean PR AUC {row['mean_pr_auc']:.3f} "
-                f"(±{row['std_pr_auc']:.3f}), ROC AUC {row['mean_roc_auc']:.3f} "
-                f"[lambda={decay_lambda:.2f}]"
-            )
-
-    leaderboard = pd.DataFrame(rows).sort_values(
-        CV_SORT_COL, ascending=False, kind="mergesort"
-    )
-    return leaderboard.reset_index(drop=True)
+            print(f"  swept {name}")
+    return pd.DataFrame(rows)
 
 
 def fit_holdout_pipelines(
     pipelines: dict,
     X_train: pd.DataFrame,
     y_train: pd.Series,
-    tuned: dict[str, dict] | None,
-    train_timestamps: pd.Series | None = None,
 ) -> dict[str, Pipeline]:
-    """Fit each tuned pipeline once on the full train (decay-weighted if capable)."""
+    """Fit each tuned pipeline once on the full train (unweighted)."""
     fitted: dict[str, Pipeline] = {}
     for name, pipeline in pipelines.items():
-        f, _ = fit_pipeline_weighted(
-            pipeline,
-            X_train,
-            y_train,
-            _holdout_sample_weights(name, tuned, train_timestamps),
-        )
+        f, _ = fit_pipeline_weighted(pipeline, X_train, y_train, None)
         fitted[name] = f
     return fitted
 
@@ -550,15 +479,14 @@ def save_benchmark_results(
     *,
     model_ids,
     tuned: dict[str, dict] | None = None,
-    tuned_blocked: dict[str, dict] | None = None,
     leaderboard: pd.DataFrame | None = None,
-    leaderboard_blocked: pd.DataFrame | None = None,
     holdout: pd.DataFrame | None = None,
     holdout_random: pd.DataFrame | None = None,
     holdout_conditional: pd.DataFrame | None = None,
     holdout_conditional_random: pd.DataFrame | None = None,
     risk_coverage: pd.DataFrame | None = None,
     risk_coverage_random: pd.DataFrame | None = None,
+    time_decay_sweep: pd.DataFrame | None = None,
     gate_reports: dict | None = None,
     holdout_split: dict | None = None,
     holdout_split_random: dict | None = None,
@@ -580,10 +508,9 @@ def save_benchmark_results(
             "primary_metric": PRIMARY_METRIC,
             "ranking": RANKING,
             "tuned_params_dir": str(TUNED_PARAMS_DIR),
-            "tuned_blocked_params_dir": str(TUNED_BLOCKED_PARAMS_DIR),
             "cv_protocol": {
                 "in_distribution": CV_PROTOCOL_IN_DIST,
-                "extrapolation": CV_PROTOCOL_EXTRAP,
+                "extrapolation": "in_distribution_tuned_temporal_holdout",
             },
             "model_ids": list(MODEL_IDS),
             "correlated_selection": {
@@ -626,28 +553,9 @@ def save_benchmark_results(
             hp[mid] = tuned[mid].get("grid_search_best_params", {})
         payload["tuned_hyperparameters"] = hp
 
-    if tuned_blocked is not None:
-        hp_b = dict(payload.get("tuned_hyperparameters_blocked") or {})
-        time_decay = dict(payload.get("time_decay") or {})
-        for mid in extrap_ids:
-            hp_b[mid] = tuned_blocked[mid].get("grid_search_best_params", {})
-            time_decay[mid] = {
-                "decay_lambda": float(tuned_blocked[mid].get("decay_lambda", 0.0)),
-                "weight_capable": mid in WEIGHTING_MODEL_IDS,
-                "search": tuned_blocked[mid].get("decay_lambda_search"),
-            }
-        payload["tuned_hyperparameters_blocked"] = hp_b
-        payload["time_decay"] = time_decay
-
     if leaderboard is not None:
         payload["leaderboard"] = _merge_model_rows(
             payload.get("leaderboard"), leaderboard.to_dict(orient="records"), interp_ids
-        )
-    if leaderboard_blocked is not None:
-        payload["leaderboard_blocked"] = _merge_model_rows(
-            payload.get("leaderboard_blocked"),
-            leaderboard_blocked.to_dict(orient="records"),
-            extrap_ids,
         )
     if holdout is not None:
         payload["holdout"] = _merge_model_rows(
@@ -677,6 +585,8 @@ def save_benchmark_results(
         payload["risk_coverage"] = risk_coverage.to_dict(orient="records")
     if risk_coverage_random is not None:
         payload["risk_coverage_random"] = risk_coverage_random.to_dict(orient="records")
+    if time_decay_sweep is not None:
+        payload["time_decay_sweep"] = time_decay_sweep.to_dict(orient="records")
     if gate_reports is not None:
         payload["gate_reports"] = gate_reports
     if process_gate is not None:
@@ -758,27 +668,21 @@ def _report_entries_for_track(
     y_test: pd.Series,
     cv,
     *,
-    train_ts: pd.Series | None = None,
-    weighted: bool = False,
     show_progress: bool = True,
 ) -> dict[str, dict]:
     """Per-model frozen PR-curve + global-importance payload for one protocol.
 
-    Holdout PR data reuses the already-computed ``scores``; the CV-OOF curve is a
-    fresh decay-weighted fold pass (the deployment-equivalent fit).
+    Holdout PR data reuses the already-computed ``scores``. When ``cv`` is given
+    (interpolation) the CV-OOF curve is added too; for the temporal track ``cv``
+    is ``None`` (no temporal CV), so the deep-dive shows a holdout-only PR curve.
     """
     entries: dict[str, dict] = {}
     for name in model_ids:
-        decay_lambda = _model_decay_lambda(name, tuned_map) if weighted else 0.0
-        oof_pipeline = build_tuned_pipeline(name, tuned_map[name])
-        y_cv, score_cv = collect_cv_oof_proba(
-            oof_pipeline,
-            X_train,
-            y_train,
-            cv,
-            train_ts=train_ts if weighted else None,
-            decay_lambda=decay_lambda,
-        )
+        if cv is not None:
+            oof_pipeline = build_tuned_pipeline(name, tuned_map[name])
+            y_cv, score_cv = collect_cv_oof_proba(oof_pipeline, X_train, y_train, cv)
+        else:
+            y_cv, score_cv = None, None
         try:
             ber_threshold = resolve_threshold_profiles(tuned_map[name]).get("ber")
         except (KeyError, ValueError):
@@ -817,10 +721,12 @@ def save_report_cache(
 
 
 def main(argv=None) -> None:
-    """Re-run after tuning. Every cell runs on BOTH protocols:
-    interpolation = stratified CV + random holdout; extrapolation = blocked CV +
-    temporal holdout + time-decay. Both standalone gates (EFA, Bayes) are scored
-    on each protocol's holdout. A --model subset merges into the existing JSON."""
+    """Re-run after tuning. Every cell is tuned once on the in-distribution
+    stratified CV (data/processed/tuned/) and scored on two holdouts:
+    interpolation = stratified CV + random holdout; extrapolation = a forward
+    temporal holdout of those same params (unweighted), plus a diagnostic
+    time-decay sweep. Both standalone gates (EFA, Bayes) are scored on each
+    protocol's holdout. A --model subset merges into the existing JSON."""
     args = _parse_args(argv)
     if args.clear_pipeline_cache:
         clear_pipeline_cache()
@@ -854,8 +760,6 @@ def main(argv=None) -> None:
         build_benchmark_pipelines(tuned, model_ids=selected),
         Xr_train,
         yr_train,
-        tuned,
-        train_timestamps=None,
     )
     scores_random = holdout_scores(fitted_random, Xr_test)
     print("\nRandom holdout (in-distribution):")
@@ -879,28 +783,28 @@ def main(argv=None) -> None:
     y_test = test_df[TARGET_COL].astype(int)
     train_ts = train_df[TIMESTAMP_COL].reset_index(drop=True)
 
-    tuned_blocked = load_all_tuned_blocked_params(model_ids=selected)
-    print("\nWeighted blocked-CV leaderboard (extrapolation protocol):")
-    leaderboard_blocked = run_weighted_blocked_leaderboard(
-        build_benchmark_pipelines(tuned_blocked, extrapolation=True, model_ids=selected),
-        X_train,
-        y_train,
-        train_ts,
-        make_blocked_time_cv(train_df),
-        tuned_blocked,
-        show_progress=True,
-    )
-    print("\nFitting temporal-holdout pipelines (extrap):")
+    # Reuse the single in-distribution `tuned/` params; the temporal holdout is
+    # an unweighted forward test of those hyperparameters (no separate tuning).
+    print("\nFitting temporal-holdout pipelines (extrap, in-dist tuned params):")
     fitted_temporal = fit_holdout_pipelines(
-        build_benchmark_pipelines(tuned_blocked, extrapolation=True, model_ids=selected),
+        build_benchmark_pipelines(tuned, model_ids=selected),
         X_train,
         y_train,
-        tuned_blocked,
-        train_timestamps=train_ts,
     )
     scores_temporal = holdout_scores(fitted_temporal, X_test)
     print("\nTemporal holdout (extrapolation):")
-    holdout = run_holdout_benchmark(scores_temporal, y_test, tuned_blocked)
+    holdout = run_holdout_benchmark(scores_temporal, y_test, tuned)
+
+    print("\nTime-decay sweep (temporal holdout vs lambda, diagnostic):")
+    time_decay_sweep = run_time_decay_sweep(
+        build_benchmark_pipelines(tuned, model_ids=selected),
+        X_train,
+        y_train,
+        train_ts,
+        X_test,
+        y_test,
+        show_progress=True,
+    )
 
     print("\nStandalone gates on the temporal holdout:")
     efa_gate_temporal = _fit_gate(EFAGate, X_train, y_train)
@@ -926,20 +830,16 @@ def main(argv=None) -> None:
             yr_train,
             yr_test,
             make_repeated_stratified_cv(),
-            train_ts=None,
-            weighted=False,
         ),
         "extrapolation": _report_entries_for_track(
             selected,
-            tuned_blocked,
+            tuned,
             fitted_temporal,
             scores_temporal,
             X_train,
             y_train,
             y_test,
-            make_blocked_time_cv(train_df),
-            train_ts=train_ts,
-            weighted=True,
+            None,
         ),
     }
     save_report_cache(report_entries, merge=merge)
@@ -958,15 +858,14 @@ def main(argv=None) -> None:
     save_benchmark_results(
         model_ids=selected,
         tuned=tuned,
-        tuned_blocked=tuned_blocked,
         leaderboard=leaderboard,
-        leaderboard_blocked=leaderboard_blocked,
         holdout=holdout,
         holdout_random=holdout_random,
         holdout_conditional=holdout_conditional,
         holdout_conditional_random=holdout_conditional_random,
         risk_coverage=risk_coverage,
         risk_coverage_random=risk_coverage_random,
+        time_decay_sweep=time_decay_sweep,
         gate_reports=gate_reports,
         holdout_split=split_meta,
         holdout_split_random=split_meta_random,
@@ -983,9 +882,7 @@ def main(argv=None) -> None:
         print(f"Wrote {PIPELINE_ARTIFACTS_PATH}")
     print("\nStratified CV leaderboard:")
     print(leaderboard.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
-    print("\nBlocked CV leaderboard:")
-    print(leaderboard_blocked.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
-    print("\nTemporal holdout (extrapolation):")
+    print("\nTemporal holdout (extrapolation, in-dist tuned params):")
     print(holdout.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
     print("\nRandom holdout (in-distribution):")
     print(holdout_random.to_string(index=False, float_format=lambda x: f"{x:.3f}"))

@@ -8,9 +8,9 @@ time-decay weighting, gate feature pipeline, frozen config) and the unified
     front-end {HSIC+hubs, RF-selection+hubs, sPLS}
         x classifier {RF, elastic-net LR, Bayesian elastic-net LR}
 
-is run on the random-stratified (interpolation) and blocked-temporal
-(extrapolation) protocols. Every cell is a plain scikit-learn ``Pipeline``
-built by ``build_model_pipeline``:
+is tuned once on the random-stratified in-distribution CV and scored on both the
+random holdout (interpolation) and a temporal forward holdout (extrapolation).
+Every cell is a plain scikit-learn ``Pipeline`` built by ``build_model_pipeline``:
 
     raw c_id + rolling-Z c_id_rz
         -> median impute -> SmartCorrelatedSelection cluster
@@ -74,7 +74,6 @@ OUTPUT_DIR = REPO_ROOT / "data" / "processed"
 # front-end), reused across the classifier-head grid; cleared via env or CLI.
 PIPELINE_CACHE_DIR = OUTPUT_DIR / ".pipeline_cache"
 TUNED_PARAMS_DIR = OUTPUT_DIR / "tuned"
-TUNED_BLOCKED_PARAMS_DIR = OUTPUT_DIR / "tuned_blocked"
 BENCHMARK_RESULTS_PATH = OUTPUT_DIR / "secom_pipeline_benchmark.json"
 PIPELINE_ARTIFACTS_PATH = OUTPUT_DIR / "secom_pipeline_artifacts.json"
 # Frozen PR-curve + global-importance cache the dashboard reads (per track/model).
@@ -92,12 +91,6 @@ TEST_SIZE = 0.20
 HOLDOUT_SPLIT_MODE = "temporal"
 N_SPLITS = 5
 N_REPEATS = 2
-N_BLOCKED_SPLITS = 3
-BLOCKED_MIN_VAL_FAILS = 3
-# Warm-up: the first blocked validation block only starts once at least this
-# fraction of the train rows has accumulated, so no fold is scored on a model
-# trained on an unrealistically small early slice.
-BLOCKED_WARMUP_MIN_TRAIN_FRACTION = 0.5
 
 GRID_SEARCH_VERBOSE = 1
 
@@ -274,9 +267,9 @@ def time_decay_weights(timestamps, decay_lambda: float) -> np.ndarray:
     """Exponential recency weights from timestamps (recent = heavier).
 
     Age is normalized to [0, 1] within the rows passed in (0 = newest,
-    1 = oldest). ``decay_lambda=0`` yields uniform weights. Applied to every
-    weight-capable cell on the temporal protocol (all nine heads, including the
-    Bayesian ones, which fold the weights into their likelihood).
+    1 = oldest). ``decay_lambda=0`` yields uniform weights. Used by the temporal-
+    holdout decay sweep; every head accepts the weights (the Bayesian ones fold
+    them into their likelihood, LR/RF forward them via CalibratedClassifierCV).
     """
     ts = np.asarray(
         pd.to_datetime(np.asarray(timestamps), errors="coerce").astype("int64"),
@@ -533,24 +526,11 @@ BAYES_SVI_STEPS = 1000
 # Each calibration fold is a full ADVI refit -> use fewer folds than LR/RF.
 BAYES_CALIB_CV = 2
 
-# Exponential time-decay (recency weighting): grid-tuned per cell on the temporal
-# protocol only (lambda=0 recovers the unweighted model).
-DECAY_LAMBDA_DEFAULT = 0.0
+# Exponential time-decay (recency weighting) grid for the temporal-holdout
+# diagnostic sweep (lambda=0 recovers the unweighted headline model). Decay is
+# no longer tuned; the benchmark sweeps these lambdas and scores the temporal
+# holdout so the effect of recency weighting can be read off directly.
 DECAY_LAMBDA_GRID = [0.0, 0.25, 0.5, 1.0, 2.0, 4.0]
-#: Weight-capable cells. All nine cells support time-decay sample weighting on the
-#: temporal protocol; the Bayesian heads weight their likelihood, the LR/RF heads
-#: forward sample_weight, all via CalibratedClassifierCV.
-WEIGHTING_MODEL_IDS: tuple[str, ...] = (
-    "hsic_enet",
-    "hsic_rf",
-    "hsic_bayes",
-    "rfsel_enet",
-    "rfsel_rf",
-    "rfsel_bayes",
-    "pls_enet",
-    "pls_rf",
-    "pls_bayes",
-)
 
 # --- Standalone gates (risk-coverage tools, not pipeline steps) --------------
 # EFA gate: Regularized EFA -> Hotelling T2 + Q (SPE).
@@ -682,10 +662,7 @@ def pipelines_frozen_config_fragment() -> dict:
         "bayes_pls_components": int(BAYES_PLS_COMPONENTS),
         "bayes_svi_steps": int(BAYES_SVI_STEPS),
         "bayes_calib_cv": int(BAYES_CALIB_CV),
-        "decay_lambda_default": float(DECAY_LAMBDA_DEFAULT),
-        "decay_lambda_grid": [float(x) for x in DECAY_LAMBDA_GRID],
-        "weighting_model_ids": list(WEIGHTING_MODEL_IDS),
-        "blocked_warmup_min_train_fraction": float(BLOCKED_WARMUP_MIN_TRAIN_FRACTION),
+        "decay_lambda_sweep_grid": [float(x) for x in DECAY_LAMBDA_GRID],
         "efa_gate_n_factors": int(EFA_GATE_N_FACTORS),
         "efa_gate_t2_alpha": float(EFA_GATE_T2_ALPHA),
         "efa_gate_q_alpha": float(EFA_GATE_Q_ALPHA),
@@ -715,8 +692,6 @@ def frozen_config() -> dict:
         "holdout_split_mode": HOLDOUT_SPLIT_MODE,
         "n_splits": N_SPLITS,
         "n_repeats": N_REPEATS,
-        "n_blocked_splits": N_BLOCKED_SPLITS,
-        "blocked_min_val_fails": BLOCKED_MIN_VAL_FAILS,
         "model_name": MODEL_NAME,
         "champion_imputation_method": CHAMPION_IMPUTATION_METHOD,
         "knn_impute_neighbors": int(KNN_IMPUTE_NEIGHBORS),

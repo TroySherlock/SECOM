@@ -16,11 +16,11 @@ from secom.dashboard.charts import (
     fig_holdout_confusion,
     fig_pr_curve_cv_holdout,
     fig_risk_coverage,
+    fig_time_decay_sweep,
 )
 from secom.dashboard.data import (
     DELTA_METRIC_COLS,
     benchmark_has_multi_profile_thresholds,
-    cv_leaderboard_blocked_df,
     cv_leaderboard_df,
     gate_conditional_df,
     gate_config,
@@ -33,8 +33,9 @@ from secom.dashboard.data import (
     list_model_ids,
     load_benchmark_results,
     model_info,
-    time_decay_meta,
+    time_decay_sweep_df,
 )
+from secom.dashboard.pr_curves import load_pr_curves
 
 # Gate identity per (track, gate) -> display label + flagged-count column stem.
 GATE_LABELS = {
@@ -42,17 +43,11 @@ GATE_LABELS = {
     "bayes": "sBFA → BGM density",
 }
 GATE_FLAGGED = {"efa": "t2", "bayes": "density"}
-from secom.dashboard.pr_curves import load_pr_curves
 
 # label -> (mean_col, std_col, chart_title)
 _CV_METRIC_SPECS_STRATIFIED: dict[str, tuple[str, str, str]] = {
     "PR-AUC": ("mean_pr_auc", "std_pr_auc", "Mean PR AUC (5×2 repeated stratified CV)"),
     "ROC-AUC": ("mean_roc_auc", "std_roc_auc", "Mean ROC AUC (5×2 repeated stratified CV)"),
-}
-
-_CV_METRIC_SPECS_BLOCKED: dict[str, tuple[str, str, str]] = {
-    "PR-AUC": ("mean_pr_auc", "std_pr_auc", "Mean PR AUC (blocked time CV)"),
-    "ROC-AUC": ("mean_roc_auc", "std_roc_auc", "Mean ROC AUC (blocked time CV)"),
 }
 
 _PROFILE_RADIO_LABELS = {pid: THRESHOLD_PROFILES[pid].display_name for pid in PROFILE_IDS}
@@ -93,26 +88,20 @@ def _format_holdout_split_caption(split: dict) -> str | None:
     return " · ".join(parts)
 
 
-def render_cv_leaderboard(payload: dict, *, blocked: bool) -> None:
-    """Cross-validation leaderboard for one protocol (no protocol radio)."""
-    suffix = "blocked" if blocked else "strat"
-    protocol_cv_df = cv_leaderboard_blocked_df(payload) if blocked else cv_leaderboard_df(payload)
-    metric_specs = _CV_METRIC_SPECS_BLOCKED if blocked else _CV_METRIC_SPECS_STRATIFIED
+def render_cv_leaderboard(payload: dict) -> None:
+    """In-distribution 5×2 stratified CV leaderboard (the single tuning protocol)."""
+    protocol_cv_df = cv_leaderboard_df(payload)
+    metric_specs = _CV_METRIC_SPECS_STRATIFIED
 
     st.subheader("Cross-validation leaderboard")
     if protocol_cv_df.empty:
-        st.warning(
-            "No blocked CV leaderboard rows in benchmark JSON. Re-run "
-            "`python -m secom.cli.benchmark`."
-            if blocked
-            else "No stratified CV leaderboard rows in benchmark JSON."
-        )
+        st.warning("No stratified CV leaderboard rows in benchmark JSON.")
         return
 
     cv_metric = st.selectbox(
         "Evaluation Metric",
         list(metric_specs),
-        key=f"cv_metric_{suffix}",
+        key="cv_metric_strat",
     )
     mean_col, std_col, chart_title = metric_specs[cv_metric]
     st.plotly_chart(
@@ -125,7 +114,7 @@ def render_cv_leaderboard(payload: dict, *, blocked: bool) -> None:
         ),
         width="stretch",
         theme="streamlit",
-        key=f"cv_leaderboard_{suffix}",
+        key="cv_leaderboard_strat",
     )
     cols_to_show = ["pipeline", mean_col, std_col]
     display_cv = protocol_cv_df[
@@ -140,12 +129,18 @@ def render_cv_leaderboard(payload: dict, *, blocked: bool) -> None:
     )
 
 
-def render_holdout_validation(payload: dict, *, blocked: bool) -> None:
-    """CV-vs-holdout validation chart + AUC summary for one protocol (no view radio)."""
-    suffix = "blocked" if blocked else "strat"
-    view_key = "holdout" if blocked else "holdout_random"
-    split_key = "holdout_split" if blocked else "holdout_split_random"
-    view_cv_df = cv_leaderboard_blocked_df(payload) if blocked else cv_leaderboard_df(payload)
+def render_holdout_validation(payload: dict, *, track: str) -> None:
+    """In-distribution CV reference vs this track's holdout (no view radio).
+
+    Both tracks reference the single 5×2 stratified CV (the one tuning protocol);
+    interpolation compares it to the random holdout, extrapolation to the temporal
+    forward holdout, so the purple-to-yellow gap reads as the drift cost.
+    """
+    is_extrap = track == "extrapolation"
+    suffix = "extrap" if is_extrap else "interp"
+    view_key = "holdout" if is_extrap else "holdout_random"
+    split_key = "holdout_split" if is_extrap else "holdout_split_random"
+    view_cv_df = cv_leaderboard_df(payload)
     view_ho_df = holdout_df(payload, key=view_key)
 
     st.subheader("Holdout evaluation (reporting only)")
@@ -157,12 +152,7 @@ def render_holdout_validation(payload: dict, *, blocked: bool) -> None:
         st.warning(f"No `{view_key}` rows in benchmark JSON. Re-run the benchmark.")
         return
     if view_cv_df.empty:
-        st.warning(
-            "No blocked CV leaderboard in benchmark JSON. Re-run "
-            "`python -m secom.cli.run_tuning` and `python -m secom.cli.benchmark`."
-            if blocked
-            else "No CV leaderboard rows in benchmark JSON."
-        )
+        st.warning("No CV leaderboard rows in benchmark JSON.")
         return
 
     ctrl_col1, ctrl_col2 = st.columns([1, 1])
@@ -191,23 +181,16 @@ def render_holdout_validation(payload: dict, *, blocked: bool) -> None:
         theme="streamlit",
         key=f"validation_leaderboard_{suffix}",
     )
-    cv_label = "blocked time CV folds" if blocked else "5×2 stratified folds"
     st.caption(
-        f"Purple markers show CV mean ± 1 SD across {cv_label}; yellow diamonds are "
-        "holdout point estimates; pale yellow bands are stratified bootstrap 95% CIs "
-        "for PR-AUC and ROC-AUC."
+        "Purple markers show in-distribution 5×2 stratified CV mean ± 1 SD; yellow "
+        "diamonds are holdout point estimates; pale yellow bands are stratified "
+        "bootstrap 95% CIs for PR-AUC and ROC-AUC."
     )
-    if blocked:
-        decay_meta = time_decay_meta(payload)
-        lam_bits = [
-            f"{mid}={float(m.get('decay_lambda', 0.0)):.2f}"
-            for mid, m in decay_meta.items()
-            if m.get("weight_capable")
-        ]
-        lam_txt = ", ".join(lam_bits) if lam_bits else "none"
+    if is_extrap:
         st.caption(
-            "Forward view: blocked-tuned hyperparameters with exponential time-decay "
-            f"sample weighting (tuned `decay_lambda`: {lam_txt})."
+            "Forward view: the same in-distribution-tuned hyperparameters, refit on the "
+            "temporal train and scored unweighted on the later holdout. The purple-to-yellow "
+            "gap is the drift cost; recency weighting is explored in the Time-decay sweep tab."
         )
 
     st.dataframe(holdout_auc_summary_df(view_ho_df), width="stretch", hide_index=True)
@@ -218,7 +201,6 @@ def render_model_deepdive(payload: dict, *, track: str) -> None:
     is_extrap = track == "extrapolation"
     model_ids = list_model_ids(payload)
     tuned = payload.get("tuned_hyperparameters") or {}
-    tuned_blocked = payload.get("tuned_hyperparameters_blocked") or {}
 
     st.subheader("Pipeline architecture & tuning")
     selected_id = st.selectbox(
@@ -237,18 +219,13 @@ def render_model_deepdive(payload: dict, *, track: str) -> None:
         st.markdown(info.description)
         st.markdown(f"**Tuning notebook:** `{info.tuning_notebook}`")
     with right:
+        st.markdown("**Tuned hyperparameters (in-distribution / stratified CV)**")
+        st.markdown(_format_params(tuned.get(selected_id, {})))
         if is_extrap:
-            st.markdown("**Tuned hyperparameters (extrapolation / blocked CV)**")
-            st.markdown(_format_params(tuned_blocked.get(selected_id, {})))
-            decay_meta = time_decay_meta(payload).get(selected_id, {})
-            if decay_meta.get("weight_capable"):
-                st.markdown(
-                    f"- `decay_lambda`: `{float(decay_meta.get('decay_lambda', 0.0)):.2f}` "
-                    "(time-decay weighting)"
-                )
-        else:
-            st.markdown("**Tuned hyperparameters (in-distribution / stratified CV)**")
-            st.markdown(_format_params(tuned.get(selected_id, {})))
+            st.caption(
+                "Same in-distribution-tuned params reused for the temporal forward "
+                "holdout (no separate temporal tuning)."
+            )
 
     st.markdown("#### Threshold profiles")
     st.markdown(
@@ -283,11 +260,10 @@ def render_model_deepdive(payload: dict, *, track: str) -> None:
         )
     if is_extrap:
         st.caption(
-            "Purple: blocked time CV OOF PR curve on validation blocks only (earliest "
-            "train block has no OOF score under the expanding window). Yellow: temporal "
-            "holdout PR curve with time-decay weighting. Blue dashed: random baseline "
-            "(positive-class prevalence). Green diamond: BER-min threshold operating "
-            "point on holdout."
+            "Temporal forward holdout PR curve only (no temporal CV — the models are "
+            "tuned in-distribution). Yellow: temporal holdout. Blue dashed: random "
+            "baseline (positive-class prevalence). Green diamond: BER-min threshold "
+            "operating point on holdout."
         )
     else:
         st.caption(
@@ -341,6 +317,38 @@ def render_model_deepdive(payload: dict, *, track: str) -> None:
         "linear heads can still miss more true fails (higher BER) under a stricter fail-class "
         "cutoff than the **Random Forest** head. **F2** is the default deploy profile; "
         "**BER** picks the symmetric misclassification minimum on the threshold grid."
+    )
+
+
+def render_time_decay_sweep(payload: dict) -> None:
+    """Diagnostic: temporal-holdout PR/ROC across time-decay λ (headline is λ=0)."""
+    st.subheader("Time-decay sweep (temporal holdout, diagnostic)")
+    metric = st.radio(
+        "Metric",
+        list(DELTA_METRIC_COLS),
+        horizontal=True,
+        key="decay_sweep_metric",
+    )
+    metric_col = DELTA_METRIC_COLS[metric]
+    sweep_df = time_decay_sweep_df(payload, metric_col)
+    if sweep_df.empty:
+        st.warning(
+            "No `time_decay_sweep` rows in benchmark JSON. Re-run "
+            "`python -m secom.benchmark`."
+        )
+        return
+    st.plotly_chart(
+        fig_time_decay_sweep(sweep_df, metric=metric_col),
+        width="stretch",
+        theme="streamlit",
+        key="time_decay_sweep_chart",
+    )
+    st.caption(
+        "Each line refits a model on the temporal train with exponential recency "
+        "weights at that λ and scores the forward holdout. λ=0 is the headline "
+        "(unweighted) model; an upward slope means recency weighting would help that "
+        "model resist drift, a downward slope means it hurts. Diagnostic only — the "
+        "headline numbers stay at λ=0."
     )
 
 

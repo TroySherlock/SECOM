@@ -42,7 +42,6 @@ from secom.pipelines import (
     C_GRID,
     CORRELATED_SELECTION_THRESHOLD,
     CORRELATED_SELECTION_THRESHOLD_GRID,
-    DECAY_LAMBDA_GRID,
     L1_RATIO_GRID,
     MODEL_CELLS,
     MODEL_IDS,
@@ -571,53 +570,6 @@ def _profile_result_at_best(
         result["mean_fbeta"] = float(np.mean(fold_fbetas))
         result["std_fbeta"] = float(np.std(fold_fbetas, ddof=0))
     return result
-
-
-def tune_time_decay_lambda(
-    spec: ModelSpec,
-    X: pd.DataFrame,
-    y: pd.Series,
-    timestamps: pd.Series,
-    cv_summary: dict,
-    cv,
-    *,
-    lambda_grid: list[float] | None = None,
-) -> dict:
-    """Select exponential time-decay lambda by mean PR-AUC over blocked CV folds.
-
-    Fits the structurally-tuned pipeline per fold with time-decay sample weights
-    and scores average_precision on each validation block. lambda is tuned only
-    on CV (never the holdout); lambda=0 recovers the unweighted model.
-    """
-    lambda_grid = [float(x) for x in (lambda_grid or DECAY_LAMBDA_GRID)]
-    best_params = spec.build_grid_search_best_params(cv_summary)
-    base_pipeline = clone(spec.build_pipeline())
-    base_pipeline.set_params(**best_params)
-
-    splits = list(cv.split(X, y))
-    per_lambda: dict[float, float] = {}
-    for decay_lambda in lambda_grid:
-        fold_scores: list[float] = []
-        for train_idx, val_idx in splits:
-            fold_pipe = clone(base_pipeline)
-            fold_pipe.fit(
-                X.iloc[train_idx],
-                y.iloc[train_idx],
-                **_sample_weight_kwargs(timestamps, train_idx, decay_lambda),
-            )
-            proba = fold_pipe.predict_proba(X.iloc[val_idx])[:, 1]
-            fold_scores.append(
-                float(average_precision_score(y.iloc[val_idx], proba))
-            )
-        per_lambda[decay_lambda] = float(np.mean(fold_scores)) if fold_scores else 0.0
-
-    best_decay_lambda = max(per_lambda, key=per_lambda.get)
-    return {
-        "best_decay_lambda": float(best_decay_lambda),
-        "best_mean_pr_auc": float(per_lambda[best_decay_lambda]),
-        "per_lambda_pr_auc": {str(k): v for k, v in per_lambda.items()},
-        "lambda_grid": lambda_grid,
-    }
 
 
 def tune_classifier_threshold_profiles(
