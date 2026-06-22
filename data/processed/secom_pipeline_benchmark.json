@@ -3823,8 +3823,8 @@
           "t2_alpha": 0.03,
           "q_alpha": 0.005,
           "gate_corr_threshold": 0.9,
-          "t2_ucl": 28.71839372663374,
-          "q_ucl": 6734922.075919537,
+          "t2_ucl": 28.718393726633902,
+          "q_ucl": 6734922.075919639,
           "n_features": 242,
           "n_reference_wafers": 1170,
           "shrinkage": 1.0
@@ -4675,8 +4675,8 @@
           "gate_corr_threshold": 0.9,
           "clip": 5.0,
           "n_seeds": 5,
-          "density_lcl": -12.32629720584075,
-          "q_ucl": 360.92791727264995,
+          "density_lcl": -12.326297205840751,
+          "q_ucl": 360.92791727265,
           "n_features": 242,
           "n_reference_wafers": 1170
         },
@@ -5524,8 +5524,8 @@
           "t2_alpha": 0.03,
           "q_alpha": 0.005,
           "gate_corr_threshold": 0.9,
-          "t2_ucl": 32.17470451775783,
-          "q_ucl": 5281931.189705723,
+          "t2_ucl": 32.174704517759984,
+          "q_ucl": 5281931.18970567,
           "n_features": 242,
           "n_reference_wafers": 1167,
           "shrinkage": 1.0
@@ -7241,8 +7241,8 @@
     "t2_alpha": 0.03,
     "q_alpha": 0.005,
     "gate_corr_threshold": 0.9,
-    "t2_ucl": 28.71839372663374,
-    "q_ucl": 6734922.075919537,
+    "t2_ucl": 28.718393726633902,
+    "q_ucl": 6734922.075919639,
     "n_features": 242,
     "n_reference_wafers": 1170,
     "shrinkage": 1.0

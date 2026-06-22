@@ -135,7 +135,6 @@
 
       devShells.${system}.default = pkgs.mkShell {
         packages = with pkgs; [
-          llama-cpp-vulkan
           curl
           jq
           python311

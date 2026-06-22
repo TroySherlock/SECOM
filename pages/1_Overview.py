@@ -1,4 +1,4 @@
-"""Introduction page: SECOM stg_secom macro health snapshot."""
+"""Overview page: the SECOM problem (rarity + drift + structured missingness)."""
 from __future__ import annotations
 
 import streamlit as st
@@ -53,10 +53,12 @@ Training and benchmarking read **`public.mart_secom_features`**.
 
 
 def main() -> None:
-    st.title("SECOM defect detection")
+    st.title("SECOM defect detection — the problem")
     st.caption(
-        "Semiconductor process monitoring: multivariate sensor snapshots labeled pass/fail. "
-        "Rare failures (~7%) require combining hundreds of weak signals."
+        "What we are up against: semiconductor process monitoring where ~7% of wafers fail, "
+        "the signal is spread across hundreds of weak, redundant sensors with structured "
+        "missingness, and the process drifts over time — so a model trained on the past must "
+        "still hold up on a later, shifted regime."
     )
 
     if not DB_PATH.exists() or not stg_available():

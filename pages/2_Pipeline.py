@@ -53,7 +53,7 @@ def main() -> None:
     st.title("Pipeline")
     st.caption(
         "How SECOM features are prepared before model training. "
-        "See the Models page **Model deep-dive** tab for PR curves and the "
+        "See the Interpolation / Extrapolation pages' **Deep-dive** tab for PR curves and the "
         "F0.5 / F2 / F4 / BER threshold selector (holdout confusion matrices)."
     )
 
