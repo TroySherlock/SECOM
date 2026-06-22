@@ -1136,6 +1136,56 @@ def fig_sensor_histogram(
     return _sized(fig, height=380)
 
 
+def fig_delta_bar(
+    df: pd.DataFrame,
+    *,
+    value_col: str = "delta",
+    label_col: str = "pipeline",
+    title: str = "Delta",
+    value_label: str = "delta",
+    positive_is_good: bool = True,
+    height: int = 380,
+) -> go.Figure:
+    """Diverging horizontal bars for signed deltas, sorted by magnitude.
+
+    Green/red encode whether a bar is desirable: when ``positive_is_good`` is
+    True, positive bars are green; flip it for loss-style deltas (e.g. the
+    interpolation-minus-extrapolation drift cost) so larger losses read red.
+    """
+    if df.empty or value_col not in df:
+        return _sized(go.Figure(), height=height, title=dict(text=title))
+    plot_df = df.dropna(subset=[value_col]).copy()
+    if plot_df.empty:
+        return _sized(go.Figure(), height=height, title=dict(text=title))
+    plot_df = plot_df.reindex(
+        plot_df[value_col].abs().sort_values(ascending=True).index
+    )
+    good = C_GREEN if positive_is_good else C_RED
+    bad = C_RED if positive_is_good else C_GREEN
+    colors = [good if v >= 0 else bad for v in plot_df[value_col]]
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=plot_df[value_col],
+                y=plot_df[label_col],
+                orientation="h",
+                marker_color=colors,
+                text=[f"{v:+.3f}" for v in plot_df[value_col]],
+                textposition="outside",
+                hovertemplate="%{y}<br>" + value_label + "=%{x:+.4g}<extra></extra>",
+            )
+        ]
+    )
+    fig.add_vline(x=0.0, line_width=1, line_color="rgba(235,235,235,0.45)")
+    fig.update_layout(
+        title=dict(text=title),
+        xaxis_title=value_label,
+        yaxis_title="",
+        showlegend=False,
+    )
+    return _sized(fig, height=height, margin=dict(l=150, r=64, t=72, b=48))
+
+
 def fig_top_features_bar(
     df: pd.DataFrame,
     *,

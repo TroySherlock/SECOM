@@ -4,7 +4,12 @@ from __future__ import annotations
 import streamlit as st
 
 from secom.dashboard import render_blue_note
-from secom.dashboard.data import holdout_comparison_df
+from secom.dashboard.charts import fig_delta_bar
+from secom.dashboard.data import (
+    DELTA_METRIC_COLS,
+    holdout_comparison_df,
+    holdout_delta_df,
+)
 from secom.dashboard.model_views import (
     load_payload,
     render_cv_leaderboard,
@@ -36,16 +41,47 @@ def main() -> None:
         f"reporting-only (`holdout_is_reporting_only={payload.get('holdout_is_reporting_only', True)}`)."
     )
 
+    st.subheader("Cost of drift — interpolation minus extrapolation holdout")
+    drift_metric = st.radio(
+        "Metric",
+        list(DELTA_METRIC_COLS),
+        horizontal=True,
+        key="drift_delta_metric",
+    )
+    metric_col = DELTA_METRIC_COLS[drift_metric]
+    delta_df = holdout_delta_df(payload, metric_col)
+    if delta_df.empty:
+        st.warning("No holdout rows for both tracks in benchmark JSON. Re-run the benchmark.")
+    else:
+        st.plotly_chart(
+            fig_delta_bar(
+                delta_df,
+                value_col="delta",
+                title=f"Drift cost per model ({drift_metric}: interpolation − extrapolation)",
+                value_label=f"{drift_metric} lost to drift",
+                positive_is_good=False,
+            ),
+            width="stretch",
+            theme="streamlit",
+            key="drift_delta_bar",
+        )
+        st.caption(
+            "Each bar is one model's in-distribution holdout minus its temporal-forward holdout "
+            f"{drift_metric}. Longer red bars = more {drift_metric} surrendered to drift; bars near "
+            "zero (or green) are the drift-robust models. Selection-based heads that lock onto "
+            "era-specific sensors tend to lose the most."
+        )
+
     comparison_df = holdout_comparison_df(payload)
     if not comparison_df.empty:
-        st.markdown("**Cost of extrapolation — per-model CV vs holdout PR-AUC (both tracks)**")
-        st.dataframe(comparison_df, width="stretch", hide_index=True)
-        st.caption(
-            "Each model under its own track. `cv_pr_auc` is that track's CV (stratified for "
-            "interpolation, blocked time CV for extrapolation); `holdout_pr_auc` is the matching "
-            "holdout (random vs temporal forward). The interpolation-minus-extrapolation gap is "
-            "the drift penalty."
-        )
+        with st.expander("Per-model detail — CV vs holdout PR-AUC (both tracks)", expanded=False):
+            st.dataframe(comparison_df, width="stretch", hide_index=True)
+            st.caption(
+                "Each model under its own track. `cv_pr_auc` is that track's CV (stratified for "
+                "interpolation, blocked time CV for extrapolation); `holdout_pr_auc` is the matching "
+                "holdout (random vs temporal forward). The interpolation-minus-extrapolation gap is "
+                "the drift penalty."
+            )
 
     tab_cv, tab_holdout, tab_model = st.tabs(
         ["CV leaderboard (blocked)", "Holdout", "Deep-dive"]

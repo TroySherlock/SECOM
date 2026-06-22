@@ -12,24 +12,36 @@ from secom.dashboard.charts import (
     C_PURPLE,
     fig_benchmark_leaderboard,
     fig_cv_vs_holdout_validation,
+    fig_delta_bar,
     fig_holdout_confusion,
     fig_pr_curve_cv_holdout,
     fig_risk_coverage,
 )
 from secom.dashboard.data import (
+    DELTA_METRIC_COLS,
     benchmark_has_multi_profile_thresholds,
     cv_leaderboard_blocked_df,
     cv_leaderboard_df,
+    gate_conditional_df,
+    gate_config,
+    gate_lift_df,
+    gate_risk_coverage_df,
+    gate_vs_gate_df,
     holdout_auc_summary_df,
-    holdout_conditional_df,
     holdout_confusion_by_profile,
     holdout_df,
     list_model_ids,
     load_benchmark_results,
     model_info,
-    risk_coverage_df,
     time_decay_meta,
 )
+
+# Gate identity per (track, gate) -> display label + flagged-count column stem.
+GATE_LABELS = {
+    "efa": "Regularized EFA → Hotelling T²",
+    "bayes": "sBFA → BGM density",
+}
+GATE_FLAGGED = {"efa": "t2", "bayes": "density"}
 from secom.dashboard.pr_curves import load_pr_curves
 
 # label -> (mean_col, std_col, chart_title)
@@ -195,7 +207,7 @@ def render_holdout_validation(payload: dict, *, blocked: bool) -> None:
         lam_txt = ", ".join(lam_bits) if lam_bits else "none"
         st.caption(
             "Forward view: blocked-tuned hyperparameters with exponential time-decay "
-            f"sample weighting (tuned `decay_lambda`: {lam_txt}; Bayesian heads unweighted)."
+            f"sample weighting (tuned `decay_lambda`: {lam_txt})."
         )
 
     st.dataframe(holdout_auc_summary_df(view_ho_df), width="stretch", hide_index=True)
@@ -332,119 +344,165 @@ def render_model_deepdive(payload: dict, *, track: str) -> None:
     )
 
 
-def render_gate_section(payload: dict, *, blocked: bool):
-    """Standalone risk-coverage gate conditional metrics for one track.
+def render_gate_lift(payload: dict, *, track: str, metric: str) -> None:
+    """Diverging delta bars: each gate's conditional-minus-global lift, plus EFA-vs-Bayes."""
+    metric_col = DELTA_METRIC_COLS[metric]
+    efa_lift = gate_lift_df(payload, track, "efa", metric_col)
+    bayes_lift = gate_lift_df(payload, track, "bayes", metric_col)
+    vs_df = gate_vs_gate_df(payload, track, metric_col)
 
-    Returns the conditional DataFrame (for the risk-coverage curve), or None.
-    """
-    if blocked:
-        cond_df = holdout_conditional_df(payload, key="holdout_conditional")
-        gate_meta = payload.get("process_gate") or {}
-        gate_title = "sBFA → BGM density"
-        flagged_label = "density"
-    else:
-        cond_df = holdout_conditional_df(payload, key="holdout_conditional_random")
-        gate_meta = payload.get("interp_process_gate") or {}
-        gate_title = "Regularized EFA → Hotelling T²"
-        flagged_label = "t2"
-
-    if cond_df.empty or not gate_meta:
+    if efa_lift.empty and bayes_lift.empty:
         st.info(
-            "No gate conditional metrics in benchmark JSON. Re-run "
+            "No gate conditional metrics for this track in benchmark JSON. Re-run "
             "`python -m secom.cli.benchmark`."
         )
-        return None
-
-    logic_txt = str(gate_meta.get("logic", "or")).upper()
-    st.markdown(
-        f"**Risk-coverage gate ({gate_title} {logic_txt} Q/SPE) — conditional metrics**"
-    )
-    q_ucl = gate_meta.get("q_ucl")
-    q_txt = f"{float(q_ucl):.1f}" if q_ucl is not None else "?"
-    base_caption = (
-        f"Raw post-cluster sensors (smart_corr threshold "
-        f"{gate_meta.get('gate_corr_threshold', '?')}); "
-        f"fit on {gate_meta.get('n_reference_wafers', '?')} passing train wafers, "
-        f"{gate_meta.get('n_features', '?')} features → "
-        f"{gate_meta.get('n_factors', '?')} factors. "
-    )
-    if blocked:
-        d_lcl = gate_meta.get("density_lcl")
-        d_txt = f"{float(d_lcl):.2f}" if d_lcl is not None else "?"
-        st.caption(
-            base_caption
-            + f"{gate_meta.get('n_mixture_components', '?')}-component BGM "
-            f"(seed-ensemble n={gate_meta.get('n_seeds', '?')}). "
-            f"Abstain when BGM log-density < {d_txt} "
-            f"(α={gate_meta.get('density_alpha', '?')}) "
-            f"**{logic_txt}** Q/SPE > {q_txt} (α={gate_meta.get('q_alpha', '?')})."
-        )
-    else:
-        t2_ucl = gate_meta.get("t2_ucl")
-        t2_txt = f"{float(t2_ucl):.1f}" if t2_ucl is not None else "?"
-        st.caption(
-            base_caption
-            + f"Abstain when Hotelling T² > {t2_txt} "
-            f"(α={gate_meta.get('t2_alpha', '?')}) "
-            f"**{logic_txt}** Q/SPE > {q_txt} (α={gate_meta.get('q_alpha', '?')})."
-        )
-    gate_cols = [
-        c
-        for c in [
-            "pipeline",
-            "coverage",
-            "conditional_pr_auc",
-            "conditional_pr_auc_ci_low",
-            "conditional_pr_auc_ci_high",
-            "global_pr_auc",
-            "n_in_control",
-            f"n_flagged_{flagged_label}",
-            "n_flagged_q",
-            "n_flagged_both",
-            "n_fails_in_control",
-            "n_fails_flagged_ooc",
-            f"n_fails_flagged_{flagged_label}",
-            "n_fails_flagged_q",
-        ]
-        if c in cond_df.columns
-    ]
-    gate_display = cond_df[gate_cols].copy()
-    for col in gate_display.select_dtypes(include="float").columns:
-        gate_display[col] = gate_display[col].round(3)
-    st.dataframe(gate_display, width="stretch", hide_index=True)
-    st.caption(
-        "`coverage` = fraction of holdout wafers in control (scored by the model). "
-        f"{logic_txt} logic: flagged if either statistic trips per the rule. "
-        "`conditional_pr_auc` is on in-control wafers only (None when "
-        "fewer than 5 in-control fails). Read beside `n_flagged_*` and "
-        "`n_fails_flagged_*` — gains can come from dropping easy negatives."
-    )
-    return cond_df
-
-
-def render_risk_coverage(payload: dict, cond_df) -> None:
-    """Risk-coverage severity sweep (temporal holdout)."""
-    rc_df = risk_coverage_df(payload)
-    if rc_df is None or rc_df.empty:
         return
-    st.markdown("**Risk–coverage curve**")
+
+    st.markdown("**Gate lift vs no gate** — conditional (kept wafers) minus global (all wafers)")
+    left, right = st.columns(2)
+    with left:
+        st.plotly_chart(
+            fig_delta_bar(
+                efa_lift,
+                title=f"EFA → T²+Q gate lift ({metric})",
+                value_label=f"conditional − global {metric}",
+                positive_is_good=True,
+            ),
+            width="stretch",
+            theme="streamlit",
+            key=f"gate_lift_efa_{track}",
+        )
+    with right:
+        st.plotly_chart(
+            fig_delta_bar(
+                bayes_lift,
+                title=f"sBFA → BGM+Q gate lift ({metric})",
+                value_label=f"conditional − global {metric}",
+                positive_is_good=True,
+            ),
+            width="stretch",
+            theme="streamlit",
+            key=f"gate_lift_bayes_{track}",
+        )
     st.caption(
-        "Rank holdout wafers by the gate's OOC severity, then keep the "
-        "least-suspicious fraction (coverage) and rescore. Coverage=1.0 is "
-        "the global metric; abstention increases to the right. The dashed "
-        "line marks the gate's actual operating coverage."
+        "Positive (green) = abstaining lifts conditional performance on the kept wafers. "
+        "Bars sit inside wide CIs at ~17-20 fails; treat direction, not magnitude, as the signal."
     )
-    rc_metric = st.radio(
-        "Metric",
-        ["PR-AUC", "ROC-AUC"],
-        horizontal=True,
-        key="rc_metric",
-    )
-    rc_key = "pr_auc" if rc_metric == "PR-AUC" else "roc_auc"
+
+    if not vs_df.empty:
+        st.markdown("**Gate vs gate** — EFA minus Bayes conditional metric")
+        st.plotly_chart(
+            fig_delta_bar(
+                vs_df,
+                title=f"EFA − Bayes conditional {metric}",
+                value_label=f"EFA − Bayes {metric}",
+                positive_is_good=True,
+            ),
+            width="stretch",
+            theme="streamlit",
+            key=f"gate_vs_gate_{track}",
+        )
+        st.caption(
+            "Green = the EFA (T²) gate keeps a better-scoring set than the Bayes (BGM) gate on "
+            "that model; red favours Bayes. This is which abstention rule wins, not whether either helps."
+        )
+
+
+def render_risk_coverage(payload: dict, *, track: str, gate: str, metric: str) -> None:
+    """Risk-coverage severity sweep for one gate on one track."""
+    rc_df = gate_risk_coverage_df(payload, track, gate)
+    gate_title = GATE_LABELS.get(gate, gate)
+    if rc_df is None or rc_df.empty:
+        st.caption(f"No risk-coverage rows for the {gate_title} gate on this track.")
+        return
+    metric_key = DELTA_METRIC_COLS[metric]
+    cond_df = gate_conditional_df(payload, track, gate)
     op_cov = None
-    if cond_df is not None and "coverage" in cond_df.columns and not cond_df["coverage"].dropna().empty:
+    if not cond_df.empty and "coverage" in cond_df.columns and not cond_df["coverage"].dropna().empty:
         op_cov = float(cond_df["coverage"].dropna().iloc[0])
     st.plotly_chart(
-        fig_risk_coverage(rc_df, metric=rc_key, operating_coverage=op_cov),
+        fig_risk_coverage(
+            rc_df,
+            metric=metric_key,
+            operating_coverage=op_cov,
+            title=f"{gate_title} risk–coverage ({metric})",
+        ),
         width="stretch",
+        theme="streamlit",
+        key=f"risk_coverage_{track}_{gate}",
     )
+
+
+def render_gate_section(payload: dict, *, track: str, gate: str) -> None:
+    """Conditional-metrics table + config caption for one gate/track, inside an expander."""
+    cond_df = gate_conditional_df(payload, track, gate)
+    gate_meta = gate_config(payload, track, gate)
+    gate_title = GATE_LABELS.get(gate, gate)
+    flagged_label = GATE_FLAGGED.get(gate, "ooc")
+    if cond_df.empty or not gate_meta:
+        return
+
+    logic_txt = str(gate_meta.get("logic", "or")).upper()
+    with st.expander(f"{gate_title} — conditional metrics (CI detail)", expanded=False):
+        q_ucl = gate_meta.get("q_ucl")
+        q_txt = f"{float(q_ucl):.1f}" if q_ucl is not None else "?"
+        base_caption = (
+            f"Raw post-cluster sensors (smart_corr threshold "
+            f"{gate_meta.get('gate_corr_threshold', '?')}); "
+            f"fit on {gate_meta.get('n_reference_wafers', '?')} passing train wafers, "
+            f"{gate_meta.get('n_features', '?')} features → "
+            f"{gate_meta.get('n_factors', '?')} factors. "
+        )
+        if gate == "bayes":
+            d_lcl = gate_meta.get("density_lcl")
+            d_txt = f"{float(d_lcl):.2f}" if d_lcl is not None else "?"
+            st.caption(
+                base_caption
+                + f"{gate_meta.get('n_mixture_components', '?')}-component BGM "
+                f"(seed-ensemble n={gate_meta.get('n_seeds', '?')}). "
+                f"Abstain when BGM log-density < {d_txt} "
+                f"(α={gate_meta.get('density_alpha', '?')}) "
+                f"**{logic_txt}** Q/SPE > {q_txt} (α={gate_meta.get('q_alpha', '?')})."
+            )
+        else:
+            t2_ucl = gate_meta.get("t2_ucl")
+            t2_txt = f"{float(t2_ucl):.1f}" if t2_ucl is not None else "?"
+            st.caption(
+                base_caption
+                + f"Abstain when Hotelling T² > {t2_txt} "
+                f"(α={gate_meta.get('t2_alpha', '?')}) "
+                f"**{logic_txt}** Q/SPE > {q_txt} (α={gate_meta.get('q_alpha', '?')})."
+            )
+        gate_cols = [
+            c
+            for c in [
+                "pipeline",
+                "coverage",
+                "conditional_pr_auc",
+                "conditional_pr_auc_ci_low",
+                "conditional_pr_auc_ci_high",
+                "global_pr_auc",
+                "conditional_roc_auc",
+                "global_roc_auc",
+                "n_in_control",
+                f"n_flagged_{flagged_label}",
+                "n_flagged_q",
+                "n_flagged_both",
+                "n_fails_in_control",
+                "n_fails_flagged_ooc",
+                f"n_fails_flagged_{flagged_label}",
+                "n_fails_flagged_q",
+            ]
+            if c in cond_df.columns
+        ]
+        gate_display = cond_df[gate_cols].copy()
+        for col in gate_display.select_dtypes(include="float").columns:
+            gate_display[col] = gate_display[col].round(3)
+        st.dataframe(gate_display, width="stretch", hide_index=True)
+        st.caption(
+            "`coverage` = fraction of holdout wafers in control (scored by the model). "
+            f"{logic_txt} logic: flagged if either statistic trips per the rule. "
+            "`conditional_pr_auc` is on in-control wafers only (None when "
+            "fewer than 5 in-control fails). Read beside `n_flagged_*` and "
+            "`n_fails_flagged_*` — gains can come from dropping easy negatives."
+        )

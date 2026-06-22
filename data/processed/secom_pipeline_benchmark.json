@@ -247,9 +247,28 @@
       }
     },
     "hsic_bayes": {
-      "decay_lambda": 0.0,
-      "weight_capable": false,
-      "search": null
+      "decay_lambda": 0.25,
+      "weight_capable": true,
+      "search": {
+        "best_decay_lambda": 0.25,
+        "best_mean_pr_auc": 0.050830387754500245,
+        "per_lambda_pr_auc": {
+          "0.0": 0.042109406614428135,
+          "0.25": 0.050830387754500245,
+          "0.5": 0.04930975385839108,
+          "1.0": 0.04413450547321515,
+          "2.0": 0.04348343079757591,
+          "4.0": 0.04385194953421904
+        },
+        "lambda_grid": [
+          0.0,
+          0.25,
+          0.5,
+          1.0,
+          2.0,
+          4.0
+        ]
+      }
     },
     "rfsel_enet": {
       "decay_lambda": 0.0,
@@ -300,9 +319,28 @@
       }
     },
     "rfsel_bayes": {
-      "decay_lambda": 0.0,
-      "weight_capable": false,
-      "search": null
+      "decay_lambda": 0.5,
+      "weight_capable": true,
+      "search": {
+        "best_decay_lambda": 0.5,
+        "best_mean_pr_auc": 0.0912396540591197,
+        "per_lambda_pr_auc": {
+          "0.0": 0.07517756463172721,
+          "0.25": 0.08527177753140548,
+          "0.5": 0.0912396540591197,
+          "1.0": 0.08184503749687062,
+          "2.0": 0.08276595582947845,
+          "4.0": 0.08673625980303049
+        },
+        "lambda_grid": [
+          0.0,
+          0.25,
+          0.5,
+          1.0,
+          2.0,
+          4.0
+        ]
+      }
     },
     "pls_enet": {
       "decay_lambda": 0.25,
@@ -353,9 +391,28 @@
       }
     },
     "pls_bayes": {
-      "decay_lambda": 0.0,
-      "weight_capable": false,
-      "search": null
+      "decay_lambda": 4.0,
+      "weight_capable": true,
+      "search": {
+        "best_decay_lambda": 4.0,
+        "best_mean_pr_auc": 0.04107003612836721,
+        "per_lambda_pr_auc": {
+          "0.0": 0.03858675215172429,
+          "0.25": 0.03870393402505376,
+          "0.5": 0.03878401727436701,
+          "1.0": 0.03809907271118137,
+          "2.0": 0.03794658439446469,
+          "4.0": 0.04107003612836721
+        },
+        "lambda_grid": [
+          0.0,
+          0.25,
+          0.5,
+          1.0,
+          2.0,
+          4.0
+        ]
+      }
     }
   },
   "leaderboard": [
@@ -532,15 +589,28 @@
     },
     {
       "pipeline": "rfsel_bayes",
-      "mean_ber_percent": 34.71995926680245,
+      "mean_ber_percent": 36.812627291242364,
       "std_ber_percent": 0.0,
-      "mean_true_positive_percent": 55.00000000000001,
+      "mean_true_positive_percent": 50.0,
       "std_true_positive_percent": 0.0,
-      "mean_true_negative_percent": 75.56008146639512,
+      "mean_true_negative_percent": 76.37474541751527,
       "std_true_negative_percent": 0.0,
-      "mean_roc_auc": 0.6742362525458248,
+      "mean_roc_auc": 0.665427698574338,
       "std_roc_auc": 0.0,
-      "mean_pr_auc": 0.07517756463172721,
+      "mean_pr_auc": 0.0912396540591197,
+      "std_pr_auc": 0.0
+    },
+    {
+      "pipeline": "hsic_bayes",
+      "mean_ber_percent": 39.47046843177189,
+      "std_ber_percent": 0.0,
+      "mean_true_positive_percent": 40.0,
+      "std_true_positive_percent": 0.0,
+      "mean_true_negative_percent": 81.05906313645622,
+      "std_true_negative_percent": 0.0,
+      "mean_roc_auc": 0.5838594704684318,
+      "std_roc_auc": 0.0,
+      "mean_pr_auc": 0.050830387754500245,
       "std_pr_auc": 0.0
     },
     {
@@ -570,33 +640,106 @@
       "std_pr_auc": 0.0
     },
     {
-      "pipeline": "hsic_bayes",
-      "mean_ber_percent": 48.06517311608961,
-      "std_ber_percent": 0.0,
-      "mean_true_positive_percent": 100.0,
-      "std_true_positive_percent": 0.0,
-      "mean_true_negative_percent": 3.8696537678207736,
-      "std_true_negative_percent": 0.0,
-      "mean_roc_auc": 0.5259674134419552,
-      "std_roc_auc": 0.0,
-      "mean_pr_auc": 0.042109406614428135,
-      "std_pr_auc": 0.0
-    },
-    {
       "pipeline": "pls_bayes",
-      "mean_ber_percent": 49.96945010183299,
+      "mean_ber_percent": 43.38594704684318,
       "std_ber_percent": 0.0,
-      "mean_true_positive_percent": 30.0,
+      "mean_true_positive_percent": 45.0,
       "std_true_positive_percent": 0.0,
-      "mean_true_negative_percent": 70.06109979633402,
+      "mean_true_negative_percent": 68.22810590631364,
       "std_true_negative_percent": 0.0,
-      "mean_roc_auc": 0.47632382892057035,
+      "mean_roc_auc": 0.5223014256619144,
       "std_roc_auc": 0.0,
-      "mean_pr_auc": 0.03858675215172429,
+      "mean_pr_auc": 0.04107003612836721,
       "std_pr_auc": 0.0
     }
   ],
   "holdout": [
+    {
+      "pipeline": "pls_bayes",
+      "pr_auc": 0.1815303984993727,
+      "roc_auc": 0.706379173290938,
+      "f0_5_threshold": 0.01947223611805903,
+      "f0_5_ber_percent": 35.59220985691574,
+      "f0_5_true_positive_percent": 47.05882352941176,
+      "f0_5_true_negative_percent": 81.75675675675676,
+      "f0_5_confusion_matrix": [
+        [
+          242,
+          54
+        ],
+        [
+          9,
+          8
+        ]
+      ],
+      "f0_5_fbeta": 0.1509433962264151,
+      "f2_threshold": 0.01947223611805903,
+      "f2_ber_percent": 35.59220985691574,
+      "f2_true_positive_percent": 47.05882352941176,
+      "f2_true_negative_percent": 81.75675675675676,
+      "f2_confusion_matrix": [
+        [
+          242,
+          54
+        ],
+        [
+          9,
+          8
+        ]
+      ],
+      "f2_fbeta": 0.3076923076923077,
+      "f4_threshold": 0.01947223611805903,
+      "f4_ber_percent": 35.59220985691574,
+      "f4_true_positive_percent": 47.05882352941176,
+      "f4_true_negative_percent": 81.75675675675676,
+      "f4_confusion_matrix": [
+        [
+          242,
+          54
+        ],
+        [
+          9,
+          8
+        ]
+      ],
+      "f4_fbeta": 0.40718562874251496,
+      "ber_threshold": 0.01947223611805903,
+      "ber_ber_percent": 35.59220985691574,
+      "ber_true_positive_percent": 47.05882352941176,
+      "ber_true_negative_percent": 81.75675675675676,
+      "ber_confusion_matrix": [
+        [
+          242,
+          54
+        ],
+        [
+          9,
+          8
+        ]
+      ],
+      "ber_percent": 35.59220985691574,
+      "true_positive_percent": 47.05882352941176,
+      "true_negative_percent": 81.75675675675676,
+      "confusion_matrix": [
+        [
+          242,
+          54
+        ],
+        [
+          9,
+          8
+        ]
+      ],
+      "pr_auc_median": 0.17892732150845692,
+      "pr_auc_ci_low": 0.08358209633484687,
+      "pr_auc_ci_high": 0.3546946830968989,
+      "roc_auc_median": 0.7049383942766296,
+      "roc_auc_ci_low": 0.5768630763116058,
+      "roc_auc_ci_high": 0.8299234896661367,
+      "ber_percent_median": 35.76112877583466,
+      "ber_percent_ci_low": 24.15267289348172,
+      "ber_percent_ci_high": 47.69475357710652
+    },
     {
       "pipeline": "pls_rf",
       "pr_auc": 0.17504727289883845,
@@ -771,175 +914,175 @@
     },
     {
       "pipeline": "hsic_bayes",
-      "pr_auc": 0.14771946684634227,
-      "roc_auc": 0.6713036565977741,
-      "f0_5_threshold": 0.12281690845422713,
-      "f0_5_ber_percent": 48.072337042925284,
-      "f0_5_true_positive_percent": 5.88235294117647,
-      "f0_5_true_negative_percent": 97.97297297297297,
+      "pr_auc": 0.14416965612000904,
+      "roc_auc": 0.7043918918918919,
+      "f0_5_threshold": 0.07588744372186093,
+      "f0_5_ber_percent": 40.26232114467408,
+      "f0_5_true_positive_percent": 23.52941176470588,
+      "f0_5_true_negative_percent": 95.94594594594594,
       "f0_5_confusion_matrix": [
         [
-          290,
-          6
+          284,
+          12
+        ],
+        [
+          13,
+          4
+        ]
+      ],
+      "f0_5_fbeta": 0.24691358024691357,
+      "f2_threshold": 0.07588744372186093,
+      "f2_ber_percent": 40.26232114467408,
+      "f2_true_positive_percent": 23.52941176470588,
+      "f2_true_negative_percent": 95.94594594594594,
+      "f2_confusion_matrix": [
+        [
+          284,
+          12
+        ],
+        [
+          13,
+          4
+        ]
+      ],
+      "f2_fbeta": 0.23809523809523808,
+      "f4_threshold": 0.001,
+      "f4_ber_percent": 50.0,
+      "f4_true_positive_percent": 100.0,
+      "f4_true_negative_percent": 0.0,
+      "f4_confusion_matrix": [
+        [
+          0,
+          296
+        ],
+        [
+          0,
+          17
+        ]
+      ],
+      "f4_fbeta": 0.49401709401709404,
+      "ber_threshold": 0.07588744372186093,
+      "ber_ber_percent": 40.26232114467408,
+      "ber_true_positive_percent": 23.52941176470588,
+      "ber_true_negative_percent": 95.94594594594594,
+      "ber_confusion_matrix": [
+        [
+          284,
+          12
+        ],
+        [
+          13,
+          4
+        ]
+      ],
+      "ber_percent": 40.26232114467408,
+      "true_positive_percent": 23.52941176470588,
+      "true_negative_percent": 95.94594594594594,
+      "confusion_matrix": [
+        [
+          284,
+          12
+        ],
+        [
+          13,
+          4
+        ]
+      ],
+      "pr_auc_median": 0.15481028331742813,
+      "pr_auc_ci_low": 0.08375570133886237,
+      "pr_auc_ci_high": 0.2941597673025329,
+      "roc_auc_median": 0.7057829888712241,
+      "roc_auc_ci_low": 0.59181240063593,
+      "roc_auc_ci_high": 0.8221557034976152,
+      "ber_percent_median": 40.43124006359301,
+      "ber_percent_ci_low": 30.594197138314794,
+      "ber_percent_ci_high": 49.4279113672496
+    },
+    {
+      "pipeline": "rfsel_bayes",
+      "pr_auc": 0.14359902607182928,
+      "roc_auc": 0.7472178060413354,
+      "f0_5_threshold": 0.1298064032016008,
+      "f0_5_ber_percent": 47.734499205087445,
+      "f0_5_true_positive_percent": 5.88235294117647,
+      "f0_5_true_negative_percent": 98.64864864864865,
+      "f0_5_confusion_matrix": [
+        [
+          292,
+          4
         ],
         [
           16,
           1
         ]
       ],
-      "f0_5_fbeta": 0.1111111111111111,
-      "f2_threshold": 0.03944222111055528,
-      "f2_ber_percent": 39.77543720190779,
-      "f2_true_positive_percent": 64.70588235294117,
-      "f2_true_negative_percent": 55.74324324324324,
+      "f0_5_fbeta": 0.13513513513513514,
+      "f2_threshold": 0.10584242121060532,
+      "f2_ber_percent": 44.962241653418126,
+      "f2_true_positive_percent": 11.76470588235294,
+      "f2_true_negative_percent": 98.3108108108108,
       "f2_confusion_matrix": [
         [
-          165,
-          131
+          291,
+          5
         ],
         [
-          6,
-          11
+          15,
+          2
         ]
       ],
-      "f2_fbeta": 0.2619047619047619,
-      "f4_threshold": 0.03944222111055528,
-      "f4_ber_percent": 39.77543720190779,
-      "f4_true_positive_percent": 64.70588235294117,
-      "f4_true_negative_percent": 55.74324324324324,
-      "f4_confusion_matrix": [
-        [
-          165,
-          131
-        ],
-        [
-          6,
-          11
-        ]
-      ],
-      "f4_fbeta": 0.45169082125603865,
-      "ber_threshold": 0.03944222111055528,
-      "ber_ber_percent": 39.77543720190779,
-      "ber_true_positive_percent": 64.70588235294117,
-      "ber_true_negative_percent": 55.74324324324324,
-      "ber_confusion_matrix": [
-        [
-          165,
-          131
-        ],
-        [
-          6,
-          11
-        ]
-      ],
-      "ber_percent": 39.77543720190779,
-      "true_positive_percent": 64.70588235294117,
-      "true_negative_percent": 55.74324324324324,
-      "confusion_matrix": [
-        [
-          165,
-          131
-        ],
-        [
-          6,
-          11
-        ]
-      ],
-      "pr_auc_median": 0.1594016356922075,
-      "pr_auc_ci_low": 0.08219011530889776,
-      "pr_auc_ci_high": 0.30341165263918085,
-      "roc_auc_median": 0.6698628775834659,
-      "roc_auc_ci_low": 0.5339999006359301,
-      "roc_auc_ci_high": 0.8118069356120827,
-      "ber_percent_median": 39.944356120826704,
-      "ber_percent_ci_low": 28.923141891891895,
-      "ber_percent_ci_high": 50.63195548489666
-    },
-    {
-      "pipeline": "pls_bayes",
-      "pr_auc": 0.14019373504110438,
-      "roc_auc": 0.747714626391097,
-      "f0_5_threshold": 0.09435967983991997,
-      "f0_5_ber_percent": 37.75834658187599,
-      "f0_5_true_positive_percent": 35.294117647058826,
-      "f0_5_true_negative_percent": 89.1891891891892,
-      "f0_5_confusion_matrix": [
-        [
-          264,
-          32
-        ],
-        [
-          11,
-          6
-        ]
-      ],
-      "f0_5_fbeta": 0.17751479289940827,
-      "f2_threshold": 0.04143921960980491,
-      "f2_ber_percent": 31.061208267090624,
-      "f2_true_positive_percent": 58.82352941176471,
-      "f2_true_negative_percent": 79.05405405405406,
-      "f2_confusion_matrix": [
-        [
-          234,
-          62
-        ],
-        [
-          7,
-          10
-        ]
-      ],
-      "f2_fbeta": 0.35714285714285715,
-      "f4_threshold": 0.04143921960980491,
-      "f4_ber_percent": 31.061208267090624,
+      "f2_fbeta": 0.13333333333333333,
+      "f4_threshold": 0.0409399699849925,
+      "f4_ber_percent": 33.42607313195549,
       "f4_true_positive_percent": 58.82352941176471,
-      "f4_true_negative_percent": 79.05405405405406,
+      "f4_true_negative_percent": 74.32432432432432,
       "f4_confusion_matrix": [
         [
-          234,
-          62
+          220,
+          76
         ],
         [
           7,
           10
         ]
       ],
-      "f4_fbeta": 0.4941860465116279,
-      "ber_threshold": 0.05841370685342672,
-      "ber_ber_percent": 37.92726550079492,
-      "ber_true_positive_percent": 35.294117647058826,
-      "ber_true_negative_percent": 88.85135135135135,
+      "f4_fbeta": 0.4748603351955307,
+      "ber_threshold": 0.10584242121060532,
+      "ber_ber_percent": 44.962241653418126,
+      "ber_true_positive_percent": 11.76470588235294,
+      "ber_true_negative_percent": 98.3108108108108,
       "ber_confusion_matrix": [
         [
-          263,
-          33
+          291,
+          5
         ],
         [
-          11,
-          6
+          15,
+          2
         ]
       ],
-      "ber_percent": 31.061208267090624,
-      "true_positive_percent": 58.82352941176471,
-      "true_negative_percent": 79.05405405405406,
+      "ber_percent": 44.962241653418126,
+      "true_positive_percent": 11.76470588235294,
+      "true_negative_percent": 98.3108108108108,
       "confusion_matrix": [
         [
-          234,
-          62
+          291,
+          5
         ],
         [
-          7,
-          10
+          15,
+          2
         ]
       ],
-      "pr_auc_median": 0.15086650840165317,
-      "pr_auc_ci_low": 0.08881779387162399,
-      "pr_auc_ci_high": 0.2779755857049008,
-      "roc_auc_median": 0.74806240063593,
-      "roc_auc_ci_low": 0.6281721979332273,
-      "roc_auc_ci_high": 0.8613051470588236,
-      "ber_percent_median": 31.230127186009536,
-      "ber_percent_ci_low": 19.630117249602552,
-      "ber_percent_ci_high": 43.33689387917329
+      "pr_auc_median": 0.15395768494120732,
+      "pr_auc_ci_low": 0.08445167138320075,
+      "pr_auc_ci_high": 0.31805807694621846,
+      "roc_auc_median": 0.74935413354531,
+      "roc_auc_ci_low": 0.6364268680445151,
+      "roc_auc_ci_high": 0.8380589228934817,
+      "ber_percent_median": 45.131160572337045,
+      "ber_percent_ci_low": 36.13448926868045,
+      "ber_percent_ci_high": 51.182432432432435
     },
     {
       "pipeline": "rfsel_enet",
@@ -1026,92 +1169,6 @@
       "ber_percent_median": 44.21701112877584,
       "ber_percent_ci_low": 34.37996820349761,
       "ber_percent_ci_high": 52.36486486486487
-    },
-    {
-      "pipeline": "rfsel_bayes",
-      "pr_auc": 0.13748646865196226,
-      "roc_auc": 0.7442368839427662,
-      "f0_5_threshold": 0.13180340170085045,
-      "f0_5_ber_percent": 47.90341812400636,
-      "f0_5_true_positive_percent": 5.88235294117647,
-      "f0_5_true_negative_percent": 98.3108108108108,
-      "f0_5_confusion_matrix": [
-        [
-          291,
-          5
-        ],
-        [
-          16,
-          1
-        ]
-      ],
-      "f0_5_fbeta": 0.12195121951219512,
-      "f2_threshold": 0.11482891445722862,
-      "f2_ber_percent": 48.072337042925284,
-      "f2_true_positive_percent": 5.88235294117647,
-      "f2_true_negative_percent": 97.97297297297297,
-      "f2_confusion_matrix": [
-        [
-          290,
-          6
-        ],
-        [
-          16,
-          1
-        ]
-      ],
-      "f2_fbeta": 0.06666666666666667,
-      "f4_threshold": 0.038942971485742876,
-      "f4_ber_percent": 33.93282988871225,
-      "f4_true_positive_percent": 58.82352941176471,
-      "f4_true_negative_percent": 73.3108108108108,
-      "f4_confusion_matrix": [
-        [
-          217,
-          79
-        ],
-        [
-          7,
-          10
-        ]
-      ],
-      "f4_fbeta": 0.4709141274238227,
-      "ber_threshold": 0.11482891445722862,
-      "ber_ber_percent": 48.072337042925284,
-      "ber_true_positive_percent": 5.88235294117647,
-      "ber_true_negative_percent": 97.97297297297297,
-      "ber_confusion_matrix": [
-        [
-          290,
-          6
-        ],
-        [
-          16,
-          1
-        ]
-      ],
-      "ber_percent": 48.072337042925284,
-      "true_positive_percent": 5.88235294117647,
-      "true_negative_percent": 97.97297297297297,
-      "confusion_matrix": [
-        [
-          290,
-          6
-        ],
-        [
-          16,
-          1
-        ]
-      ],
-      "pr_auc_median": 0.14892159775147829,
-      "pr_auc_ci_low": 0.08742718559816447,
-      "pr_auc_ci_high": 0.2947867455264081,
-      "roc_auc_median": 0.7468203497615262,
-      "roc_auc_ci_low": 0.6384911565977743,
-      "roc_auc_ci_high": 0.8413280007949125,
-      "ber_percent_median": 48.241255961844196,
-      "ber_percent_ci_low": 41.51430842607313,
-      "ber_percent_ci_high": 51.689189189189186
     },
     {
       "pipeline": "hsic_rf",
@@ -2202,12 +2259,12 @@
       "n_flagged_q": 3,
       "n_flagged_both": 3,
       "n_flagged_either": 41,
-      "global_pr_auc": 0.14771946684634227,
-      "global_roc_auc": 0.6713036565977741,
-      "conditional_pr_auc": 0.20858520749897758,
-      "conditional_roc_auc": 0.7117919921875,
-      "conditional_pr_auc_ci_low": 0.10605290466056873,
-      "conditional_pr_auc_ci_high": 0.4135739290620194
+      "global_pr_auc": 0.14416965612000904,
+      "global_roc_auc": 0.7043918918918919,
+      "conditional_pr_auc": 0.20042667653305876,
+      "conditional_roc_auc": 0.7376708984375,
+      "conditional_pr_auc_ci_low": 0.10538456025942079,
+      "conditional_pr_auc_ci_high": 0.4114241994396386
     },
     {
       "pipeline": "rfsel_enet",
@@ -2262,12 +2319,12 @@
       "n_flagged_q": 3,
       "n_flagged_both": 3,
       "n_flagged_either": 41,
-      "global_pr_auc": 0.13748646865196226,
-      "global_roc_auc": 0.7442368839427662,
-      "conditional_pr_auc": 0.22093188128608002,
-      "conditional_roc_auc": 0.7674560546875,
-      "conditional_pr_auc_ci_low": 0.10578961510079384,
-      "conditional_pr_auc_ci_high": 0.4068091943872086
+      "global_pr_auc": 0.14359902607182928,
+      "global_roc_auc": 0.7472178060413354,
+      "conditional_pr_auc": 0.2327290702598111,
+      "conditional_roc_auc": 0.7716064453125,
+      "conditional_pr_auc_ci_low": 0.10883764909683387,
+      "conditional_pr_auc_ci_high": 0.4298334571197812
     },
     {
       "pipeline": "pls_enet",
@@ -2322,194 +2379,194 @@
       "n_flagged_q": 3,
       "n_flagged_both": 3,
       "n_flagged_either": 41,
-      "global_pr_auc": 0.14019373504110438,
-      "global_roc_auc": 0.747714626391097,
-      "conditional_pr_auc": 0.165569933854216,
-      "conditional_roc_auc": 0.764404296875,
-      "conditional_pr_auc_ci_low": 0.10021476860078267,
-      "conditional_pr_auc_ci_high": 0.35162421608775724
+      "global_pr_auc": 0.1815303984993727,
+      "global_roc_auc": 0.706379173290938,
+      "conditional_pr_auc": 0.2008211005798322,
+      "conditional_roc_auc": 0.7183837890625,
+      "conditional_pr_auc_ci_low": 0.08915133783785115,
+      "conditional_pr_auc_ci_high": 0.390659596321756
     }
   ],
   "holdout_conditional_random": [
     {
       "pipeline": "hsic_enet",
-      "coverage": 0.964968152866242,
+      "coverage": 0.9617834394904459,
       "n_total": 314,
-      "n_in_control": 303,
-      "n_flagged_ooc": 11,
+      "n_in_control": 302,
+      "n_flagged_ooc": 12,
       "n_fails_total": 21,
-      "n_fails_in_control": 19,
-      "n_fails_flagged_ooc": 2,
-      "n_flagged_t2": 9,
-      "n_flagged_q": 2,
+      "n_fails_in_control": 17,
+      "n_fails_flagged_ooc": 4,
+      "n_flagged_t2": 11,
+      "n_flagged_q": 1,
       "n_flagged_both": 0,
-      "n_flagged_either": 11,
+      "n_flagged_either": 12,
       "global_pr_auc": 0.13888750530322236,
       "global_roc_auc": 0.6518771331058021,
-      "conditional_pr_auc": 0.11304554937402697,
-      "conditional_roc_auc": 0.6277798369162343,
-      "conditional_pr_auc_ci_low": 0.07098239525304419,
-      "conditional_pr_auc_ci_high": 0.24075239169844198
+      "conditional_pr_auc": 0.10589103278455672,
+      "conditional_roc_auc": 0.6479876160990712,
+      "conditional_pr_auc_ci_low": 0.06813319061660138,
+      "conditional_pr_auc_ci_high": 0.2531186892355437
     },
     {
       "pipeline": "hsic_rf",
-      "coverage": 0.964968152866242,
+      "coverage": 0.9617834394904459,
       "n_total": 314,
-      "n_in_control": 303,
-      "n_flagged_ooc": 11,
+      "n_in_control": 302,
+      "n_flagged_ooc": 12,
       "n_fails_total": 21,
-      "n_fails_in_control": 19,
-      "n_fails_flagged_ooc": 2,
-      "n_flagged_t2": 9,
-      "n_flagged_q": 2,
+      "n_fails_in_control": 17,
+      "n_fails_flagged_ooc": 4,
+      "n_flagged_t2": 11,
+      "n_flagged_q": 1,
       "n_flagged_both": 0,
-      "n_flagged_either": 11,
+      "n_flagged_either": 12,
       "global_pr_auc": 0.3098929855727105,
       "global_roc_auc": 0.7922151795871932,
-      "conditional_pr_auc": 0.26009855989765296,
-      "conditional_roc_auc": 0.7813194959229058,
-      "conditional_pr_auc_ci_low": 0.14042990471322653,
-      "conditional_pr_auc_ci_high": 0.45927405754132883
+      "conditional_pr_auc": 0.24919453713535117,
+      "conditional_roc_auc": 0.7682146542827658,
+      "conditional_pr_auc_ci_low": 0.12524304107983156,
+      "conditional_pr_auc_ci_high": 0.47957022371358193
     },
     {
       "pipeline": "hsic_bayes",
-      "coverage": 0.964968152866242,
+      "coverage": 0.9617834394904459,
       "n_total": 314,
-      "n_in_control": 303,
-      "n_flagged_ooc": 11,
+      "n_in_control": 302,
+      "n_flagged_ooc": 12,
       "n_fails_total": 21,
-      "n_fails_in_control": 19,
-      "n_fails_flagged_ooc": 2,
-      "n_flagged_t2": 9,
-      "n_flagged_q": 2,
+      "n_fails_in_control": 17,
+      "n_fails_flagged_ooc": 4,
+      "n_flagged_t2": 11,
+      "n_flagged_q": 1,
       "n_flagged_both": 0,
-      "n_flagged_either": 11,
+      "n_flagged_either": 12,
       "global_pr_auc": 0.15924092739608206,
       "global_roc_auc": 0.6931578091987648,
-      "conditional_pr_auc": 0.1242893600221528,
-      "conditional_roc_auc": 0.6659562638991846,
-      "conditional_pr_auc_ci_low": 0.08292712448546036,
-      "conditional_pr_auc_ci_high": 0.2418068171463439
+      "conditional_pr_auc": 0.12448722880007898,
+      "conditional_roc_auc": 0.7033023735810113,
+      "conditional_pr_auc_ci_low": 0.0830231227565817,
+      "conditional_pr_auc_ci_high": 0.2675162451399446
     },
     {
       "pipeline": "rfsel_enet",
-      "coverage": 0.964968152866242,
+      "coverage": 0.9617834394904459,
       "n_total": 314,
-      "n_in_control": 303,
-      "n_flagged_ooc": 11,
+      "n_in_control": 302,
+      "n_flagged_ooc": 12,
       "n_fails_total": 21,
-      "n_fails_in_control": 19,
-      "n_fails_flagged_ooc": 2,
-      "n_flagged_t2": 9,
-      "n_flagged_q": 2,
+      "n_fails_in_control": 17,
+      "n_fails_flagged_ooc": 4,
+      "n_flagged_t2": 11,
+      "n_flagged_q": 1,
       "n_flagged_both": 0,
-      "n_flagged_either": 11,
+      "n_flagged_either": 12,
       "global_pr_auc": 0.16943325848678265,
       "global_roc_auc": 0.7318381277425646,
-      "conditional_pr_auc": 0.15038778228505068,
-      "conditional_roc_auc": 0.717939214232765,
-      "conditional_pr_auc_ci_low": 0.10061308516124318,
-      "conditional_pr_auc_ci_high": 0.2818249800354323
+      "conditional_pr_auc": 0.14062544200845908,
+      "conditional_roc_auc": 0.742827657378741,
+      "conditional_pr_auc_ci_low": 0.09284574973514,
+      "conditional_pr_auc_ci_high": 0.2759984070077184
     },
     {
       "pipeline": "rfsel_rf",
-      "coverage": 0.964968152866242,
+      "coverage": 0.9617834394904459,
       "n_total": 314,
-      "n_in_control": 303,
-      "n_flagged_ooc": 11,
+      "n_in_control": 302,
+      "n_flagged_ooc": 12,
       "n_fails_total": 21,
-      "n_fails_in_control": 19,
-      "n_fails_flagged_ooc": 2,
-      "n_flagged_t2": 9,
-      "n_flagged_q": 2,
+      "n_fails_in_control": 17,
+      "n_fails_flagged_ooc": 4,
+      "n_flagged_t2": 11,
+      "n_flagged_q": 1,
       "n_flagged_both": 0,
-      "n_flagged_either": 11,
+      "n_flagged_either": 12,
       "global_pr_auc": 0.21600663119787633,
       "global_roc_auc": 0.770437185112953,
-      "conditional_pr_auc": 0.18334599361342654,
-      "conditional_roc_auc": 0.7544477390659748,
-      "conditional_pr_auc_ci_low": 0.1170332249915418,
-      "conditional_pr_auc_ci_high": 0.3584073924783034
+      "conditional_pr_auc": 0.18991362340001156,
+      "conditional_roc_auc": 0.7504643962848297,
+      "conditional_pr_auc_ci_low": 0.11203662059520254,
+      "conditional_pr_auc_ci_high": 0.40857119513855955
     },
     {
       "pipeline": "rfsel_bayes",
-      "coverage": 0.964968152866242,
+      "coverage": 0.9617834394904459,
       "n_total": 314,
-      "n_in_control": 303,
-      "n_flagged_ooc": 11,
+      "n_in_control": 302,
+      "n_flagged_ooc": 12,
       "n_fails_total": 21,
-      "n_fails_in_control": 19,
-      "n_fails_flagged_ooc": 2,
-      "n_flagged_t2": 9,
-      "n_flagged_q": 2,
+      "n_fails_in_control": 17,
+      "n_fails_flagged_ooc": 4,
+      "n_flagged_t2": 11,
+      "n_flagged_q": 1,
       "n_flagged_both": 0,
-      "n_flagged_either": 11,
+      "n_flagged_either": 12,
       "global_pr_auc": 0.19498093379843698,
       "global_roc_auc": 0.724362099788721,
-      "conditional_pr_auc": 0.1596821178685481,
-      "conditional_roc_auc": 0.7102483320978503,
-      "conditional_pr_auc_ci_low": 0.09428681686124077,
-      "conditional_pr_auc_ci_high": 0.32805494845493194
+      "conditional_pr_auc": 0.16822165533486172,
+      "conditional_roc_auc": 0.7644994840041279,
+      "conditional_pr_auc_ci_low": 0.09936885610905136,
+      "conditional_pr_auc_ci_high": 0.3528158227684318
     },
     {
       "pipeline": "pls_enet",
-      "coverage": 0.964968152866242,
+      "coverage": 0.9617834394904459,
       "n_total": 314,
-      "n_in_control": 303,
-      "n_flagged_ooc": 11,
+      "n_in_control": 302,
+      "n_flagged_ooc": 12,
       "n_fails_total": 21,
-      "n_fails_in_control": 19,
-      "n_fails_flagged_ooc": 2,
-      "n_flagged_t2": 9,
-      "n_flagged_q": 2,
+      "n_fails_in_control": 17,
+      "n_fails_flagged_ooc": 4,
+      "n_flagged_t2": 11,
+      "n_flagged_q": 1,
       "n_flagged_both": 0,
-      "n_flagged_either": 11,
+      "n_flagged_either": 12,
       "global_pr_auc": 0.10753661589942247,
       "global_roc_auc": 0.5652527222493093,
-      "conditional_pr_auc": 0.1167639695630292,
-      "conditional_roc_auc": 0.5804299481097108,
-      "conditional_pr_auc_ci_low": 0.06910930609257518,
-      "conditional_pr_auc_ci_high": 0.27562219146847394
+      "conditional_pr_auc": 0.12102318000991454,
+      "conditional_roc_auc": 0.6229102167182663,
+      "conditional_pr_auc_ci_low": 0.06381088376260921,
+      "conditional_pr_auc_ci_high": 0.2890957670243816
     },
     {
       "pipeline": "pls_rf",
-      "coverage": 0.964968152866242,
+      "coverage": 0.9617834394904459,
       "n_total": 314,
-      "n_in_control": 303,
-      "n_flagged_ooc": 11,
+      "n_in_control": 302,
+      "n_flagged_ooc": 12,
       "n_fails_total": 21,
-      "n_fails_in_control": 19,
-      "n_fails_flagged_ooc": 2,
-      "n_flagged_t2": 9,
-      "n_flagged_q": 2,
+      "n_fails_in_control": 17,
+      "n_fails_flagged_ooc": 4,
+      "n_flagged_t2": 11,
+      "n_flagged_q": 1,
       "n_flagged_both": 0,
-      "n_flagged_either": 11,
+      "n_flagged_either": 12,
       "global_pr_auc": 0.11565839195056524,
       "global_roc_auc": 0.6605720786608158,
-      "conditional_pr_auc": 0.10497878440888368,
-      "conditional_roc_auc": 0.6425129725722758,
-      "conditional_pr_auc_ci_low": 0.07454931973521202,
-      "conditional_pr_auc_ci_high": 0.19619359682624724
+      "conditional_pr_auc": 0.09375728554978044,
+      "conditional_roc_auc": 0.6219814241486068,
+      "conditional_pr_auc_ci_low": 0.06066803040257917,
+      "conditional_pr_auc_ci_high": 0.19001460172729676
     },
     {
       "pipeline": "pls_bayes",
-      "coverage": 0.964968152866242,
+      "coverage": 0.9617834394904459,
       "n_total": 314,
-      "n_in_control": 303,
-      "n_flagged_ooc": 11,
+      "n_in_control": 302,
+      "n_flagged_ooc": 12,
       "n_fails_total": 21,
-      "n_fails_in_control": 19,
-      "n_fails_flagged_ooc": 2,
-      "n_flagged_t2": 9,
-      "n_flagged_q": 2,
+      "n_fails_in_control": 17,
+      "n_fails_flagged_ooc": 4,
+      "n_flagged_t2": 11,
+      "n_flagged_q": 1,
       "n_flagged_both": 0,
-      "n_flagged_either": 11,
+      "n_flagged_either": 12,
       "global_pr_auc": 0.11285735688329304,
       "global_roc_auc": 0.5693157809198764,
-      "conditional_pr_auc": 0.11851504695545774,
-      "conditional_roc_auc": 0.5569866567828021,
-      "conditional_pr_auc_ci_low": 0.06775589769517079,
-      "conditional_pr_auc_ci_high": 0.27631653085047736
+      "conditional_pr_auc": 0.11838859187199174,
+      "conditional_roc_auc": 0.6012383900928793,
+      "conditional_pr_auc_ci_low": 0.0634359219172495,
+      "conditional_pr_auc_ci_high": 0.2751035915835389
     }
   ],
   "risk_coverage": [
@@ -2534,8 +2591,8 @@
       "coverage": 1.0,
       "n_kept": 313,
       "n_fails_kept": 17,
-      "pr_auc": 0.14771946684634227,
-      "roc_auc": 0.6713036565977741
+      "pr_auc": 0.14416965612000904,
+      "roc_auc": 0.7043918918918919
     },
     {
       "pipeline": "rfsel_enet",
@@ -2558,8 +2615,8 @@
       "coverage": 1.0,
       "n_kept": 313,
       "n_fails_kept": 17,
-      "pr_auc": 0.13748646865196226,
-      "roc_auc": 0.7442368839427662
+      "pr_auc": 0.14359902607182928,
+      "roc_auc": 0.7472178060413354
     },
     {
       "pipeline": "pls_enet",
@@ -2582,8 +2639,8 @@
       "coverage": 1.0,
       "n_kept": 313,
       "n_fails_kept": 17,
-      "pr_auc": 0.14019373504110438,
-      "roc_auc": 0.747714626391097
+      "pr_auc": 0.1815303984993727,
+      "roc_auc": 0.706379173290938
     },
     {
       "pipeline": "hsic_enet",
@@ -2606,8 +2663,8 @@
       "coverage": 0.99,
       "n_kept": 310,
       "n_fails_kept": 17,
-      "pr_auc": 0.17791952318667875,
-      "roc_auc": 0.677976309977916
+      "pr_auc": 0.17209309354331864,
+      "roc_auc": 0.7114033326641237
     },
     {
       "pipeline": "rfsel_enet",
@@ -2630,8 +2687,8 @@
       "coverage": 0.99,
       "n_kept": 310,
       "n_fails_kept": 17,
-      "pr_auc": 0.19768609674264126,
-      "roc_auc": 0.7518570568159005
+      "pr_auc": 0.21492096954698325,
+      "roc_auc": 0.7548685003011443
     },
     {
       "pipeline": "pls_enet",
@@ -2654,8 +2711,8 @@
       "coverage": 0.99,
       "n_kept": 310,
       "n_fails_kept": 17,
-      "pr_auc": 0.15655324489257455,
-      "roc_auc": 0.7520578197149168
+      "pr_auc": 0.19018240741468034,
+      "roc_auc": 0.7108010439670749
     },
     {
       "pipeline": "hsic_enet",
@@ -2678,8 +2735,8 @@
       "coverage": 0.95,
       "n_kept": 297,
       "n_fails_kept": 17,
-      "pr_auc": 0.19683119117908315,
-      "roc_auc": 0.6830882352941177
+      "pr_auc": 0.18968871685054534,
+      "roc_auc": 0.7165966386554622
     },
     {
       "pipeline": "rfsel_enet",
@@ -2702,8 +2759,8 @@
       "coverage": 0.95,
       "n_kept": 297,
       "n_fails_kept": 17,
-      "pr_auc": 0.20099912864192843,
-      "roc_auc": 0.7502100840336133
+      "pr_auc": 0.21724343445534583,
+      "roc_auc": 0.7513655462184874
     },
     {
       "pipeline": "pls_enet",
@@ -2726,8 +2783,8 @@
       "coverage": 0.95,
       "n_kept": 297,
       "n_fails_kept": 17,
-      "pr_auc": 0.15778723090373376,
-      "roc_auc": 0.7467436974789915
+      "pr_auc": 0.1910121395708617,
+      "roc_auc": 0.7043067226890756
     },
     {
       "pipeline": "hsic_enet",
@@ -2750,8 +2807,8 @@
       "coverage": 0.9,
       "n_kept": 282,
       "n_fails_kept": 16,
-      "pr_auc": 0.2073962303516877,
-      "roc_auc": 0.7133458646616542
+      "pr_auc": 0.19913307788214646,
+      "roc_auc": 0.7393092105263158
     },
     {
       "pipeline": "rfsel_enet",
@@ -2774,8 +2831,8 @@
       "coverage": 0.9,
       "n_kept": 282,
       "n_fails_kept": 16,
-      "pr_auc": 0.21992471598980867,
-      "roc_auc": 0.7713815789473684
+      "pr_auc": 0.23135039963138745,
+      "roc_auc": 0.7754934210526316
     },
     {
       "pipeline": "pls_enet",
@@ -2798,8 +2855,8 @@
       "coverage": 0.9,
       "n_kept": 282,
       "n_fails_kept": 16,
-      "pr_auc": 0.1645158145225459,
-      "roc_auc": 0.7687969924812029
+      "pr_auc": 0.19977132148114837,
+      "roc_auc": 0.7234492481203008
     },
     {
       "pipeline": "hsic_enet",
@@ -2822,8 +2879,8 @@
       "coverage": 0.85,
       "n_kept": 266,
       "n_fails_kept": 15,
-      "pr_auc": 0.17128720105506176,
-      "roc_auc": 0.6926958831341302
+      "pr_auc": 0.1703711684059235,
+      "roc_auc": 0.7197875166002656
     },
     {
       "pipeline": "rfsel_enet",
@@ -2846,8 +2903,8 @@
       "coverage": 0.85,
       "n_kept": 266,
       "n_fails_kept": 15,
-      "pr_auc": 0.14480614061518582,
-      "roc_auc": 0.754050464807437
+      "pr_auc": 0.1528977997327998,
+      "roc_auc": 0.7572377158034529
     },
     {
       "pipeline": "pls_enet",
@@ -2870,8 +2927,8 @@
       "coverage": 0.85,
       "n_kept": 266,
       "n_fails_kept": 15,
-      "pr_auc": 0.14840781682160878,
-      "roc_auc": 0.749535192563081
+      "pr_auc": 0.1880881173025652,
+      "roc_auc": 0.702257636122178
     },
     {
       "pipeline": "hsic_enet",
@@ -2894,8 +2951,8 @@
       "coverage": 0.8,
       "n_kept": 250,
       "n_fails_kept": 14,
-      "pr_auc": 0.17999614220366283,
-      "roc_auc": 0.7092917675544793
+      "pr_auc": 0.17917403050716332,
+      "roc_auc": 0.7431900726392252
     },
     {
       "pipeline": "rfsel_enet",
@@ -2918,8 +2975,8 @@
       "coverage": 0.8,
       "n_kept": 250,
       "n_fails_kept": 14,
-      "pr_auc": 0.14944043666737553,
-      "roc_auc": 0.7527239709443099
+      "pr_auc": 0.1586827405789516,
+      "roc_auc": 0.7566585956416465
     },
     {
       "pipeline": "pls_enet",
@@ -2942,8 +2999,8 @@
       "coverage": 0.8,
       "n_kept": 250,
       "n_fails_kept": 14,
-      "pr_auc": 0.1501281517063937,
-      "roc_auc": 0.7437953995157385
+      "pr_auc": 0.19416957966199622,
+      "roc_auc": 0.6946125907990315
     },
     {
       "pipeline": "hsic_enet",
@@ -2966,8 +3023,8 @@
       "coverage": 0.7,
       "n_kept": 219,
       "n_fails_kept": 13,
-      "pr_auc": 0.22933427101462267,
-      "roc_auc": 0.705563853622106
+      "pr_auc": 0.22244321791833105,
+      "roc_auc": 0.7458924570575056
     },
     {
       "pipeline": "rfsel_enet",
@@ -2990,8 +3047,8 @@
       "coverage": 0.7,
       "n_kept": 219,
       "n_fails_kept": 13,
-      "pr_auc": 0.1835387297752884,
-      "roc_auc": 0.7468259895444361
+      "pr_auc": 0.2440051437746154,
+      "roc_auc": 0.7580283793876027
     },
     {
       "pipeline": "pls_enet",
@@ -3014,8 +3071,8 @@
       "coverage": 0.7,
       "n_kept": 219,
       "n_fails_kept": 13,
-      "pr_auc": 0.1824754802626246,
-      "roc_auc": 0.7845407020164301
+      "pr_auc": 0.22779996894580282,
+      "roc_auc": 0.7285287528005975
     },
     {
       "pipeline": "hsic_enet",
@@ -3038,8 +3095,8 @@
       "coverage": 0.6,
       "n_kept": 188,
       "n_fails_kept": 11,
-      "pr_auc": 0.2627466078058963,
-      "roc_auc": 0.6910631741140216
+      "pr_auc": 0.25172769019472085,
+      "roc_auc": 0.7277863379558295
     },
     {
       "pipeline": "rfsel_enet",
@@ -3062,8 +3119,8 @@
       "coverage": 0.6,
       "n_kept": 188,
       "n_fails_kept": 11,
-      "pr_auc": 0.13684146176757012,
-      "roc_auc": 0.7039034411915769
+      "pr_auc": 0.20297694874127997,
+      "roc_auc": 0.7244478685156652
     },
     {
       "pipeline": "pls_enet",
@@ -3086,8 +3143,8 @@
       "coverage": 0.6,
       "n_kept": 188,
       "n_fails_kept": 11,
-      "pr_auc": 0.1439502148399634,
-      "roc_auc": 0.7542372881355932
+      "pr_auc": 0.14842217713613512,
+      "roc_auc": 0.7044170518746791
     },
     {
       "pipeline": "hsic_enet",
@@ -3110,8 +3167,8 @@
       "coverage": 0.5,
       "n_kept": 156,
       "n_fails_kept": 8,
-      "pr_auc": 0.22033468559837727,
-      "roc_auc": 0.676097972972973
+      "pr_auc": 0.20416111241799315,
+      "roc_auc": 0.7314189189189189
     },
     {
       "pipeline": "rfsel_enet",
@@ -3134,8 +3191,8 @@
       "coverage": 0.5,
       "n_kept": 156,
       "n_fails_kept": 8,
-      "pr_auc": 0.12114089977861303,
-      "roc_auc": 0.6908783783783784
+      "pr_auc": 0.21526414700756807,
+      "roc_auc": 0.6980574324324323
     },
     {
       "pipeline": "pls_enet",
@@ -3158,8 +3215,8 @@
       "coverage": 0.5,
       "n_kept": 156,
       "n_fails_kept": 8,
-      "pr_auc": 0.12630229610715524,
-      "roc_auc": 0.7246621621621621
+      "pr_auc": 0.11430860805860807,
+      "roc_auc": 0.6592060810810811
     }
   ],
   "risk_coverage_random": [
@@ -3240,576 +3297,576 @@
       "coverage": 0.99,
       "n_kept": 311,
       "n_fails_kept": 21,
-      "pr_auc": 0.13964454644118937,
-      "roc_auc": 0.6516420361247948
+      "pr_auc": 0.1415673631626222,
+      "roc_auc": 0.6542692939244663
     },
     {
       "pipeline": "hsic_rf",
       "coverage": 0.99,
       "n_kept": 311,
       "n_fails_kept": 21,
-      "pr_auc": 0.3100721001428907,
-      "roc_auc": 0.7913793103448277
+      "pr_auc": 0.3103421026103118,
+      "roc_auc": 0.791871921182266
     },
     {
       "pipeline": "hsic_bayes",
       "coverage": 0.99,
       "n_kept": 311,
       "n_fails_kept": 21,
-      "pr_auc": 0.15978792063632688,
-      "roc_auc": 0.692775041050903
+      "pr_auc": 0.16013310498157232,
+      "roc_auc": 0.693103448275862
     },
     {
       "pipeline": "rfsel_enet",
       "coverage": 0.99,
       "n_kept": 311,
       "n_fails_kept": 21,
-      "pr_auc": 0.1706785668205909,
-      "roc_auc": 0.7330049261083742
+      "pr_auc": 0.16952042229126607,
+      "roc_auc": 0.7299671592775041
     },
     {
       "pipeline": "rfsel_rf",
       "coverage": 0.99,
       "n_kept": 311,
       "n_fails_kept": 21,
-      "pr_auc": 0.21633951504974078,
-      "roc_auc": 0.7698686371100165
+      "pr_auc": 0.21692912457088934,
+      "roc_auc": 0.7704433497536947
     },
     {
       "pipeline": "rfsel_bayes",
       "coverage": 0.99,
       "n_kept": 311,
       "n_fails_kept": 21,
-      "pr_auc": 0.1957804888231923,
-      "roc_auc": 0.7241379310344828
+      "pr_auc": 0.19581199853212136,
+      "roc_auc": 0.7245484400656814
     },
     {
       "pipeline": "pls_enet",
       "coverage": 0.99,
       "n_kept": 311,
       "n_fails_kept": 21,
-      "pr_auc": 0.10912053495924987,
-      "roc_auc": 0.5653530377668308
+      "pr_auc": 0.11007100742782994,
+      "roc_auc": 0.5675697865353038
     },
     {
       "pipeline": "pls_rf",
       "coverage": 0.99,
       "n_kept": 311,
       "n_fails_kept": 21,
-      "pr_auc": 0.11741211814119501,
-      "roc_auc": 0.6618226600985222
+      "pr_auc": 0.11954923935929215,
+      "roc_auc": 0.6634646962233169
     },
     {
       "pipeline": "pls_bayes",
       "coverage": 0.99,
       "n_kept": 311,
       "n_fails_kept": 21,
-      "pr_auc": 0.11908970948384145,
-      "roc_auc": 0.5701149425287356
+      "pr_auc": 0.11511693691029884,
+      "roc_auc": 0.5712643678160919
     },
     {
       "pipeline": "hsic_enet",
       "coverage": 0.95,
       "n_kept": 298,
-      "n_fails_kept": 19,
-      "pr_auc": 0.11279001164814491,
-      "roc_auc": 0.6246934540652707
+      "n_fails_kept": 18,
+      "pr_auc": 0.104367488446083,
+      "roc_auc": 0.6122023809523809
     },
     {
       "pipeline": "hsic_rf",
       "coverage": 0.95,
       "n_kept": 298,
-      "n_fails_kept": 19,
-      "pr_auc": 0.2581871980244353,
-      "roc_auc": 0.7786266742124127
+      "n_fails_kept": 18,
+      "pr_auc": 0.25422788104652916,
+      "roc_auc": 0.7725198412698412
     },
     {
       "pipeline": "hsic_bayes",
       "coverage": 0.95,
       "n_kept": 298,
-      "n_fails_kept": 19,
-      "pr_auc": 0.12448241718535469,
-      "roc_auc": 0.6627051499717034
+      "n_fails_kept": 18,
+      "pr_auc": 0.12141698758931321,
+      "roc_auc": 0.6624007936507937
     },
     {
       "pipeline": "rfsel_enet",
       "coverage": 0.95,
       "n_kept": 298,
-      "n_fails_kept": 19,
-      "pr_auc": 0.1460392957293732,
-      "roc_auc": 0.7142991888322958
+      "n_fails_kept": 18,
+      "pr_auc": 0.13214953937073984,
+      "roc_auc": 0.6993055555555555
     },
     {
       "pipeline": "rfsel_rf",
       "coverage": 0.95,
       "n_kept": 298,
-      "n_fails_kept": 19,
-      "pr_auc": 0.180764125937365,
-      "roc_auc": 0.7491982644784003
+      "n_fails_kept": 18,
+      "pr_auc": 0.1804580984339158,
+      "roc_auc": 0.750297619047619
     },
     {
       "pipeline": "rfsel_bayes",
       "coverage": 0.95,
       "n_kept": 298,
-      "n_fails_kept": 19,
-      "pr_auc": 0.1575554923293481,
-      "roc_auc": 0.7061875117902283
+      "n_fails_kept": 18,
+      "pr_auc": 0.16021736919305518,
+      "roc_auc": 0.7205357142857143
     },
     {
       "pipeline": "pls_enet",
       "coverage": 0.95,
       "n_kept": 298,
-      "n_fails_kept": 19,
-      "pr_auc": 0.11888269314794526,
-      "roc_auc": 0.5791360120731938
+      "n_fails_kept": 18,
+      "pr_auc": 0.12014368234275176,
+      "roc_auc": 0.5995039682539683
     },
     {
       "pipeline": "pls_rf",
       "coverage": 0.95,
       "n_kept": 298,
-      "n_fails_kept": 19,
-      "pr_auc": 0.10691439744022671,
-      "roc_auc": 0.6408224863233352
+      "n_fails_kept": 18,
+      "pr_auc": 0.10288236736266768,
+      "roc_auc": 0.6368055555555556
     },
     {
       "pipeline": "pls_bayes",
       "coverage": 0.95,
       "n_kept": 298,
-      "n_fails_kept": 19,
-      "pr_auc": 0.11951862095478888,
-      "roc_auc": 0.5551782682512734
+      "n_fails_kept": 18,
+      "pr_auc": 0.11640790103004628,
+      "roc_auc": 0.5768849206349207
     },
     {
       "pipeline": "hsic_enet",
       "coverage": 0.9,
       "n_kept": 283,
-      "n_fails_kept": 19,
-      "pr_auc": 0.1320964805722748,
-      "roc_auc": 0.6322767145135566
+      "n_fails_kept": 15,
+      "pr_auc": 0.09826283720361323,
+      "roc_auc": 0.6213930348258706
     },
     {
       "pipeline": "hsic_rf",
       "coverage": 0.9,
       "n_kept": 283,
-      "n_fails_kept": 19,
-      "pr_auc": 0.27443962314445214,
-      "roc_auc": 0.7832934609250397
+      "n_fails_kept": 15,
+      "pr_auc": 0.21284627501733006,
+      "roc_auc": 0.7409203980099502
     },
     {
       "pipeline": "hsic_bayes",
       "coverage": 0.9,
       "n_kept": 283,
-      "n_fails_kept": 19,
-      "pr_auc": 0.13394039562518087,
-      "roc_auc": 0.6696570972886762
+      "n_fails_kept": 15,
+      "pr_auc": 0.11329742958270049,
+      "roc_auc": 0.6945273631840796
     },
     {
       "pipeline": "rfsel_enet",
       "coverage": 0.9,
       "n_kept": 283,
-      "n_fails_kept": 19,
-      "pr_auc": 0.16327332016536128,
-      "roc_auc": 0.7212918660287082
+      "n_fails_kept": 15,
+      "pr_auc": 0.12158461997340071,
+      "roc_auc": 0.7221393034825871
     },
     {
       "pipeline": "rfsel_rf",
       "coverage": 0.9,
       "n_kept": 283,
-      "n_fails_kept": 19,
-      "pr_auc": 0.19191588804031953,
-      "roc_auc": 0.751993620414673
+      "n_fails_kept": 15,
+      "pr_auc": 0.17283378752641482,
+      "roc_auc": 0.7268656716417911
     },
     {
       "pipeline": "rfsel_bayes",
       "coverage": 0.9,
       "n_kept": 283,
-      "n_fails_kept": 19,
-      "pr_auc": 0.17264673151866614,
-      "roc_auc": 0.7120215311004783
+      "n_fails_kept": 15,
+      "pr_auc": 0.12132935602199932,
+      "roc_auc": 0.7412935323383084
     },
     {
       "pipeline": "pls_enet",
       "coverage": 0.9,
       "n_kept": 283,
-      "n_fails_kept": 19,
-      "pr_auc": 0.12266846214281718,
-      "roc_auc": 0.5777511961722488
+      "n_fails_kept": 15,
+      "pr_auc": 0.14060125002740823,
+      "roc_auc": 0.6402985074626866
     },
     {
       "pipeline": "pls_rf",
       "coverage": 0.9,
       "n_kept": 283,
-      "n_fails_kept": 19,
-      "pr_auc": 0.11149380041088203,
-      "roc_auc": 0.6422448165869219
+      "n_fails_kept": 15,
+      "pr_auc": 0.10286524169800444,
+      "roc_auc": 0.6282338308457711
     },
     {
       "pipeline": "pls_bayes",
       "coverage": 0.9,
       "n_kept": 283,
-      "n_fails_kept": 19,
-      "pr_auc": 0.12279564830554476,
-      "roc_auc": 0.555921052631579
+      "n_fails_kept": 15,
+      "pr_auc": 0.1480736139470286,
+      "roc_auc": 0.6348258706467662
     },
     {
       "pipeline": "hsic_enet",
       "coverage": 0.85,
       "n_kept": 267,
-      "n_fails_kept": 18,
-      "pr_auc": 0.12737128258823194,
-      "roc_auc": 0.6181392235609103
+      "n_fails_kept": 13,
+      "pr_auc": 0.11145634991788839,
+      "roc_auc": 0.6511205330102968
     },
     {
       "pipeline": "hsic_rf",
       "coverage": 0.85,
       "n_kept": 267,
-      "n_fails_kept": 18,
-      "pr_auc": 0.27518850673468925,
-      "roc_auc": 0.7747657295850067
+      "n_fails_kept": 13,
+      "pr_auc": 0.23053281237964296,
+      "roc_auc": 0.7389460932768019
     },
     {
       "pipeline": "hsic_bayes",
       "coverage": 0.85,
       "n_kept": 267,
-      "n_fails_kept": 18,
-      "pr_auc": 0.13160458780750658,
-      "roc_auc": 0.6593038821954483
+      "n_fails_kept": 13,
+      "pr_auc": 0.1217478112159661,
+      "roc_auc": 0.7387946698970321
     },
     {
       "pipeline": "rfsel_enet",
       "coverage": 0.85,
       "n_kept": 267,
-      "n_fails_kept": 18,
-      "pr_auc": 0.16945313042387367,
-      "roc_auc": 0.7107318161535029
+      "n_fails_kept": 13,
+      "pr_auc": 0.1297423638429994,
+      "roc_auc": 0.7141126589945488
     },
     {
       "pipeline": "rfsel_rf",
       "coverage": 0.85,
       "n_kept": 267,
-      "n_fails_kept": 18,
-      "pr_auc": 0.20497536770507047,
-      "roc_auc": 0.7479919678714859
+      "n_fails_kept": 13,
+      "pr_auc": 0.1819400359059547,
+      "roc_auc": 0.7309206541490005
     },
     {
       "pipeline": "rfsel_bayes",
       "coverage": 0.85,
       "n_kept": 267,
-      "n_fails_kept": 18,
-      "pr_auc": 0.18385886616507657,
-      "roc_auc": 0.7260151717983042
+      "n_fails_kept": 13,
+      "pr_auc": 0.1284615928687297,
+      "roc_auc": 0.7590854027861902
     },
     {
       "pipeline": "pls_enet",
       "coverage": 0.85,
       "n_kept": 267,
-      "n_fails_kept": 18,
-      "pr_auc": 0.13872562030271038,
-      "roc_auc": 0.5952699687639447
+      "n_fails_kept": 13,
+      "pr_auc": 0.133909759349991,
+      "roc_auc": 0.6225015142337977
     },
     {
       "pipeline": "pls_rf",
       "coverage": 0.85,
       "n_kept": 267,
-      "n_fails_kept": 18,
-      "pr_auc": 0.11867007815013775,
-      "roc_auc": 0.6366577420794288
+      "n_fails_kept": 13,
+      "pr_auc": 0.09180059415583876,
+      "roc_auc": 0.6368867353119321
     },
     {
       "pipeline": "pls_bayes",
       "coverage": 0.85,
       "n_kept": 267,
-      "n_fails_kept": 18,
-      "pr_auc": 0.14265644835758673,
-      "roc_auc": 0.5793172690763052
+      "n_fails_kept": 13,
+      "pr_auc": 0.14012105777612896,
+      "roc_auc": 0.6447607510599637
     },
     {
       "pipeline": "hsic_enet",
       "coverage": 0.8,
       "n_kept": 251,
-      "n_fails_kept": 18,
-      "pr_auc": 0.1331264665433367,
-      "roc_auc": 0.6167143538388175
+      "n_fails_kept": 11,
+      "pr_auc": 0.10396153765718984,
+      "roc_auc": 0.6215909090909091
     },
     {
       "pipeline": "hsic_rf",
       "coverage": 0.8,
       "n_kept": 251,
-      "n_fails_kept": 18,
-      "pr_auc": 0.277876297817664,
-      "roc_auc": 0.7695517405817835
+      "n_fails_kept": 11,
+      "pr_auc": 0.14468096713688786,
+      "roc_auc": 0.7138257575757576
     },
     {
       "pipeline": "hsic_bayes",
       "coverage": 0.8,
       "n_kept": 251,
-      "n_fails_kept": 18,
-      "pr_auc": 0.14151989495318934,
-      "roc_auc": 0.6607057701478303
+      "n_fails_kept": 11,
+      "pr_auc": 0.09264588128147035,
+      "roc_auc": 0.7077651515151515
     },
     {
       "pipeline": "rfsel_enet",
       "coverage": 0.8,
       "n_kept": 251,
-      "n_fails_kept": 18,
-      "pr_auc": 0.17492217826325063,
-      "roc_auc": 0.7103004291845495
+      "n_fails_kept": 11,
+      "pr_auc": 0.11788737010341513,
+      "roc_auc": 0.6899621212121213
     },
     {
       "pipeline": "rfsel_rf",
       "coverage": 0.8,
       "n_kept": 251,
-      "n_fails_kept": 18,
-      "pr_auc": 0.20763015069176619,
-      "roc_auc": 0.7429661421077731
+      "n_fails_kept": 11,
+      "pr_auc": 0.12209060089342832,
+      "roc_auc": 0.686931818181818
     },
     {
       "pipeline": "rfsel_bayes",
       "coverage": 0.8,
       "n_kept": 251,
-      "n_fails_kept": 18,
-      "pr_auc": 0.18714852389103492,
-      "roc_auc": 0.7224606580829758
+      "n_fails_kept": 11,
+      "pr_auc": 0.10342839797938452,
+      "roc_auc": 0.7270833333333333
     },
     {
       "pipeline": "pls_enet",
       "coverage": 0.8,
       "n_kept": 251,
-      "n_fails_kept": 18,
-      "pr_auc": 0.14245716475946774,
-      "roc_auc": 0.5952551263710062
+      "n_fails_kept": 11,
+      "pr_auc": 0.14147255665266484,
+      "roc_auc": 0.6318181818181816
     },
     {
       "pipeline": "pls_rf",
       "coverage": 0.8,
       "n_kept": 251,
-      "n_fails_kept": 18,
-      "pr_auc": 0.12503058581603388,
-      "roc_auc": 0.6368621840724845
+      "n_fails_kept": 11,
+      "pr_auc": 0.08432212992824215,
+      "roc_auc": 0.6229166666666666
     },
     {
       "pipeline": "pls_bayes",
       "coverage": 0.8,
       "n_kept": 251,
-      "n_fails_kept": 18,
-      "pr_auc": 0.14694001051288372,
-      "roc_auc": 0.5809489747257988
+      "n_fails_kept": 11,
+      "pr_auc": 0.14574666787114568,
+      "roc_auc": 0.6604166666666667
     },
     {
       "pipeline": "hsic_enet",
       "coverage": 0.7,
       "n_kept": 220,
-      "n_fails_kept": 17,
-      "pr_auc": 0.1444962792291337,
-      "roc_auc": 0.6095334685598377
+      "n_fails_kept": 9,
+      "pr_auc": 0.0614988662234255,
+      "roc_auc": 0.6145339652448657
     },
     {
       "pipeline": "hsic_rf",
       "coverage": 0.7,
       "n_kept": 220,
-      "n_fails_kept": 17,
-      "pr_auc": 0.2924325086613048,
-      "roc_auc": 0.7677484787018255
+      "n_fails_kept": 9,
+      "pr_auc": 0.16659554073263338,
+      "roc_auc": 0.7374934175882043
     },
     {
       "pipeline": "hsic_bayes",
       "coverage": 0.7,
       "n_kept": 220,
-      "n_fails_kept": 17,
-      "pr_auc": 0.14974353599497722,
-      "roc_auc": 0.6450304259634887
+      "n_fails_kept": 9,
+      "pr_auc": 0.1036881749784926,
+      "roc_auc": 0.7303844128488678
     },
     {
       "pipeline": "rfsel_enet",
       "coverage": 0.7,
       "n_kept": 220,
-      "n_fails_kept": 17,
-      "pr_auc": 0.19845476191093858,
-      "roc_auc": 0.7367429730512896
+      "n_fails_kept": 9,
+      "pr_auc": 0.11601970339682231,
+      "roc_auc": 0.6737756714060031
     },
     {
       "pipeline": "rfsel_rf",
       "coverage": 0.7,
       "n_kept": 220,
-      "n_fails_kept": 17,
-      "pr_auc": 0.24331333904887248,
-      "roc_auc": 0.7623877137061721
+      "n_fails_kept": 9,
+      "pr_auc": 0.09947047665488815,
+      "roc_auc": 0.7209057398630858
     },
     {
       "pipeline": "rfsel_bayes",
       "coverage": 0.7,
       "n_kept": 220,
-      "n_fails_kept": 17,
-      "pr_auc": 0.2120003035347896,
-      "roc_auc": 0.7471747319617501
+      "n_fails_kept": 9,
+      "pr_auc": 0.0865578460099008,
+      "roc_auc": 0.7301211163770405
     },
     {
       "pipeline": "pls_enet",
       "coverage": 0.7,
       "n_kept": 220,
-      "n_fails_kept": 17,
-      "pr_auc": 0.15346140382034976,
-      "roc_auc": 0.6111272095044914
+      "n_fails_kept": 9,
+      "pr_auc": 0.12647105980439313,
+      "roc_auc": 0.6021590310689837
     },
     {
       "pipeline": "pls_rf",
       "coverage": 0.7,
       "n_kept": 220,
-      "n_fails_kept": 17,
-      "pr_auc": 0.13847899131973176,
-      "roc_auc": 0.6528542451463344
+      "n_fails_kept": 9,
+      "pr_auc": 0.07828596218277355,
+      "roc_auc": 0.6058451816745655
     },
     {
       "pipeline": "pls_bayes",
       "coverage": 0.7,
       "n_kept": 220,
-      "n_fails_kept": 17,
-      "pr_auc": 0.16141092075599248,
-      "roc_auc": 0.579107505070994
+      "n_fails_kept": 9,
+      "pr_auc": 0.12744220309501858,
+      "roc_auc": 0.6140073723012112
     },
     {
       "pipeline": "hsic_enet",
       "coverage": 0.6,
       "n_kept": 188,
-      "n_fails_kept": 16,
-      "pr_auc": 0.12363546848288776,
-      "roc_auc": 0.585029069767442
+      "n_fails_kept": 7,
+      "pr_auc": 0.05809599555622885,
+      "roc_auc": 0.6298342541436464
     },
     {
       "pipeline": "hsic_rf",
       "coverage": 0.6,
       "n_kept": 188,
-      "n_fails_kept": 16,
-      "pr_auc": 0.30022418173289356,
-      "roc_auc": 0.7561773255813954
+      "n_fails_kept": 7,
+      "pr_auc": 0.18720071368838648,
+      "roc_auc": 0.8058405682715074
     },
     {
       "pipeline": "hsic_bayes",
       "coverage": 0.6,
       "n_kept": 188,
-      "n_fails_kept": 16,
-      "pr_auc": 0.16109042579728566,
-      "roc_auc": 0.6335392441860466
+      "n_fails_kept": 7,
+      "pr_auc": 0.09640553558553289,
+      "roc_auc": 0.7273086029992107
     },
     {
       "pipeline": "rfsel_enet",
       "coverage": 0.6,
       "n_kept": 188,
-      "n_fails_kept": 16,
-      "pr_auc": 0.19349796082029305,
-      "roc_auc": 0.7202034883720931
+      "n_fails_kept": 7,
+      "pr_auc": 0.0813496306174201,
+      "roc_auc": 0.6767955801104972
     },
     {
       "pipeline": "rfsel_rf",
       "coverage": 0.6,
       "n_kept": 188,
-      "n_fails_kept": 16,
-      "pr_auc": 0.22060794313866972,
-      "roc_auc": 0.7421874999999999
+      "n_fails_kept": 7,
+      "pr_auc": 0.0838446671596711,
+      "roc_auc": 0.7383583267561168
     },
     {
       "pipeline": "rfsel_bayes",
       "coverage": 0.6,
       "n_kept": 188,
-      "n_fails_kept": 16,
-      "pr_auc": 0.2090259415504248,
-      "roc_auc": 0.7323764534883721
+      "n_fails_kept": 7,
+      "pr_auc": 0.08102306265499484,
+      "roc_auc": 0.7067876874506709
     },
     {
       "pipeline": "pls_enet",
       "coverage": 0.6,
       "n_kept": 188,
-      "n_fails_kept": 16,
-      "pr_auc": 0.18789127610550055,
-      "roc_auc": 0.6193677325581395
+      "n_fails_kept": 7,
+      "pr_auc": 0.07034927346924486,
+      "roc_auc": 0.6053670086819258
     },
     {
       "pipeline": "pls_rf",
       "coverage": 0.6,
       "n_kept": 188,
-      "n_fails_kept": 16,
-      "pr_auc": 0.1697378690168953,
-      "roc_auc": 0.6696947674418605
+      "n_fails_kept": 7,
+      "pr_auc": 0.08041996968889596,
+      "roc_auc": 0.6322020520915549
     },
     {
       "pipeline": "pls_bayes",
       "coverage": 0.6,
       "n_kept": 188,
-      "n_fails_kept": 16,
-      "pr_auc": 0.19177771708041866,
-      "roc_auc": 0.5715843023255814
+      "n_fails_kept": 7,
+      "pr_auc": 0.07324855728711112,
+      "roc_auc": 0.6290449881610103
     },
     {
       "pipeline": "hsic_enet",
       "coverage": 0.5,
       "n_kept": 157,
-      "n_fails_kept": 13,
-      "pr_auc": 0.1276028442245759,
-      "roc_auc": 0.5961538461538463
+      "n_fails_kept": 6,
+      "pr_auc": 0.06922898414126484,
+      "roc_auc": 0.6683222958057394
     },
     {
       "pipeline": "hsic_rf",
       "coverage": 0.5,
       "n_kept": 157,
-      "n_fails_kept": 13,
-      "pr_auc": 0.2988843953984798,
-      "roc_auc": 0.733707264957265
+      "n_fails_kept": 6,
+      "pr_auc": 0.23771650759985863,
+      "roc_auc": 0.8807947019867549
     },
     {
       "pipeline": "hsic_bayes",
       "coverage": 0.5,
       "n_kept": 157,
-      "n_fails_kept": 13,
-      "pr_auc": 0.16751159163877882,
-      "roc_auc": 0.655982905982906
+      "n_fails_kept": 6,
+      "pr_auc": 0.11798533227104656,
+      "roc_auc": 0.7339955849889624
     },
     {
       "pipeline": "rfsel_enet",
       "coverage": 0.5,
       "n_kept": 157,
-      "n_fails_kept": 13,
-      "pr_auc": 0.18229549140716125,
-      "roc_auc": 0.7136752136752137
+      "n_fails_kept": 6,
+      "pr_auc": 0.09043439186459781,
+      "roc_auc": 0.6445916114790288
     },
     {
       "pipeline": "rfsel_rf",
       "coverage": 0.5,
       "n_kept": 157,
-      "n_fails_kept": 13,
-      "pr_auc": 0.19047761127946894,
-      "roc_auc": 0.7123397435897436
+      "n_fails_kept": 6,
+      "pr_auc": 0.09340813366042724,
+      "roc_auc": 0.7323399558498896
     },
     {
       "pipeline": "rfsel_bayes",
       "coverage": 0.5,
       "n_kept": 157,
-      "n_fails_kept": 13,
-      "pr_auc": 0.1989096642918299,
-      "roc_auc": 0.7061965811965812
+      "n_fails_kept": 6,
+      "pr_auc": 0.0726758770966088,
+      "roc_auc": 0.6826710816777042
     },
     {
       "pipeline": "pls_enet",
       "coverage": 0.5,
       "n_kept": 157,
-      "n_fails_kept": 13,
-      "pr_auc": 0.15471402364612827,
-      "roc_auc": 0.6135149572649572
+      "n_fails_kept": 6,
+      "pr_auc": 0.08470657085306767,
+      "roc_auc": 0.5689845474613686
     },
     {
       "pipeline": "pls_rf",
       "coverage": 0.5,
       "n_kept": 157,
-      "n_fails_kept": 13,
-      "pr_auc": 0.1718736321722344,
-      "roc_auc": 0.6821581196581197
+      "n_fails_kept": 6,
+      "pr_auc": 0.09367519905589855,
+      "roc_auc": 0.6109271523178808
     },
     {
       "pipeline": "pls_bayes",
       "coverage": 0.5,
       "n_kept": 157,
-      "n_fails_kept": 13,
-      "pr_auc": 0.15698431190442416,
-      "roc_auc": 0.5678418803418803
+      "n_fails_kept": 6,
+      "pr_auc": 0.08832237829258305,
+      "roc_auc": 0.6109271523178808
     }
   ],
   "gate_reports": {
@@ -3817,14 +3874,15 @@
       "efa": {
         "config": {
           "logic": "or",
-          "feature_stage": "post_cluster_efa",
+          "feature_stage": "post_cluster_efa_scaled",
           "method": "regularized_efa_t2_q",
           "n_factors": 10,
           "t2_alpha": 0.03,
           "q_alpha": 0.005,
           "gate_corr_threshold": 0.9,
-          "t2_ucl": 28.718393726633902,
-          "q_ucl": 6734922.075919639,
+          "clip": 5.0,
+          "t2_ucl": 28.900783829012276,
+          "q_ucl": 355.89739745613025,
           "n_features": 242,
           "n_reference_wafers": 1170,
           "shrinkage": 1.0
@@ -3832,183 +3890,183 @@
         "conditional": [
           {
             "pipeline": "hsic_enet",
-            "coverage": 0.964968152866242,
+            "coverage": 0.9617834394904459,
             "n_total": 314,
-            "n_in_control": 303,
-            "n_flagged_ooc": 11,
+            "n_in_control": 302,
+            "n_flagged_ooc": 12,
             "n_fails_total": 21,
-            "n_fails_in_control": 19,
-            "n_fails_flagged_ooc": 2,
-            "n_flagged_t2": 9,
-            "n_flagged_q": 2,
+            "n_fails_in_control": 17,
+            "n_fails_flagged_ooc": 4,
+            "n_flagged_t2": 11,
+            "n_flagged_q": 1,
             "n_flagged_both": 0,
-            "n_flagged_either": 11,
+            "n_flagged_either": 12,
             "global_pr_auc": 0.13888750530322236,
             "global_roc_auc": 0.6518771331058021,
-            "conditional_pr_auc": 0.11304554937402697,
-            "conditional_roc_auc": 0.6277798369162343,
-            "conditional_pr_auc_ci_low": 0.07098239525304419,
-            "conditional_pr_auc_ci_high": 0.24075239169844198
+            "conditional_pr_auc": 0.10589103278455672,
+            "conditional_roc_auc": 0.6479876160990712,
+            "conditional_pr_auc_ci_low": 0.06813319061660138,
+            "conditional_pr_auc_ci_high": 0.2531186892355437
           },
           {
             "pipeline": "hsic_rf",
-            "coverage": 0.964968152866242,
+            "coverage": 0.9617834394904459,
             "n_total": 314,
-            "n_in_control": 303,
-            "n_flagged_ooc": 11,
+            "n_in_control": 302,
+            "n_flagged_ooc": 12,
             "n_fails_total": 21,
-            "n_fails_in_control": 19,
-            "n_fails_flagged_ooc": 2,
-            "n_flagged_t2": 9,
-            "n_flagged_q": 2,
+            "n_fails_in_control": 17,
+            "n_fails_flagged_ooc": 4,
+            "n_flagged_t2": 11,
+            "n_flagged_q": 1,
             "n_flagged_both": 0,
-            "n_flagged_either": 11,
+            "n_flagged_either": 12,
             "global_pr_auc": 0.3098929855727105,
             "global_roc_auc": 0.7922151795871932,
-            "conditional_pr_auc": 0.26009855989765296,
-            "conditional_roc_auc": 0.7813194959229058,
-            "conditional_pr_auc_ci_low": 0.14042990471322653,
-            "conditional_pr_auc_ci_high": 0.45927405754132883
+            "conditional_pr_auc": 0.24919453713535117,
+            "conditional_roc_auc": 0.7682146542827658,
+            "conditional_pr_auc_ci_low": 0.12524304107983156,
+            "conditional_pr_auc_ci_high": 0.47957022371358193
           },
           {
             "pipeline": "hsic_bayes",
-            "coverage": 0.964968152866242,
+            "coverage": 0.9617834394904459,
             "n_total": 314,
-            "n_in_control": 303,
-            "n_flagged_ooc": 11,
+            "n_in_control": 302,
+            "n_flagged_ooc": 12,
             "n_fails_total": 21,
-            "n_fails_in_control": 19,
-            "n_fails_flagged_ooc": 2,
-            "n_flagged_t2": 9,
-            "n_flagged_q": 2,
+            "n_fails_in_control": 17,
+            "n_fails_flagged_ooc": 4,
+            "n_flagged_t2": 11,
+            "n_flagged_q": 1,
             "n_flagged_both": 0,
-            "n_flagged_either": 11,
+            "n_flagged_either": 12,
             "global_pr_auc": 0.15924092739608206,
             "global_roc_auc": 0.6931578091987648,
-            "conditional_pr_auc": 0.1242893600221528,
-            "conditional_roc_auc": 0.6659562638991846,
-            "conditional_pr_auc_ci_low": 0.08292712448546036,
-            "conditional_pr_auc_ci_high": 0.2418068171463439
+            "conditional_pr_auc": 0.12448722880007898,
+            "conditional_roc_auc": 0.7033023735810113,
+            "conditional_pr_auc_ci_low": 0.0830231227565817,
+            "conditional_pr_auc_ci_high": 0.2675162451399446
           },
           {
             "pipeline": "rfsel_enet",
-            "coverage": 0.964968152866242,
+            "coverage": 0.9617834394904459,
             "n_total": 314,
-            "n_in_control": 303,
-            "n_flagged_ooc": 11,
+            "n_in_control": 302,
+            "n_flagged_ooc": 12,
             "n_fails_total": 21,
-            "n_fails_in_control": 19,
-            "n_fails_flagged_ooc": 2,
-            "n_flagged_t2": 9,
-            "n_flagged_q": 2,
+            "n_fails_in_control": 17,
+            "n_fails_flagged_ooc": 4,
+            "n_flagged_t2": 11,
+            "n_flagged_q": 1,
             "n_flagged_both": 0,
-            "n_flagged_either": 11,
+            "n_flagged_either": 12,
             "global_pr_auc": 0.16943325848678265,
             "global_roc_auc": 0.7318381277425646,
-            "conditional_pr_auc": 0.15038778228505068,
-            "conditional_roc_auc": 0.717939214232765,
-            "conditional_pr_auc_ci_low": 0.10061308516124318,
-            "conditional_pr_auc_ci_high": 0.2818249800354323
+            "conditional_pr_auc": 0.14062544200845908,
+            "conditional_roc_auc": 0.742827657378741,
+            "conditional_pr_auc_ci_low": 0.09284574973514,
+            "conditional_pr_auc_ci_high": 0.2759984070077184
           },
           {
             "pipeline": "rfsel_rf",
-            "coverage": 0.964968152866242,
+            "coverage": 0.9617834394904459,
             "n_total": 314,
-            "n_in_control": 303,
-            "n_flagged_ooc": 11,
+            "n_in_control": 302,
+            "n_flagged_ooc": 12,
             "n_fails_total": 21,
-            "n_fails_in_control": 19,
-            "n_fails_flagged_ooc": 2,
-            "n_flagged_t2": 9,
-            "n_flagged_q": 2,
+            "n_fails_in_control": 17,
+            "n_fails_flagged_ooc": 4,
+            "n_flagged_t2": 11,
+            "n_flagged_q": 1,
             "n_flagged_both": 0,
-            "n_flagged_either": 11,
+            "n_flagged_either": 12,
             "global_pr_auc": 0.21600663119787633,
             "global_roc_auc": 0.770437185112953,
-            "conditional_pr_auc": 0.18334599361342654,
-            "conditional_roc_auc": 0.7544477390659748,
-            "conditional_pr_auc_ci_low": 0.1170332249915418,
-            "conditional_pr_auc_ci_high": 0.3584073924783034
+            "conditional_pr_auc": 0.18991362340001156,
+            "conditional_roc_auc": 0.7504643962848297,
+            "conditional_pr_auc_ci_low": 0.11203662059520254,
+            "conditional_pr_auc_ci_high": 0.40857119513855955
           },
           {
             "pipeline": "rfsel_bayes",
-            "coverage": 0.964968152866242,
+            "coverage": 0.9617834394904459,
             "n_total": 314,
-            "n_in_control": 303,
-            "n_flagged_ooc": 11,
+            "n_in_control": 302,
+            "n_flagged_ooc": 12,
             "n_fails_total": 21,
-            "n_fails_in_control": 19,
-            "n_fails_flagged_ooc": 2,
-            "n_flagged_t2": 9,
-            "n_flagged_q": 2,
+            "n_fails_in_control": 17,
+            "n_fails_flagged_ooc": 4,
+            "n_flagged_t2": 11,
+            "n_flagged_q": 1,
             "n_flagged_both": 0,
-            "n_flagged_either": 11,
+            "n_flagged_either": 12,
             "global_pr_auc": 0.19498093379843698,
             "global_roc_auc": 0.724362099788721,
-            "conditional_pr_auc": 0.1596821178685481,
-            "conditional_roc_auc": 0.7102483320978503,
-            "conditional_pr_auc_ci_low": 0.09428681686124077,
-            "conditional_pr_auc_ci_high": 0.32805494845493194
+            "conditional_pr_auc": 0.16822165533486172,
+            "conditional_roc_auc": 0.7644994840041279,
+            "conditional_pr_auc_ci_low": 0.09936885610905136,
+            "conditional_pr_auc_ci_high": 0.3528158227684318
           },
           {
             "pipeline": "pls_enet",
-            "coverage": 0.964968152866242,
+            "coverage": 0.9617834394904459,
             "n_total": 314,
-            "n_in_control": 303,
-            "n_flagged_ooc": 11,
+            "n_in_control": 302,
+            "n_flagged_ooc": 12,
             "n_fails_total": 21,
-            "n_fails_in_control": 19,
-            "n_fails_flagged_ooc": 2,
-            "n_flagged_t2": 9,
-            "n_flagged_q": 2,
+            "n_fails_in_control": 17,
+            "n_fails_flagged_ooc": 4,
+            "n_flagged_t2": 11,
+            "n_flagged_q": 1,
             "n_flagged_both": 0,
-            "n_flagged_either": 11,
+            "n_flagged_either": 12,
             "global_pr_auc": 0.10753661589942247,
             "global_roc_auc": 0.5652527222493093,
-            "conditional_pr_auc": 0.1167639695630292,
-            "conditional_roc_auc": 0.5804299481097108,
-            "conditional_pr_auc_ci_low": 0.06910930609257518,
-            "conditional_pr_auc_ci_high": 0.27562219146847394
+            "conditional_pr_auc": 0.12102318000991454,
+            "conditional_roc_auc": 0.6229102167182663,
+            "conditional_pr_auc_ci_low": 0.06381088376260921,
+            "conditional_pr_auc_ci_high": 0.2890957670243816
           },
           {
             "pipeline": "pls_rf",
-            "coverage": 0.964968152866242,
+            "coverage": 0.9617834394904459,
             "n_total": 314,
-            "n_in_control": 303,
-            "n_flagged_ooc": 11,
+            "n_in_control": 302,
+            "n_flagged_ooc": 12,
             "n_fails_total": 21,
-            "n_fails_in_control": 19,
-            "n_fails_flagged_ooc": 2,
-            "n_flagged_t2": 9,
-            "n_flagged_q": 2,
+            "n_fails_in_control": 17,
+            "n_fails_flagged_ooc": 4,
+            "n_flagged_t2": 11,
+            "n_flagged_q": 1,
             "n_flagged_both": 0,
-            "n_flagged_either": 11,
+            "n_flagged_either": 12,
             "global_pr_auc": 0.11565839195056524,
             "global_roc_auc": 0.6605720786608158,
-            "conditional_pr_auc": 0.10497878440888368,
-            "conditional_roc_auc": 0.6425129725722758,
-            "conditional_pr_auc_ci_low": 0.07454931973521202,
-            "conditional_pr_auc_ci_high": 0.19619359682624724
+            "conditional_pr_auc": 0.09375728554978044,
+            "conditional_roc_auc": 0.6219814241486068,
+            "conditional_pr_auc_ci_low": 0.06066803040257917,
+            "conditional_pr_auc_ci_high": 0.19001460172729676
           },
           {
             "pipeline": "pls_bayes",
-            "coverage": 0.964968152866242,
+            "coverage": 0.9617834394904459,
             "n_total": 314,
-            "n_in_control": 303,
-            "n_flagged_ooc": 11,
+            "n_in_control": 302,
+            "n_flagged_ooc": 12,
             "n_fails_total": 21,
-            "n_fails_in_control": 19,
-            "n_fails_flagged_ooc": 2,
-            "n_flagged_t2": 9,
-            "n_flagged_q": 2,
+            "n_fails_in_control": 17,
+            "n_fails_flagged_ooc": 4,
+            "n_flagged_t2": 11,
+            "n_flagged_q": 1,
             "n_flagged_both": 0,
-            "n_flagged_either": 11,
+            "n_flagged_either": 12,
             "global_pr_auc": 0.11285735688329304,
             "global_roc_auc": 0.5693157809198764,
-            "conditional_pr_auc": 0.11851504695545774,
-            "conditional_roc_auc": 0.5569866567828021,
-            "conditional_pr_auc_ci_low": 0.06775589769517079,
-            "conditional_pr_auc_ci_high": 0.27631653085047736
+            "conditional_pr_auc": 0.11838859187199174,
+            "conditional_roc_auc": 0.6012383900928793,
+            "conditional_pr_auc_ci_low": 0.0634359219172495,
+            "conditional_pr_auc_ci_high": 0.2751035915835389
           }
         ],
         "risk_coverage": [
@@ -4089,576 +4147,576 @@
             "coverage": 0.99,
             "n_kept": 311,
             "n_fails_kept": 21,
-            "pr_auc": 0.13964454644118937,
-            "roc_auc": 0.6516420361247948
+            "pr_auc": 0.1415673631626222,
+            "roc_auc": 0.6542692939244663
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.99,
             "n_kept": 311,
             "n_fails_kept": 21,
-            "pr_auc": 0.3100721001428907,
-            "roc_auc": 0.7913793103448277
+            "pr_auc": 0.3103421026103118,
+            "roc_auc": 0.791871921182266
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.99,
             "n_kept": 311,
             "n_fails_kept": 21,
-            "pr_auc": 0.15978792063632688,
-            "roc_auc": 0.692775041050903
+            "pr_auc": 0.16013310498157232,
+            "roc_auc": 0.693103448275862
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.99,
             "n_kept": 311,
             "n_fails_kept": 21,
-            "pr_auc": 0.1706785668205909,
-            "roc_auc": 0.7330049261083742
+            "pr_auc": 0.16952042229126607,
+            "roc_auc": 0.7299671592775041
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.99,
             "n_kept": 311,
             "n_fails_kept": 21,
-            "pr_auc": 0.21633951504974078,
-            "roc_auc": 0.7698686371100165
+            "pr_auc": 0.21692912457088934,
+            "roc_auc": 0.7704433497536947
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.99,
             "n_kept": 311,
             "n_fails_kept": 21,
-            "pr_auc": 0.1957804888231923,
-            "roc_auc": 0.7241379310344828
+            "pr_auc": 0.19581199853212136,
+            "roc_auc": 0.7245484400656814
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.99,
             "n_kept": 311,
             "n_fails_kept": 21,
-            "pr_auc": 0.10912053495924987,
-            "roc_auc": 0.5653530377668308
+            "pr_auc": 0.11007100742782994,
+            "roc_auc": 0.5675697865353038
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.99,
             "n_kept": 311,
             "n_fails_kept": 21,
-            "pr_auc": 0.11741211814119501,
-            "roc_auc": 0.6618226600985222
+            "pr_auc": 0.11954923935929215,
+            "roc_auc": 0.6634646962233169
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.99,
             "n_kept": 311,
             "n_fails_kept": 21,
-            "pr_auc": 0.11908970948384145,
-            "roc_auc": 0.5701149425287356
+            "pr_auc": 0.11511693691029884,
+            "roc_auc": 0.5712643678160919
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.95,
             "n_kept": 298,
-            "n_fails_kept": 19,
-            "pr_auc": 0.11279001164814491,
-            "roc_auc": 0.6246934540652707
+            "n_fails_kept": 18,
+            "pr_auc": 0.104367488446083,
+            "roc_auc": 0.6122023809523809
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.95,
             "n_kept": 298,
-            "n_fails_kept": 19,
-            "pr_auc": 0.2581871980244353,
-            "roc_auc": 0.7786266742124127
+            "n_fails_kept": 18,
+            "pr_auc": 0.25422788104652916,
+            "roc_auc": 0.7725198412698412
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.95,
             "n_kept": 298,
-            "n_fails_kept": 19,
-            "pr_auc": 0.12448241718535469,
-            "roc_auc": 0.6627051499717034
+            "n_fails_kept": 18,
+            "pr_auc": 0.12141698758931321,
+            "roc_auc": 0.6624007936507937
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.95,
             "n_kept": 298,
-            "n_fails_kept": 19,
-            "pr_auc": 0.1460392957293732,
-            "roc_auc": 0.7142991888322958
+            "n_fails_kept": 18,
+            "pr_auc": 0.13214953937073984,
+            "roc_auc": 0.6993055555555555
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.95,
             "n_kept": 298,
-            "n_fails_kept": 19,
-            "pr_auc": 0.180764125937365,
-            "roc_auc": 0.7491982644784003
+            "n_fails_kept": 18,
+            "pr_auc": 0.1804580984339158,
+            "roc_auc": 0.750297619047619
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.95,
             "n_kept": 298,
-            "n_fails_kept": 19,
-            "pr_auc": 0.1575554923293481,
-            "roc_auc": 0.7061875117902283
+            "n_fails_kept": 18,
+            "pr_auc": 0.16021736919305518,
+            "roc_auc": 0.7205357142857143
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.95,
             "n_kept": 298,
-            "n_fails_kept": 19,
-            "pr_auc": 0.11888269314794526,
-            "roc_auc": 0.5791360120731938
+            "n_fails_kept": 18,
+            "pr_auc": 0.12014368234275176,
+            "roc_auc": 0.5995039682539683
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.95,
             "n_kept": 298,
-            "n_fails_kept": 19,
-            "pr_auc": 0.10691439744022671,
-            "roc_auc": 0.6408224863233352
+            "n_fails_kept": 18,
+            "pr_auc": 0.10288236736266768,
+            "roc_auc": 0.6368055555555556
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.95,
             "n_kept": 298,
-            "n_fails_kept": 19,
-            "pr_auc": 0.11951862095478888,
-            "roc_auc": 0.5551782682512734
+            "n_fails_kept": 18,
+            "pr_auc": 0.11640790103004628,
+            "roc_auc": 0.5768849206349207
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.9,
             "n_kept": 283,
-            "n_fails_kept": 19,
-            "pr_auc": 0.1320964805722748,
-            "roc_auc": 0.6322767145135566
+            "n_fails_kept": 15,
+            "pr_auc": 0.09826283720361323,
+            "roc_auc": 0.6213930348258706
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.9,
             "n_kept": 283,
-            "n_fails_kept": 19,
-            "pr_auc": 0.27443962314445214,
-            "roc_auc": 0.7832934609250397
+            "n_fails_kept": 15,
+            "pr_auc": 0.21284627501733006,
+            "roc_auc": 0.7409203980099502
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.9,
             "n_kept": 283,
-            "n_fails_kept": 19,
-            "pr_auc": 0.13394039562518087,
-            "roc_auc": 0.6696570972886762
+            "n_fails_kept": 15,
+            "pr_auc": 0.11329742958270049,
+            "roc_auc": 0.6945273631840796
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.9,
             "n_kept": 283,
-            "n_fails_kept": 19,
-            "pr_auc": 0.16327332016536128,
-            "roc_auc": 0.7212918660287082
+            "n_fails_kept": 15,
+            "pr_auc": 0.12158461997340071,
+            "roc_auc": 0.7221393034825871
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.9,
             "n_kept": 283,
-            "n_fails_kept": 19,
-            "pr_auc": 0.19191588804031953,
-            "roc_auc": 0.751993620414673
+            "n_fails_kept": 15,
+            "pr_auc": 0.17283378752641482,
+            "roc_auc": 0.7268656716417911
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.9,
             "n_kept": 283,
-            "n_fails_kept": 19,
-            "pr_auc": 0.17264673151866614,
-            "roc_auc": 0.7120215311004783
+            "n_fails_kept": 15,
+            "pr_auc": 0.12132935602199932,
+            "roc_auc": 0.7412935323383084
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.9,
             "n_kept": 283,
-            "n_fails_kept": 19,
-            "pr_auc": 0.12266846214281718,
-            "roc_auc": 0.5777511961722488
+            "n_fails_kept": 15,
+            "pr_auc": 0.14060125002740823,
+            "roc_auc": 0.6402985074626866
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.9,
             "n_kept": 283,
-            "n_fails_kept": 19,
-            "pr_auc": 0.11149380041088203,
-            "roc_auc": 0.6422448165869219
+            "n_fails_kept": 15,
+            "pr_auc": 0.10286524169800444,
+            "roc_auc": 0.6282338308457711
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.9,
             "n_kept": 283,
-            "n_fails_kept": 19,
-            "pr_auc": 0.12279564830554476,
-            "roc_auc": 0.555921052631579
+            "n_fails_kept": 15,
+            "pr_auc": 0.1480736139470286,
+            "roc_auc": 0.6348258706467662
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.85,
             "n_kept": 267,
-            "n_fails_kept": 18,
-            "pr_auc": 0.12737128258823194,
-            "roc_auc": 0.6181392235609103
+            "n_fails_kept": 13,
+            "pr_auc": 0.11145634991788839,
+            "roc_auc": 0.6511205330102968
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.85,
             "n_kept": 267,
-            "n_fails_kept": 18,
-            "pr_auc": 0.27518850673468925,
-            "roc_auc": 0.7747657295850067
+            "n_fails_kept": 13,
+            "pr_auc": 0.23053281237964296,
+            "roc_auc": 0.7389460932768019
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.85,
             "n_kept": 267,
-            "n_fails_kept": 18,
-            "pr_auc": 0.13160458780750658,
-            "roc_auc": 0.6593038821954483
+            "n_fails_kept": 13,
+            "pr_auc": 0.1217478112159661,
+            "roc_auc": 0.7387946698970321
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.85,
             "n_kept": 267,
-            "n_fails_kept": 18,
-            "pr_auc": 0.16945313042387367,
-            "roc_auc": 0.7107318161535029
+            "n_fails_kept": 13,
+            "pr_auc": 0.1297423638429994,
+            "roc_auc": 0.7141126589945488
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.85,
             "n_kept": 267,
-            "n_fails_kept": 18,
-            "pr_auc": 0.20497536770507047,
-            "roc_auc": 0.7479919678714859
+            "n_fails_kept": 13,
+            "pr_auc": 0.1819400359059547,
+            "roc_auc": 0.7309206541490005
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.85,
             "n_kept": 267,
-            "n_fails_kept": 18,
-            "pr_auc": 0.18385886616507657,
-            "roc_auc": 0.7260151717983042
+            "n_fails_kept": 13,
+            "pr_auc": 0.1284615928687297,
+            "roc_auc": 0.7590854027861902
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.85,
             "n_kept": 267,
-            "n_fails_kept": 18,
-            "pr_auc": 0.13872562030271038,
-            "roc_auc": 0.5952699687639447
+            "n_fails_kept": 13,
+            "pr_auc": 0.133909759349991,
+            "roc_auc": 0.6225015142337977
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.85,
             "n_kept": 267,
-            "n_fails_kept": 18,
-            "pr_auc": 0.11867007815013775,
-            "roc_auc": 0.6366577420794288
+            "n_fails_kept": 13,
+            "pr_auc": 0.09180059415583876,
+            "roc_auc": 0.6368867353119321
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.85,
             "n_kept": 267,
-            "n_fails_kept": 18,
-            "pr_auc": 0.14265644835758673,
-            "roc_auc": 0.5793172690763052
+            "n_fails_kept": 13,
+            "pr_auc": 0.14012105777612896,
+            "roc_auc": 0.6447607510599637
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.8,
             "n_kept": 251,
-            "n_fails_kept": 18,
-            "pr_auc": 0.1331264665433367,
-            "roc_auc": 0.6167143538388175
+            "n_fails_kept": 11,
+            "pr_auc": 0.10396153765718984,
+            "roc_auc": 0.6215909090909091
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.8,
             "n_kept": 251,
-            "n_fails_kept": 18,
-            "pr_auc": 0.277876297817664,
-            "roc_auc": 0.7695517405817835
+            "n_fails_kept": 11,
+            "pr_auc": 0.14468096713688786,
+            "roc_auc": 0.7138257575757576
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.8,
             "n_kept": 251,
-            "n_fails_kept": 18,
-            "pr_auc": 0.14151989495318934,
-            "roc_auc": 0.6607057701478303
+            "n_fails_kept": 11,
+            "pr_auc": 0.09264588128147035,
+            "roc_auc": 0.7077651515151515
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.8,
             "n_kept": 251,
-            "n_fails_kept": 18,
-            "pr_auc": 0.17492217826325063,
-            "roc_auc": 0.7103004291845495
+            "n_fails_kept": 11,
+            "pr_auc": 0.11788737010341513,
+            "roc_auc": 0.6899621212121213
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.8,
             "n_kept": 251,
-            "n_fails_kept": 18,
-            "pr_auc": 0.20763015069176619,
-            "roc_auc": 0.7429661421077731
+            "n_fails_kept": 11,
+            "pr_auc": 0.12209060089342832,
+            "roc_auc": 0.686931818181818
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.8,
             "n_kept": 251,
-            "n_fails_kept": 18,
-            "pr_auc": 0.18714852389103492,
-            "roc_auc": 0.7224606580829758
+            "n_fails_kept": 11,
+            "pr_auc": 0.10342839797938452,
+            "roc_auc": 0.7270833333333333
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.8,
             "n_kept": 251,
-            "n_fails_kept": 18,
-            "pr_auc": 0.14245716475946774,
-            "roc_auc": 0.5952551263710062
+            "n_fails_kept": 11,
+            "pr_auc": 0.14147255665266484,
+            "roc_auc": 0.6318181818181816
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.8,
             "n_kept": 251,
-            "n_fails_kept": 18,
-            "pr_auc": 0.12503058581603388,
-            "roc_auc": 0.6368621840724845
+            "n_fails_kept": 11,
+            "pr_auc": 0.08432212992824215,
+            "roc_auc": 0.6229166666666666
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.8,
             "n_kept": 251,
-            "n_fails_kept": 18,
-            "pr_auc": 0.14694001051288372,
-            "roc_auc": 0.5809489747257988
+            "n_fails_kept": 11,
+            "pr_auc": 0.14574666787114568,
+            "roc_auc": 0.6604166666666667
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.7,
             "n_kept": 220,
-            "n_fails_kept": 17,
-            "pr_auc": 0.1444962792291337,
-            "roc_auc": 0.6095334685598377
+            "n_fails_kept": 9,
+            "pr_auc": 0.0614988662234255,
+            "roc_auc": 0.6145339652448657
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.7,
             "n_kept": 220,
-            "n_fails_kept": 17,
-            "pr_auc": 0.2924325086613048,
-            "roc_auc": 0.7677484787018255
+            "n_fails_kept": 9,
+            "pr_auc": 0.16659554073263338,
+            "roc_auc": 0.7374934175882043
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.7,
             "n_kept": 220,
-            "n_fails_kept": 17,
-            "pr_auc": 0.14974353599497722,
-            "roc_auc": 0.6450304259634887
+            "n_fails_kept": 9,
+            "pr_auc": 0.1036881749784926,
+            "roc_auc": 0.7303844128488678
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.7,
             "n_kept": 220,
-            "n_fails_kept": 17,
-            "pr_auc": 0.19845476191093858,
-            "roc_auc": 0.7367429730512896
+            "n_fails_kept": 9,
+            "pr_auc": 0.11601970339682231,
+            "roc_auc": 0.6737756714060031
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.7,
             "n_kept": 220,
-            "n_fails_kept": 17,
-            "pr_auc": 0.24331333904887248,
-            "roc_auc": 0.7623877137061721
+            "n_fails_kept": 9,
+            "pr_auc": 0.09947047665488815,
+            "roc_auc": 0.7209057398630858
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.7,
             "n_kept": 220,
-            "n_fails_kept": 17,
-            "pr_auc": 0.2120003035347896,
-            "roc_auc": 0.7471747319617501
+            "n_fails_kept": 9,
+            "pr_auc": 0.0865578460099008,
+            "roc_auc": 0.7301211163770405
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.7,
             "n_kept": 220,
-            "n_fails_kept": 17,
-            "pr_auc": 0.15346140382034976,
-            "roc_auc": 0.6111272095044914
+            "n_fails_kept": 9,
+            "pr_auc": 0.12647105980439313,
+            "roc_auc": 0.6021590310689837
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.7,
             "n_kept": 220,
-            "n_fails_kept": 17,
-            "pr_auc": 0.13847899131973176,
-            "roc_auc": 0.6528542451463344
+            "n_fails_kept": 9,
+            "pr_auc": 0.07828596218277355,
+            "roc_auc": 0.6058451816745655
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.7,
             "n_kept": 220,
-            "n_fails_kept": 17,
-            "pr_auc": 0.16141092075599248,
-            "roc_auc": 0.579107505070994
+            "n_fails_kept": 9,
+            "pr_auc": 0.12744220309501858,
+            "roc_auc": 0.6140073723012112
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.6,
             "n_kept": 188,
-            "n_fails_kept": 16,
-            "pr_auc": 0.12363546848288776,
-            "roc_auc": 0.585029069767442
+            "n_fails_kept": 7,
+            "pr_auc": 0.05809599555622885,
+            "roc_auc": 0.6298342541436464
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.6,
             "n_kept": 188,
-            "n_fails_kept": 16,
-            "pr_auc": 0.30022418173289356,
-            "roc_auc": 0.7561773255813954
+            "n_fails_kept": 7,
+            "pr_auc": 0.18720071368838648,
+            "roc_auc": 0.8058405682715074
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.6,
             "n_kept": 188,
-            "n_fails_kept": 16,
-            "pr_auc": 0.16109042579728566,
-            "roc_auc": 0.6335392441860466
+            "n_fails_kept": 7,
+            "pr_auc": 0.09640553558553289,
+            "roc_auc": 0.7273086029992107
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.6,
             "n_kept": 188,
-            "n_fails_kept": 16,
-            "pr_auc": 0.19349796082029305,
-            "roc_auc": 0.7202034883720931
+            "n_fails_kept": 7,
+            "pr_auc": 0.0813496306174201,
+            "roc_auc": 0.6767955801104972
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.6,
             "n_kept": 188,
-            "n_fails_kept": 16,
-            "pr_auc": 0.22060794313866972,
-            "roc_auc": 0.7421874999999999
+            "n_fails_kept": 7,
+            "pr_auc": 0.0838446671596711,
+            "roc_auc": 0.7383583267561168
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.6,
             "n_kept": 188,
-            "n_fails_kept": 16,
-            "pr_auc": 0.2090259415504248,
-            "roc_auc": 0.7323764534883721
+            "n_fails_kept": 7,
+            "pr_auc": 0.08102306265499484,
+            "roc_auc": 0.7067876874506709
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.6,
             "n_kept": 188,
-            "n_fails_kept": 16,
-            "pr_auc": 0.18789127610550055,
-            "roc_auc": 0.6193677325581395
+            "n_fails_kept": 7,
+            "pr_auc": 0.07034927346924486,
+            "roc_auc": 0.6053670086819258
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.6,
             "n_kept": 188,
-            "n_fails_kept": 16,
-            "pr_auc": 0.1697378690168953,
-            "roc_auc": 0.6696947674418605
+            "n_fails_kept": 7,
+            "pr_auc": 0.08041996968889596,
+            "roc_auc": 0.6322020520915549
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.6,
             "n_kept": 188,
-            "n_fails_kept": 16,
-            "pr_auc": 0.19177771708041866,
-            "roc_auc": 0.5715843023255814
+            "n_fails_kept": 7,
+            "pr_auc": 0.07324855728711112,
+            "roc_auc": 0.6290449881610103
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.5,
             "n_kept": 157,
-            "n_fails_kept": 13,
-            "pr_auc": 0.1276028442245759,
-            "roc_auc": 0.5961538461538463
+            "n_fails_kept": 6,
+            "pr_auc": 0.06922898414126484,
+            "roc_auc": 0.6683222958057394
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.5,
             "n_kept": 157,
-            "n_fails_kept": 13,
-            "pr_auc": 0.2988843953984798,
-            "roc_auc": 0.733707264957265
+            "n_fails_kept": 6,
+            "pr_auc": 0.23771650759985863,
+            "roc_auc": 0.8807947019867549
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.5,
             "n_kept": 157,
-            "n_fails_kept": 13,
-            "pr_auc": 0.16751159163877882,
-            "roc_auc": 0.655982905982906
+            "n_fails_kept": 6,
+            "pr_auc": 0.11798533227104656,
+            "roc_auc": 0.7339955849889624
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.5,
             "n_kept": 157,
-            "n_fails_kept": 13,
-            "pr_auc": 0.18229549140716125,
-            "roc_auc": 0.7136752136752137
+            "n_fails_kept": 6,
+            "pr_auc": 0.09043439186459781,
+            "roc_auc": 0.6445916114790288
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.5,
             "n_kept": 157,
-            "n_fails_kept": 13,
-            "pr_auc": 0.19047761127946894,
-            "roc_auc": 0.7123397435897436
+            "n_fails_kept": 6,
+            "pr_auc": 0.09340813366042724,
+            "roc_auc": 0.7323399558498896
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.5,
             "n_kept": 157,
-            "n_fails_kept": 13,
-            "pr_auc": 0.1989096642918299,
-            "roc_auc": 0.7061965811965812
+            "n_fails_kept": 6,
+            "pr_auc": 0.0726758770966088,
+            "roc_auc": 0.6826710816777042
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.5,
             "n_kept": 157,
-            "n_fails_kept": 13,
-            "pr_auc": 0.15471402364612827,
-            "roc_auc": 0.6135149572649572
+            "n_fails_kept": 6,
+            "pr_auc": 0.08470657085306767,
+            "roc_auc": 0.5689845474613686
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.5,
             "n_kept": 157,
-            "n_fails_kept": 13,
-            "pr_auc": 0.1718736321722344,
-            "roc_auc": 0.6821581196581197
+            "n_fails_kept": 6,
+            "pr_auc": 0.09367519905589855,
+            "roc_auc": 0.6109271523178808
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.5,
             "n_kept": 157,
-            "n_fails_kept": 13,
-            "pr_auc": 0.15698431190442416,
-            "roc_auc": 0.5678418803418803
+            "n_fails_kept": 6,
+            "pr_auc": 0.08832237829258305,
+            "roc_auc": 0.6109271523178808
           }
         ]
       },
@@ -5518,14 +5576,15 @@
       "efa": {
         "config": {
           "logic": "or",
-          "feature_stage": "post_cluster_efa",
+          "feature_stage": "post_cluster_efa_scaled",
           "method": "regularized_efa_t2_q",
           "n_factors": 10,
           "t2_alpha": 0.03,
           "q_alpha": 0.005,
           "gate_corr_threshold": 0.9,
-          "t2_ucl": 32.174704517759984,
-          "q_ucl": 5281931.18970567,
+          "clip": 5.0,
+          "t2_ucl": 30.829272269629005,
+          "q_ucl": 362.2690234334792,
           "n_features": 242,
           "n_reference_wafers": 1167,
           "shrinkage": 1.0
@@ -5533,183 +5592,183 @@
         "conditional": [
           {
             "pipeline": "hsic_enet",
-            "coverage": 0.9456869009584664,
+            "coverage": 0.9584664536741214,
             "n_total": 313,
-            "n_in_control": 296,
-            "n_flagged_ooc": 17,
+            "n_in_control": 300,
+            "n_flagged_ooc": 13,
             "n_fails_total": 17,
-            "n_fails_in_control": 17,
-            "n_fails_flagged_ooc": 0,
-            "n_flagged_t2": 7,
-            "n_flagged_q": 15,
-            "n_flagged_both": 5,
-            "n_flagged_either": 17,
+            "n_fails_in_control": 16,
+            "n_fails_flagged_ooc": 1,
+            "n_flagged_t2": 11,
+            "n_flagged_q": 5,
+            "n_flagged_both": 3,
+            "n_flagged_either": 13,
             "global_pr_auc": 0.057121171986352526,
             "global_roc_auc": 0.48281001589825123,
-            "conditional_pr_auc": 0.06174929218593145,
-            "conditional_roc_auc": 0.49209361163820375,
-            "conditional_pr_auc_ci_low": 0.049665536625585885,
-            "conditional_pr_auc_ci_high": 0.10658812565942412
+            "conditional_pr_auc": 0.05807170722072022,
+            "conditional_roc_auc": 0.4940580985915493,
+            "conditional_pr_auc_ci_low": 0.04474823806790506,
+            "conditional_pr_auc_ci_high": 0.09849844857202181
           },
           {
             "pipeline": "hsic_rf",
-            "coverage": 0.9456869009584664,
+            "coverage": 0.9584664536741214,
             "n_total": 313,
-            "n_in_control": 296,
-            "n_flagged_ooc": 17,
+            "n_in_control": 300,
+            "n_flagged_ooc": 13,
             "n_fails_total": 17,
-            "n_fails_in_control": 17,
-            "n_fails_flagged_ooc": 0,
-            "n_flagged_t2": 7,
-            "n_flagged_q": 15,
-            "n_flagged_both": 5,
-            "n_flagged_either": 17,
+            "n_fails_in_control": 16,
+            "n_fails_flagged_ooc": 1,
+            "n_flagged_t2": 11,
+            "n_flagged_q": 5,
+            "n_flagged_both": 3,
+            "n_flagged_either": 13,
             "global_pr_auc": 0.1063446161723095,
             "global_roc_auc": 0.6521263910969792,
-            "conditional_pr_auc": 0.14653982020355244,
-            "conditional_roc_auc": 0.6664558296436854,
-            "conditional_pr_auc_ci_low": 0.07410378704214422,
-            "conditional_pr_auc_ci_high": 0.35452479570695994
+            "conditional_pr_auc": 0.13126939744567184,
+            "conditional_roc_auc": 0.6912411971830986,
+            "conditional_pr_auc_ci_low": 0.07315788383650727,
+            "conditional_pr_auc_ci_high": 0.30629883460334373
           },
           {
             "pipeline": "hsic_bayes",
-            "coverage": 0.9456869009584664,
+            "coverage": 0.9584664536741214,
             "n_total": 313,
-            "n_in_control": 296,
-            "n_flagged_ooc": 17,
+            "n_in_control": 300,
+            "n_flagged_ooc": 13,
             "n_fails_total": 17,
-            "n_fails_in_control": 17,
-            "n_fails_flagged_ooc": 0,
-            "n_flagged_t2": 7,
-            "n_flagged_q": 15,
-            "n_flagged_both": 5,
-            "n_flagged_either": 17,
-            "global_pr_auc": 0.14771946684634227,
-            "global_roc_auc": 0.6713036565977741,
-            "conditional_pr_auc": 0.18134781342637088,
-            "conditional_roc_auc": 0.6823740248787687,
-            "conditional_pr_auc_ci_low": 0.09167929589627738,
-            "conditional_pr_auc_ci_high": 0.388327272850324
+            "n_fails_in_control": 16,
+            "n_fails_flagged_ooc": 1,
+            "n_flagged_t2": 11,
+            "n_flagged_q": 5,
+            "n_flagged_both": 3,
+            "n_flagged_either": 13,
+            "global_pr_auc": 0.14416965612000904,
+            "global_roc_auc": 0.7043918918918919,
+            "conditional_pr_auc": 0.19515184778951788,
+            "conditional_roc_auc": 0.7378961267605634,
+            "conditional_pr_auc_ci_low": 0.09999384819503927,
+            "conditional_pr_auc_ci_high": 0.4162851207599042
           },
           {
             "pipeline": "rfsel_enet",
-            "coverage": 0.9456869009584664,
+            "coverage": 0.9584664536741214,
             "n_total": 313,
-            "n_in_control": 296,
-            "n_flagged_ooc": 17,
+            "n_in_control": 300,
+            "n_flagged_ooc": 13,
             "n_fails_total": 17,
-            "n_fails_in_control": 17,
-            "n_fails_flagged_ooc": 0,
-            "n_flagged_t2": 7,
-            "n_flagged_q": 15,
-            "n_flagged_both": 5,
-            "n_flagged_either": 17,
+            "n_fails_in_control": 16,
+            "n_fails_flagged_ooc": 1,
+            "n_flagged_t2": 11,
+            "n_flagged_q": 5,
+            "n_flagged_both": 3,
+            "n_flagged_either": 13,
             "global_pr_auc": 0.13984702039535052,
             "global_roc_auc": 0.7561605723370428,
-            "conditional_pr_auc": 0.16960707250145723,
-            "conditional_roc_auc": 0.7634408602150538,
-            "conditional_pr_auc_ci_low": 0.10596828956717948,
-            "conditional_pr_auc_ci_high": 0.3367586075801221
+            "conditional_pr_auc": 0.18087709736098706,
+            "conditional_roc_auc": 0.8082086267605635,
+            "conditional_pr_auc_ci_low": 0.11368105709258683,
+            "conditional_pr_auc_ci_high": 0.3538579758978913
           },
           {
             "pipeline": "rfsel_rf",
-            "coverage": 0.9456869009584664,
+            "coverage": 0.9584664536741214,
             "n_total": 313,
-            "n_in_control": 296,
-            "n_flagged_ooc": 17,
+            "n_in_control": 300,
+            "n_flagged_ooc": 13,
             "n_fails_total": 17,
-            "n_fails_in_control": 17,
-            "n_fails_flagged_ooc": 0,
-            "n_flagged_t2": 7,
-            "n_flagged_q": 15,
-            "n_flagged_both": 5,
-            "n_flagged_either": 17,
+            "n_fails_in_control": 16,
+            "n_fails_flagged_ooc": 1,
+            "n_flagged_t2": 11,
+            "n_flagged_q": 5,
+            "n_flagged_both": 3,
+            "n_flagged_either": 13,
             "global_pr_auc": 0.09270455889751866,
             "global_roc_auc": 0.6724960254372019,
-            "conditional_pr_auc": 0.1042085506908483,
-            "conditional_roc_auc": 0.6838498840396374,
-            "conditional_pr_auc_ci_low": 0.07361418157216207,
-            "conditional_pr_auc_ci_high": 0.20756625700930761
+            "conditional_pr_auc": 0.10008980296217487,
+            "conditional_roc_auc": 0.6897007042253521,
+            "conditional_pr_auc_ci_low": 0.06912109943649054,
+            "conditional_pr_auc_ci_high": 0.198730635173944
           },
           {
             "pipeline": "rfsel_bayes",
-            "coverage": 0.9456869009584664,
+            "coverage": 0.9584664536741214,
             "n_total": 313,
-            "n_in_control": 296,
-            "n_flagged_ooc": 17,
+            "n_in_control": 300,
+            "n_flagged_ooc": 13,
             "n_fails_total": 17,
-            "n_fails_in_control": 17,
-            "n_fails_flagged_ooc": 0,
-            "n_flagged_t2": 7,
-            "n_flagged_q": 15,
-            "n_flagged_both": 5,
-            "n_flagged_either": 17,
-            "global_pr_auc": 0.13748646865196226,
-            "global_roc_auc": 0.7442368839427662,
-            "conditional_pr_auc": 0.20385457623416342,
-            "conditional_roc_auc": 0.7555344718532574,
-            "conditional_pr_auc_ci_low": 0.09992397220306655,
-            "conditional_pr_auc_ci_high": 0.392703542060113
+            "n_fails_in_control": 16,
+            "n_fails_flagged_ooc": 1,
+            "n_flagged_t2": 11,
+            "n_flagged_q": 5,
+            "n_flagged_both": 3,
+            "n_flagged_either": 13,
+            "global_pr_auc": 0.14359902607182928,
+            "global_roc_auc": 0.7472178060413354,
+            "conditional_pr_auc": 0.22777919852965675,
+            "conditional_roc_auc": 0.7804797535211268,
+            "conditional_pr_auc_ci_low": 0.10543667751811142,
+            "conditional_pr_auc_ci_high": 0.4368959744483049
           },
           {
             "pipeline": "pls_enet",
-            "coverage": 0.9456869009584664,
+            "coverage": 0.9584664536741214,
             "n_total": 313,
-            "n_in_control": 296,
-            "n_flagged_ooc": 17,
+            "n_in_control": 300,
+            "n_flagged_ooc": 13,
             "n_fails_total": 17,
-            "n_fails_in_control": 17,
-            "n_fails_flagged_ooc": 0,
-            "n_flagged_t2": 7,
-            "n_flagged_q": 15,
-            "n_flagged_both": 5,
-            "n_flagged_either": 17,
+            "n_fails_in_control": 16,
+            "n_fails_flagged_ooc": 1,
+            "n_flagged_t2": 11,
+            "n_flagged_q": 5,
+            "n_flagged_both": 3,
+            "n_flagged_either": 13,
             "global_pr_auc": 0.14911908440911392,
             "global_roc_auc": 0.6617647058823529,
-            "conditional_pr_auc": 0.17754191142360437,
-            "conditional_roc_auc": 0.6697238034998947,
-            "conditional_pr_auc_ci_low": 0.08207424041539425,
-            "conditional_pr_auc_ci_high": 0.4140845948566536
+            "conditional_pr_auc": 0.17680085376937776,
+            "conditional_roc_auc": 0.682218309859155,
+            "conditional_pr_auc_ci_low": 0.08254769594886183,
+            "conditional_pr_auc_ci_high": 0.4095422726905917
           },
           {
             "pipeline": "pls_rf",
-            "coverage": 0.9456869009584664,
+            "coverage": 0.9584664536741214,
             "n_total": 313,
-            "n_in_control": 296,
-            "n_flagged_ooc": 17,
+            "n_in_control": 300,
+            "n_flagged_ooc": 13,
             "n_fails_total": 17,
-            "n_fails_in_control": 17,
-            "n_fails_flagged_ooc": 0,
-            "n_flagged_t2": 7,
-            "n_flagged_q": 15,
-            "n_flagged_both": 5,
-            "n_flagged_either": 17,
+            "n_fails_in_control": 16,
+            "n_fails_flagged_ooc": 1,
+            "n_flagged_t2": 11,
+            "n_flagged_q": 5,
+            "n_flagged_both": 3,
+            "n_flagged_either": 13,
             "global_pr_auc": 0.17504727289883845,
             "global_roc_auc": 0.6632551669316376,
-            "conditional_pr_auc": 0.2404872588939284,
-            "conditional_roc_auc": 0.6717267552182162,
-            "conditional_pr_auc_ci_low": 0.09294778601171834,
-            "conditional_pr_auc_ci_high": 0.43334015040249246
+            "conditional_pr_auc": 0.24423046461592687,
+            "conditional_roc_auc": 0.7019146126760563,
+            "conditional_pr_auc_ci_low": 0.09582939065876249,
+            "conditional_pr_auc_ci_high": 0.4498290025333637
           },
           {
             "pipeline": "pls_bayes",
-            "coverage": 0.9456869009584664,
+            "coverage": 0.9584664536741214,
             "n_total": 313,
-            "n_in_control": 296,
-            "n_flagged_ooc": 17,
+            "n_in_control": 300,
+            "n_flagged_ooc": 13,
             "n_fails_total": 17,
-            "n_fails_in_control": 17,
-            "n_fails_flagged_ooc": 0,
-            "n_flagged_t2": 7,
-            "n_flagged_q": 15,
-            "n_flagged_both": 5,
-            "n_flagged_either": 17,
-            "global_pr_auc": 0.14019373504110438,
-            "global_roc_auc": 0.747714626391097,
-            "conditional_pr_auc": 0.16070566102092732,
-            "conditional_roc_auc": 0.752055660974067,
-            "conditional_pr_auc_ci_low": 0.1002631766095204,
-            "conditional_pr_auc_ci_high": 0.3571720136449175
+            "n_fails_in_control": 16,
+            "n_fails_flagged_ooc": 1,
+            "n_flagged_t2": 11,
+            "n_flagged_q": 5,
+            "n_flagged_both": 3,
+            "n_flagged_either": 13,
+            "global_pr_auc": 0.1815303984993727,
+            "global_roc_auc": 0.706379173290938,
+            "conditional_pr_auc": 0.19864063398427625,
+            "conditional_roc_auc": 0.7327244718309859,
+            "conditional_pr_auc_ci_low": 0.09059649916811478,
+            "conditional_pr_auc_ci_high": 0.3906057127107799
           }
         ],
         "risk_coverage": [
@@ -5734,8 +5793,8 @@
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.14771946684634227,
-            "roc_auc": 0.6713036565977741
+            "pr_auc": 0.14416965612000904,
+            "roc_auc": 0.7043918918918919
           },
           {
             "pipeline": "rfsel_enet",
@@ -5758,8 +5817,8 @@
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.13748646865196226,
-            "roc_auc": 0.7442368839427662
+            "pr_auc": 0.14359902607182928,
+            "roc_auc": 0.7472178060413354
           },
           {
             "pipeline": "pls_enet",
@@ -5782,584 +5841,584 @@
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.14019373504110438,
-            "roc_auc": 0.747714626391097
+            "pr_auc": 0.1815303984993727,
+            "roc_auc": 0.706379173290938
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.058124746271405604,
-            "roc_auc": 0.4850431640232885
+            "pr_auc": 0.05868950844937658,
+            "roc_auc": 0.4870507930134511
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.10759815666798313,
-            "roc_auc": 0.6529813290503915
+            "pr_auc": 0.12433695652921681,
+            "roc_auc": 0.6584019273238305
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.156151178420086,
-            "roc_auc": 0.6733587633005421
+            "pr_auc": 0.17209309354331864,
+            "roc_auc": 0.7114033326641237
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.14633192255552258,
-            "roc_auc": 0.7587833768319614
+            "pr_auc": 0.16733488968141577,
+            "roc_auc": 0.7639028307568761
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.09363685513994582,
-            "roc_auc": 0.6739610519975909
+            "pr_auc": 0.09782906043235305,
+            "roc_auc": 0.6787793615739811
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.14821373014892358,
-            "roc_auc": 0.747741417386067
+            "pr_auc": 0.21492096954698325,
+            "roc_auc": 0.7548685003011443
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.15201220219538092,
-            "roc_auc": 0.6653282473398916
+            "pr_auc": 0.17003415845263128,
+            "roc_auc": 0.6654286287893997
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.18006630193238954,
-            "roc_auc": 0.6667335876330054
+            "pr_auc": 0.23032547437125578,
+            "roc_auc": 0.6681389279261192
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.14862207005525258,
-            "roc_auc": 0.7520578197149168
+            "pr_auc": 0.19018240741468034,
+            "roc_auc": 0.7108010439670749
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.95,
             "n_kept": 297,
-            "n_fails_kept": 17,
-            "pr_auc": 0.061602305596881346,
-            "roc_auc": 0.492436974789916
+            "n_fails_kept": 16,
+            "pr_auc": 0.05947760084398328,
+            "roc_auc": 0.4991103202846975
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.95,
             "n_kept": 297,
-            "n_fails_kept": 17,
-            "pr_auc": 0.14542523605819777,
-            "roc_auc": 0.6648109243697479
+            "n_fails_kept": 16,
+            "pr_auc": 0.09719037393058552,
+            "roc_auc": 0.6476868327402135
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.95,
             "n_kept": 297,
-            "n_fails_kept": 17,
-            "pr_auc": 0.18124607197281561,
-            "roc_auc": 0.6822478991596639
+            "n_fails_kept": 16,
+            "pr_auc": 0.14810115470685353,
+            "roc_auc": 0.6949510676156584
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.95,
             "n_kept": 297,
-            "n_fails_kept": 17,
-            "pr_auc": 0.16941049683859072,
-            "roc_auc": 0.763235294117647
+            "n_fails_kept": 16,
+            "pr_auc": 0.1292091697045718,
+            "roc_auc": 0.7487766903914591
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.95,
             "n_kept": 297,
-            "n_fails_kept": 17,
-            "pr_auc": 0.10381228004446558,
-            "roc_auc": 0.6827731092436975
+            "n_fails_kept": 16,
+            "pr_auc": 0.09209922188757838,
+            "roc_auc": 0.6660364768683275
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.95,
             "n_kept": 297,
-            "n_fails_kept": 17,
-            "pr_auc": 0.20367816830459484,
-            "roc_auc": 0.7553571428571427
+            "n_fails_kept": 16,
+            "pr_auc": 0.14357529876553451,
+            "roc_auc": 0.7438834519572954
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.95,
             "n_kept": 297,
-            "n_fails_kept": 17,
-            "pr_auc": 0.1774622863439793,
-            "roc_auc": 0.6701680672268908
+            "n_fails_kept": 16,
+            "pr_auc": 0.13926950689550477,
+            "roc_auc": 0.6530249110320285
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.95,
             "n_kept": 297,
-            "n_fails_kept": 17,
-            "pr_auc": 0.2403660203442588,
-            "roc_auc": 0.6716386554621849
+            "n_fails_kept": 16,
+            "pr_auc": 0.22207926134372996,
+            "roc_auc": 0.6555827402135231
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.95,
             "n_kept": 297,
-            "n_fails_kept": 17,
-            "pr_auc": 0.16067153598680228,
-            "roc_auc": 0.7526260504201681
+            "n_fails_kept": 16,
+            "pr_auc": 0.1804984127238634,
+            "roc_auc": 0.6989546263345197
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.9,
             "n_kept": 282,
-            "n_fails_kept": 17,
-            "pr_auc": 0.06423505572441743,
-            "roc_auc": 0.49245283018867925
+            "n_fails_kept": 14,
+            "pr_auc": 0.05835894266289331,
+            "roc_auc": 0.5131929637526652
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.9,
             "n_kept": 282,
-            "n_fails_kept": 17,
-            "pr_auc": 0.15273176999122642,
-            "roc_auc": 0.6665926748057713
+            "n_fails_kept": 14,
+            "pr_auc": 0.10253000446852276,
+            "roc_auc": 0.6852345415778252
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.9,
             "n_kept": 282,
-            "n_fails_kept": 17,
-            "pr_auc": 0.1868804183009261,
-            "roc_auc": 0.6803551609322974
+            "n_fails_kept": 14,
+            "pr_auc": 0.17227872518808834,
+            "roc_auc": 0.7440031982942431
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.9,
             "n_kept": 282,
-            "n_fails_kept": 17,
-            "pr_auc": 0.17238063897119324,
-            "roc_auc": 0.7602663706992232
+            "n_fails_kept": 14,
+            "pr_auc": 0.13340402670012116,
+            "roc_auc": 0.7867803837953091
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.9,
             "n_kept": 282,
-            "n_fails_kept": 17,
-            "pr_auc": 0.11095587034163527,
-            "roc_auc": 0.6839067702552719
+            "n_fails_kept": 14,
+            "pr_auc": 0.08837570136740765,
+            "roc_auc": 0.6609808102345416
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.9,
             "n_kept": 282,
-            "n_fails_kept": 17,
-            "pr_auc": 0.2068623511130993,
-            "roc_auc": 0.7521642619311877
+            "n_fails_kept": 14,
+            "pr_auc": 0.1530470832460426,
+            "roc_auc": 0.7682569296375267
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.9,
             "n_kept": 282,
-            "n_fails_kept": 17,
-            "pr_auc": 0.1794000091071571,
-            "roc_auc": 0.6672586015538291
+            "n_fails_kept": 14,
+            "pr_auc": 0.14075603558444397,
+            "roc_auc": 0.6557835820895522
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.9,
             "n_kept": 282,
-            "n_fails_kept": 17,
-            "pr_auc": 0.24238191626207822,
-            "roc_auc": 0.6698113207547169
+            "n_fails_kept": 14,
+            "pr_auc": 0.23336578974592762,
+            "roc_auc": 0.6783049040511727
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.9,
             "n_kept": 282,
-            "n_fails_kept": 17,
-            "pr_auc": 0.16198325507839745,
-            "roc_auc": 0.7478357380688125
+            "n_fails_kept": 14,
+            "pr_auc": 0.19155692366883262,
+            "roc_auc": 0.7137526652452025
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.85,
             "n_kept": 266,
-            "n_fails_kept": 15,
-            "pr_auc": 0.06309994395270878,
-            "roc_auc": 0.5031872509960159
+            "n_fails_kept": 13,
+            "pr_auc": 0.059999631910024984,
+            "roc_auc": 0.5234113712374583
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.85,
             "n_kept": 266,
-            "n_fails_kept": 15,
-            "pr_auc": 0.16355435637847776,
-            "roc_auc": 0.6909694555112882
+            "n_fails_kept": 13,
+            "pr_auc": 0.0807112678997241,
+            "roc_auc": 0.6675281240498632
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.85,
             "n_kept": 266,
-            "n_fails_kept": 15,
-            "pr_auc": 0.18894453932077834,
-            "roc_auc": 0.6909694555112882
+            "n_fails_kept": 13,
+            "pr_auc": 0.18248160383710255,
+            "roc_auc": 0.7564609303739738
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.85,
             "n_kept": 266,
-            "n_fails_kept": 15,
-            "pr_auc": 0.1758538382376062,
-            "roc_auc": 0.7658698539176627
+            "n_fails_kept": 13,
+            "pr_auc": 0.13148786538567228,
+            "roc_auc": 0.7813925205229554
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.85,
             "n_kept": 266,
-            "n_fails_kept": 15,
-            "pr_auc": 0.09281565429699101,
-            "roc_auc": 0.6752988047808764
+            "n_fails_kept": 13,
+            "pr_auc": 0.07231445269457176,
+            "roc_auc": 0.6363636363636364
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.85,
             "n_kept": 266,
-            "n_fails_kept": 15,
-            "pr_auc": 0.19696305982347173,
-            "roc_auc": 0.7385126162018593
+            "n_fails_kept": 13,
+            "pr_auc": 0.1803427797580497,
+            "roc_auc": 0.7715110975980541
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.85,
             "n_kept": 266,
-            "n_fails_kept": 15,
-            "pr_auc": 0.1933729250662889,
-            "roc_auc": 0.6764940239043825
+            "n_fails_kept": 13,
+            "pr_auc": 0.14851860040793913,
+            "roc_auc": 0.6748251748251748
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.85,
             "n_kept": 266,
-            "n_fails_kept": 15,
-            "pr_auc": 0.2564512328395438,
-            "roc_auc": 0.6795484727755644
+            "n_fails_kept": 13,
+            "pr_auc": 0.24748535770962715,
+            "roc_auc": 0.6977804803891761
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.85,
             "n_kept": 266,
-            "n_fails_kept": 15,
-            "pr_auc": 0.17287416140424233,
-            "roc_auc": 0.7747675962815403
+            "n_fails_kept": 13,
+            "pr_auc": 0.1984928794678143,
+            "roc_auc": 0.7082699908786865
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.8,
             "n_kept": 250,
-            "n_fails_kept": 14,
-            "pr_auc": 0.06469130970500833,
-            "roc_auc": 0.5143765133171911
+            "n_fails_kept": 12,
+            "pr_auc": 0.06352742042504879,
+            "roc_auc": 0.5360644257703081
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.8,
             "n_kept": 250,
-            "n_fails_kept": 14,
-            "pr_auc": 0.1629975714725856,
-            "roc_auc": 0.6752421307506052
+            "n_fails_kept": 12,
+            "pr_auc": 0.08777737607599051,
+            "roc_auc": 0.6860994397759104
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.8,
             "n_kept": 250,
-            "n_fails_kept": 14,
-            "pr_auc": 0.19760806400825015,
-            "roc_auc": 0.6853813559322033
+            "n_fails_kept": 12,
+            "pr_auc": 0.16237311941225724,
+            "roc_auc": 0.742296918767507
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.8,
             "n_kept": 250,
-            "n_fails_kept": 14,
-            "pr_auc": 0.17964944341579253,
-            "roc_auc": 0.760139225181598
+            "n_fails_kept": 12,
+            "pr_auc": 0.12103741554743992,
+            "roc_auc": 0.7720588235294117
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.8,
             "n_kept": 250,
-            "n_fails_kept": 14,
-            "pr_auc": 0.09562327601352995,
-            "roc_auc": 0.6815980629539952
+            "n_fails_kept": 12,
+            "pr_auc": 0.07533684599525332,
+            "roc_auc": 0.6505602240896359
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.8,
             "n_kept": 250,
-            "n_fails_kept": 14,
-            "pr_auc": 0.21293456709105182,
-            "roc_auc": 0.761955205811138
+            "n_fails_kept": 12,
+            "pr_auc": 0.1441213187671033,
+            "roc_auc": 0.754201680672269
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.8,
             "n_kept": 250,
-            "n_fails_kept": 14,
-            "pr_auc": 0.19901109139307893,
-            "roc_auc": 0.6700968523002421
+            "n_fails_kept": 12,
+            "pr_auc": 0.10209595959595959,
+            "roc_auc": 0.64968487394958
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.8,
             "n_kept": 250,
-            "n_fails_kept": 14,
-            "pr_auc": 0.2657220613854201,
-            "roc_auc": 0.6713075060532687
+            "n_fails_kept": 12,
+            "pr_auc": 0.17540064195726912,
+            "roc_auc": 0.6755952380952381
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.8,
             "n_kept": 250,
-            "n_fails_kept": 14,
-            "pr_auc": 0.17501508881218364,
-            "roc_auc": 0.7701271186440678
+            "n_fails_kept": 12,
+            "pr_auc": 0.1235051046322633,
+            "roc_auc": 0.6867997198879552
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.7,
             "n_kept": 219,
-            "n_fails_kept": 10,
-            "pr_auc": 0.04837165424652474,
-            "roc_auc": 0.4633971291866029
+            "n_fails_kept": 11,
+            "pr_auc": 0.0689952529655207,
+            "roc_auc": 0.5238199300699301
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.7,
             "n_kept": 219,
-            "n_fails_kept": 10,
-            "pr_auc": 0.1333471197913178,
-            "roc_auc": 0.6758373205741627
+            "n_fails_kept": 11,
+            "pr_auc": 0.08663496889985692,
+            "roc_auc": 0.6728583916083916
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.7,
             "n_kept": 219,
-            "n_fails_kept": 10,
-            "pr_auc": 0.23864672502849382,
-            "roc_auc": 0.7409090909090909
+            "n_fails_kept": 11,
+            "pr_auc": 0.16949405096180487,
+            "roc_auc": 0.7296765734265733
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.7,
             "n_kept": 219,
-            "n_fails_kept": 10,
-            "pr_auc": 0.19508044476418623,
-            "roc_auc": 0.8035885167464114
+            "n_fails_kept": 11,
+            "pr_auc": 0.11447227280152754,
+            "roc_auc": 0.7515297202797202
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.7,
             "n_kept": 219,
-            "n_fails_kept": 10,
-            "pr_auc": 0.08130799978393562,
-            "roc_auc": 0.6925837320574163
+            "n_fails_kept": 11,
+            "pr_auc": 0.07480138833460452,
+            "roc_auc": 0.6236888111888113
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.7,
             "n_kept": 219,
-            "n_fails_kept": 10,
-            "pr_auc": 0.22332301713880662,
-            "roc_auc": 0.755023923444976
+            "n_fails_kept": 11,
+            "pr_auc": 0.20286370195461106,
+            "roc_auc": 0.7462849650349651
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.7,
             "n_kept": 219,
-            "n_fails_kept": 10,
-            "pr_auc": 0.22536703631224175,
-            "roc_auc": 0.7346889952153111
+            "n_fails_kept": 11,
+            "pr_auc": 0.117829780812408,
+            "roc_auc": 0.6501311188811189
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.7,
             "n_kept": 219,
-            "n_fails_kept": 10,
-            "pr_auc": 0.32700641684454634,
-            "roc_auc": 0.7784688995215311
+            "n_fails_kept": 11,
+            "pr_auc": 0.19613396555340654,
+            "roc_auc": 0.6748251748251748
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.7,
             "n_kept": 219,
-            "n_fails_kept": 10,
-            "pr_auc": 0.17384152579520465,
-            "roc_auc": 0.7856459330143541
+            "n_fails_kept": 11,
+            "pr_auc": 0.13795659528376406,
+            "roc_auc": 0.6728583916083916
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.6,
             "n_kept": 188,
-            "n_fails_kept": 10,
-            "pr_auc": 0.05609284332688588,
-            "roc_auc": 0.46544943820224727
+            "n_fails_kept": 9,
+            "pr_auc": 0.07076335799740055,
+            "roc_auc": 0.5012414649286158
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.6,
             "n_kept": 188,
-            "n_fails_kept": 10,
-            "pr_auc": 0.14840391634902728,
-            "roc_auc": 0.6803370786516855
+            "n_fails_kept": 9,
+            "pr_auc": 0.08740277347083125,
+            "roc_auc": 0.6679081315952824
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.6,
             "n_kept": 188,
-            "n_fails_kept": 10,
-            "pr_auc": 0.24377258909080207,
-            "roc_auc": 0.7373595505617977
+            "n_fails_kept": 9,
+            "pr_auc": 0.18149398635913708,
+            "roc_auc": 0.7420856610800743
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.6,
             "n_kept": 188,
-            "n_fails_kept": 10,
-            "pr_auc": 0.20134788583064447,
-            "roc_auc": 0.7955056179775281
+            "n_fails_kept": 9,
+            "pr_auc": 0.09840867301585035,
+            "roc_auc": 0.7216014897579143
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.6,
             "n_kept": 188,
-            "n_fails_kept": 10,
-            "pr_auc": 0.08997925281483735,
-            "roc_auc": 0.6800561797752809
+            "n_fails_kept": 9,
+            "pr_auc": 0.08355613840710632,
+            "roc_auc": 0.6548727498448169
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.6,
             "n_kept": 188,
-            "n_fails_kept": 10,
-            "pr_auc": 0.23225526150593057,
-            "roc_auc": 0.7536516853932584
+            "n_fails_kept": 9,
+            "pr_auc": 0.19858136650058317,
+            "roc_auc": 0.7026691495965238
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.6,
             "n_kept": 188,
-            "n_fails_kept": 10,
-            "pr_auc": 0.24055012279437543,
-            "roc_auc": 0.7328651685393258
+            "n_fails_kept": 9,
+            "pr_auc": 0.09982660324205678,
+            "roc_auc": 0.6365611421477344
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.6,
             "n_kept": 188,
-            "n_fails_kept": 10,
-            "pr_auc": 0.33508001637819085,
-            "roc_auc": 0.7764044943820224
+            "n_fails_kept": 9,
+            "pr_auc": 0.20403565758332592,
+            "roc_auc": 0.648975791433892
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.6,
             "n_kept": 188,
-            "n_fails_kept": 10,
-            "pr_auc": 0.18509759002336934,
-            "roc_auc": 0.7811797752808988
+            "n_fails_kept": 9,
+            "pr_auc": 0.11404411367653021,
+            "roc_auc": 0.675356921166977
           },
           {
             "pipeline": "hsic_enet",
             "coverage": 0.5,
             "n_kept": 156,
-            "n_fails_kept": 6,
-            "pr_auc": 0.04639550264550265,
-            "roc_auc": 0.5388888888888889
+            "n_fails_kept": 7,
+            "pr_auc": 0.07264957264957266,
+            "roc_auc": 0.46931927133269413
           },
           {
             "pipeline": "hsic_rf",
             "coverage": 0.5,
             "n_kept": 156,
-            "n_fails_kept": 6,
-            "pr_auc": 0.16348991350868108,
-            "roc_auc": 0.6861111111111111
+            "n_fails_kept": 7,
+            "pr_auc": 0.08097877380957615,
+            "roc_auc": 0.6418983700862896
           },
           {
             "pipeline": "hsic_bayes",
             "coverage": 0.5,
             "n_kept": 156,
-            "n_fails_kept": 6,
-            "pr_auc": 0.2155840722851032,
-            "roc_auc": 0.755
+            "n_fails_kept": 7,
+            "pr_auc": 0.09393939393939393,
+            "roc_auc": 0.6893576222435283
           },
           {
             "pipeline": "rfsel_enet",
             "coverage": 0.5,
             "n_kept": 156,
-            "n_fails_kept": 6,
-            "pr_auc": 0.22425038904450673,
-            "roc_auc": 0.8211111111111112
+            "n_fails_kept": 7,
+            "pr_auc": 0.0903635908802968,
+            "roc_auc": 0.7023010546500479
           },
           {
             "pipeline": "rfsel_rf",
             "coverage": 0.5,
             "n_kept": 156,
-            "n_fails_kept": 6,
-            "pr_auc": 0.10351008546051649,
-            "roc_auc": 0.7633333333333333
+            "n_fails_kept": 7,
+            "pr_auc": 0.05988747962742179,
+            "roc_auc": 0.6073825503355704
           },
           {
             "pipeline": "rfsel_bayes",
             "coverage": 0.5,
             "n_kept": 156,
-            "n_fails_kept": 6,
-            "pr_auc": 0.26450350891344676,
-            "roc_auc": 0.8066666666666668
+            "n_fails_kept": 7,
+            "pr_auc": 0.08433915215485283,
+            "roc_auc": 0.6735378715244488
           },
           {
             "pipeline": "pls_enet",
             "coverage": 0.5,
             "n_kept": 156,
-            "n_fails_kept": 6,
-            "pr_auc": 0.19985754985754986,
-            "roc_auc": 0.726111111111111
+            "n_fails_kept": 7,
+            "pr_auc": 0.0798886714033979,
+            "roc_auc": 0.5627996164908917
           },
           {
             "pipeline": "pls_rf",
             "coverage": 0.5,
             "n_kept": 156,
-            "n_fails_kept": 6,
-            "pr_auc": 0.3057974921543417,
-            "roc_auc": 0.8483333333333334
+            "n_fails_kept": 7,
+            "pr_auc": 0.19285121757021845,
+            "roc_auc": 0.5714285714285714
           },
           {
             "pipeline": "pls_bayes",
             "coverage": 0.5,
             "n_kept": 156,
-            "n_fails_kept": 6,
-            "pr_auc": 0.12667124542124542,
-            "roc_auc": 0.7677777777777779
+            "n_fails_kept": 7,
+            "pr_auc": 0.06864385910818044,
+            "roc_auc": 0.5997123681687441
           }
         ]
       },
@@ -6435,12 +6494,12 @@
             "n_flagged_q": 3,
             "n_flagged_both": 3,
             "n_flagged_either": 41,
-            "global_pr_auc": 0.14771946684634227,
-            "global_roc_auc": 0.6713036565977741,
-            "conditional_pr_auc": 0.20858520749897758,
-            "conditional_roc_auc": 0.7117919921875,
-            "conditional_pr_auc_ci_low": 0.10605290466056873,
-            "conditional_pr_auc_ci_high": 0.4135739290620194
+            "global_pr_auc": 0.14416965612000904,
+            "global_roc_auc": 0.7043918918918919,
+            "conditional_pr_auc": 0.20042667653305876,
+            "conditional_roc_auc": 0.7376708984375,
+            "conditional_pr_auc_ci_low": 0.10538456025942079,
+            "conditional_pr_auc_ci_high": 0.4114241994396386
           },
           {
             "pipeline": "rfsel_enet",
@@ -6495,12 +6554,12 @@
             "n_flagged_q": 3,
             "n_flagged_both": 3,
             "n_flagged_either": 41,
-            "global_pr_auc": 0.13748646865196226,
-            "global_roc_auc": 0.7442368839427662,
-            "conditional_pr_auc": 0.22093188128608002,
-            "conditional_roc_auc": 0.7674560546875,
-            "conditional_pr_auc_ci_low": 0.10578961510079384,
-            "conditional_pr_auc_ci_high": 0.4068091943872086
+            "global_pr_auc": 0.14359902607182928,
+            "global_roc_auc": 0.7472178060413354,
+            "conditional_pr_auc": 0.2327290702598111,
+            "conditional_roc_auc": 0.7716064453125,
+            "conditional_pr_auc_ci_low": 0.10883764909683387,
+            "conditional_pr_auc_ci_high": 0.4298334571197812
           },
           {
             "pipeline": "pls_enet",
@@ -6555,12 +6614,12 @@
             "n_flagged_q": 3,
             "n_flagged_both": 3,
             "n_flagged_either": 41,
-            "global_pr_auc": 0.14019373504110438,
-            "global_roc_auc": 0.747714626391097,
-            "conditional_pr_auc": 0.165569933854216,
-            "conditional_roc_auc": 0.764404296875,
-            "conditional_pr_auc_ci_low": 0.10021476860078267,
-            "conditional_pr_auc_ci_high": 0.35162421608775724
+            "global_pr_auc": 0.1815303984993727,
+            "global_roc_auc": 0.706379173290938,
+            "conditional_pr_auc": 0.2008211005798322,
+            "conditional_roc_auc": 0.7183837890625,
+            "conditional_pr_auc_ci_low": 0.08915133783785115,
+            "conditional_pr_auc_ci_high": 0.390659596321756
           }
         ],
         "risk_coverage": [
@@ -6585,8 +6644,8 @@
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.14771946684634227,
-            "roc_auc": 0.6713036565977741
+            "pr_auc": 0.14416965612000904,
+            "roc_auc": 0.7043918918918919
           },
           {
             "pipeline": "rfsel_enet",
@@ -6609,8 +6668,8 @@
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.13748646865196226,
-            "roc_auc": 0.7442368839427662
+            "pr_auc": 0.14359902607182928,
+            "roc_auc": 0.7472178060413354
           },
           {
             "pipeline": "pls_enet",
@@ -6633,8 +6692,8 @@
             "coverage": 1.0,
             "n_kept": 313,
             "n_fails_kept": 17,
-            "pr_auc": 0.14019373504110438,
-            "roc_auc": 0.747714626391097
+            "pr_auc": 0.1815303984993727,
+            "roc_auc": 0.706379173290938
           },
           {
             "pipeline": "hsic_enet",
@@ -6657,8 +6716,8 @@
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.17791952318667875,
-            "roc_auc": 0.677976309977916
+            "pr_auc": 0.17209309354331864,
+            "roc_auc": 0.7114033326641237
           },
           {
             "pipeline": "rfsel_enet",
@@ -6681,8 +6740,8 @@
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.19768609674264126,
-            "roc_auc": 0.7518570568159005
+            "pr_auc": 0.21492096954698325,
+            "roc_auc": 0.7548685003011443
           },
           {
             "pipeline": "pls_enet",
@@ -6705,8 +6764,8 @@
             "coverage": 0.99,
             "n_kept": 310,
             "n_fails_kept": 17,
-            "pr_auc": 0.15655324489257455,
-            "roc_auc": 0.7520578197149168
+            "pr_auc": 0.19018240741468034,
+            "roc_auc": 0.7108010439670749
           },
           {
             "pipeline": "hsic_enet",
@@ -6729,8 +6788,8 @@
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 17,
-            "pr_auc": 0.19683119117908315,
-            "roc_auc": 0.6830882352941177
+            "pr_auc": 0.18968871685054534,
+            "roc_auc": 0.7165966386554622
           },
           {
             "pipeline": "rfsel_enet",
@@ -6753,8 +6812,8 @@
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 17,
-            "pr_auc": 0.20099912864192843,
-            "roc_auc": 0.7502100840336133
+            "pr_auc": 0.21724343445534583,
+            "roc_auc": 0.7513655462184874
           },
           {
             "pipeline": "pls_enet",
@@ -6777,8 +6836,8 @@
             "coverage": 0.95,
             "n_kept": 297,
             "n_fails_kept": 17,
-            "pr_auc": 0.15778723090373376,
-            "roc_auc": 0.7467436974789915
+            "pr_auc": 0.1910121395708617,
+            "roc_auc": 0.7043067226890756
           },
           {
             "pipeline": "hsic_enet",
@@ -6801,8 +6860,8 @@
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 16,
-            "pr_auc": 0.2073962303516877,
-            "roc_auc": 0.7133458646616542
+            "pr_auc": 0.19913307788214646,
+            "roc_auc": 0.7393092105263158
           },
           {
             "pipeline": "rfsel_enet",
@@ -6825,8 +6884,8 @@
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 16,
-            "pr_auc": 0.21992471598980867,
-            "roc_auc": 0.7713815789473684
+            "pr_auc": 0.23135039963138745,
+            "roc_auc": 0.7754934210526316
           },
           {
             "pipeline": "pls_enet",
@@ -6849,8 +6908,8 @@
             "coverage": 0.9,
             "n_kept": 282,
             "n_fails_kept": 16,
-            "pr_auc": 0.1645158145225459,
-            "roc_auc": 0.7687969924812029
+            "pr_auc": 0.19977132148114837,
+            "roc_auc": 0.7234492481203008
           },
           {
             "pipeline": "hsic_enet",
@@ -6873,8 +6932,8 @@
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 15,
-            "pr_auc": 0.17128720105506176,
-            "roc_auc": 0.6926958831341302
+            "pr_auc": 0.1703711684059235,
+            "roc_auc": 0.7197875166002656
           },
           {
             "pipeline": "rfsel_enet",
@@ -6897,8 +6956,8 @@
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 15,
-            "pr_auc": 0.14480614061518582,
-            "roc_auc": 0.754050464807437
+            "pr_auc": 0.1528977997327998,
+            "roc_auc": 0.7572377158034529
           },
           {
             "pipeline": "pls_enet",
@@ -6921,8 +6980,8 @@
             "coverage": 0.85,
             "n_kept": 266,
             "n_fails_kept": 15,
-            "pr_auc": 0.14840781682160878,
-            "roc_auc": 0.749535192563081
+            "pr_auc": 0.1880881173025652,
+            "roc_auc": 0.702257636122178
           },
           {
             "pipeline": "hsic_enet",
@@ -6945,8 +7004,8 @@
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 14,
-            "pr_auc": 0.17999614220366283,
-            "roc_auc": 0.7092917675544793
+            "pr_auc": 0.17917403050716332,
+            "roc_auc": 0.7431900726392252
           },
           {
             "pipeline": "rfsel_enet",
@@ -6969,8 +7028,8 @@
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 14,
-            "pr_auc": 0.14944043666737553,
-            "roc_auc": 0.7527239709443099
+            "pr_auc": 0.1586827405789516,
+            "roc_auc": 0.7566585956416465
           },
           {
             "pipeline": "pls_enet",
@@ -6993,8 +7052,8 @@
             "coverage": 0.8,
             "n_kept": 250,
             "n_fails_kept": 14,
-            "pr_auc": 0.1501281517063937,
-            "roc_auc": 0.7437953995157385
+            "pr_auc": 0.19416957966199622,
+            "roc_auc": 0.6946125907990315
           },
           {
             "pipeline": "hsic_enet",
@@ -7017,8 +7076,8 @@
             "coverage": 0.7,
             "n_kept": 219,
             "n_fails_kept": 13,
-            "pr_auc": 0.22933427101462267,
-            "roc_auc": 0.705563853622106
+            "pr_auc": 0.22244321791833105,
+            "roc_auc": 0.7458924570575056
           },
           {
             "pipeline": "rfsel_enet",
@@ -7041,8 +7100,8 @@
             "coverage": 0.7,
             "n_kept": 219,
             "n_fails_kept": 13,
-            "pr_auc": 0.1835387297752884,
-            "roc_auc": 0.7468259895444361
+            "pr_auc": 0.2440051437746154,
+            "roc_auc": 0.7580283793876027
           },
           {
             "pipeline": "pls_enet",
@@ -7065,8 +7124,8 @@
             "coverage": 0.7,
             "n_kept": 219,
             "n_fails_kept": 13,
-            "pr_auc": 0.1824754802626246,
-            "roc_auc": 0.7845407020164301
+            "pr_auc": 0.22779996894580282,
+            "roc_auc": 0.7285287528005975
           },
           {
             "pipeline": "hsic_enet",
@@ -7089,8 +7148,8 @@
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 11,
-            "pr_auc": 0.2627466078058963,
-            "roc_auc": 0.6910631741140216
+            "pr_auc": 0.25172769019472085,
+            "roc_auc": 0.7277863379558295
           },
           {
             "pipeline": "rfsel_enet",
@@ -7113,8 +7172,8 @@
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 11,
-            "pr_auc": 0.13684146176757012,
-            "roc_auc": 0.7039034411915769
+            "pr_auc": 0.20297694874127997,
+            "roc_auc": 0.7244478685156652
           },
           {
             "pipeline": "pls_enet",
@@ -7137,8 +7196,8 @@
             "coverage": 0.6,
             "n_kept": 188,
             "n_fails_kept": 11,
-            "pr_auc": 0.1439502148399634,
-            "roc_auc": 0.7542372881355932
+            "pr_auc": 0.14842217713613512,
+            "roc_auc": 0.7044170518746791
           },
           {
             "pipeline": "hsic_enet",
@@ -7161,8 +7220,8 @@
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 8,
-            "pr_auc": 0.22033468559837727,
-            "roc_auc": 0.676097972972973
+            "pr_auc": 0.20416111241799315,
+            "roc_auc": 0.7314189189189189
           },
           {
             "pipeline": "rfsel_enet",
@@ -7185,8 +7244,8 @@
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 8,
-            "pr_auc": 0.12114089977861303,
-            "roc_auc": 0.6908783783783784
+            "pr_auc": 0.21526414700756807,
+            "roc_auc": 0.6980574324324323
           },
           {
             "pipeline": "pls_enet",
@@ -7209,8 +7268,8 @@
             "coverage": 0.5,
             "n_kept": 156,
             "n_fails_kept": 8,
-            "pr_auc": 0.12630229610715524,
-            "roc_auc": 0.7246621621621621
+            "pr_auc": 0.11430860805860807,
+            "roc_auc": 0.6592060810810811
           }
         ]
       }
@@ -7235,14 +7294,15 @@
   },
   "interp_process_gate": {
     "logic": "or",
-    "feature_stage": "post_cluster_efa",
+    "feature_stage": "post_cluster_efa_scaled",
     "method": "regularized_efa_t2_q",
     "n_factors": 10,
     "t2_alpha": 0.03,
     "q_alpha": 0.005,
     "gate_corr_threshold": 0.9,
-    "t2_ucl": 28.718393726633902,
-    "q_ucl": 6734922.075919639,
+    "clip": 5.0,
+    "t2_ucl": 28.900783829012276,
+    "q_ucl": 355.89739745613025,
     "n_features": 242,
     "n_reference_wafers": 1170,
     "shrinkage": 1.0

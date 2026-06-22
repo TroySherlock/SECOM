@@ -274,9 +274,9 @@ def time_decay_weights(timestamps, decay_lambda: float) -> np.ndarray:
     """Exponential recency weights from timestamps (recent = heavier).
 
     Age is normalized to [0, 1] within the rows passed in (0 = newest,
-    1 = oldest). ``decay_lambda=0`` yields uniform weights. Retained for the
-    interpolation/sklearn paths; the Bayesian extrapolation models handle drift
-    structurally via a random-walk intercept instead.
+    1 = oldest). ``decay_lambda=0`` yields uniform weights. Applied to every
+    weight-capable cell on the temporal protocol (all nine heads, including the
+    Bayesian ones, which fold the weights into their likelihood).
     """
     ts = np.asarray(
         pd.to_datetime(np.asarray(timestamps), errors="coerce").astype("int64"),
@@ -533,19 +533,23 @@ BAYES_SVI_STEPS = 1000
 # Each calibration fold is a full ADVI refit -> use fewer folds than LR/RF.
 BAYES_CALIB_CV = 2
 
-# Exponential time-decay (recency weighting): grid-tuned for the weight-capable
-# (LR/RF) cells on the temporal protocol only.
+# Exponential time-decay (recency weighting): grid-tuned per cell on the temporal
+# protocol only (lambda=0 recovers the unweighted model).
 DECAY_LAMBDA_DEFAULT = 0.0
 DECAY_LAMBDA_GRID = [0.0, 0.25, 0.5, 1.0, 2.0, 4.0]
-#: Weight-capable cells (LR/RF). The Bayesian cells skip decay (compute), and the
-#: decay path only runs on the temporal protocol.
+#: Weight-capable cells. All nine cells support time-decay sample weighting on the
+#: temporal protocol; the Bayesian heads weight their likelihood, the LR/RF heads
+#: forward sample_weight, all via CalibratedClassifierCV.
 WEIGHTING_MODEL_IDS: tuple[str, ...] = (
     "hsic_enet",
     "hsic_rf",
+    "hsic_bayes",
     "rfsel_enet",
     "rfsel_rf",
+    "rfsel_bayes",
     "pls_enet",
     "pls_rf",
+    "pls_bayes",
 )
 
 # --- Standalone gates (risk-coverage tools, not pipeline steps) --------------
@@ -554,6 +558,7 @@ EFA_GATE_N_FACTORS = 10
 EFA_GATE_T2_ALPHA = 0.03
 EFA_GATE_Q_ALPHA = 0.005
 EFA_GATE_LOGIC = "or"
+EFA_GATE_CLIP = 5.0
 
 # Bayes gate: sparse Bayesian factor analysis -> BGM density + Q (SPE).
 BAYES_GATE_N_FACTORS = 8

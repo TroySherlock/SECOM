@@ -10,10 +10,12 @@ import numpy as np
 import pandas as pd
 from sklearn.covariance import LedoitWolf
 from sklearn.decomposition import FactorAnalysis
+from sklearn.preprocessing import RobustScaler
 
 from secom.pipelines import RANDOM_SEED, build_gate_feature_pipeline
 from secom.hub_interactions import sensor_value_columns
 from secom.pipelines import (
+    EFA_GATE_CLIP,
     EFA_GATE_LOGIC,
     EFA_GATE_N_FACTORS,
     EFA_GATE_Q_ALPHA,
@@ -86,11 +88,13 @@ class EFAGate:
         q_alpha: float = EFA_GATE_Q_ALPHA,
         gate_corr_threshold: float = GATE_CORR_THRESHOLD,
         logic: str = EFA_GATE_LOGIC,
+        clip: float = EFA_GATE_CLIP,
     ):
         self.n_factors = int(n_factors)
         self.t2_alpha = float(t2_alpha)
         self.q_alpha = float(q_alpha)
         self.gate_corr_threshold = float(gate_corr_threshold)
+        self.clip = float(clip)
         logic_norm = str(logic).strip().lower()
         if logic_norm not in ("or", "and"):
             raise ValueError(f"gate logic must be 'or' or 'and', got {logic!r}")
@@ -100,16 +104,21 @@ class EFAGate:
         sensor_cols = sensor_value_columns(X_train.columns)
         if not sensor_cols:
             raise ValueError("No sensor columns found for EFAGate")
+        self.sensor_cols_ = sensor_cols
 
         self.feature_pipe_ = build_gate_feature_pipeline(self.gate_corr_threshold)
         y_arr = np.asarray(y_train, dtype=int)
         X_sensors = X_train[sensor_cols]
         self.feature_pipe_.fit(X_sensors, y_arr)
 
-        X_gate = self._transform_gate_features(X_sensors)
+        post = self._post_cluster(X_sensors)
+        # Robust (median/IQR) scaling fit on all wafers; _scale_clip then clips the
+        # tails RobustScaler leaves intact so spikes can't dominate the Gaussian
+        # T2 / Q statistics (mirrors the sBFA BayesGate).
+        self.scaler_ = RobustScaler().fit(post)
+
         passing = y_arr == 0
-        ref_df = X_gate.loc[passing] if isinstance(X_gate, pd.DataFrame) else X_gate[passing]
-        ref = np.asarray(ref_df, dtype="float64")
+        ref = self._scale_clip(post)[passing]
         if ref.shape[0] == 0 or ref.shape[1] == 0:
             raise ValueError("EFAGate requires passing wafers and nonzero features")
 
@@ -120,19 +129,23 @@ class EFAGate:
         self.n_reference_ = int(ref.shape[0])
         self.n_features_ = int(ref.shape[1])
         self.n_factors_ = int(self.efa_.n_factors_)
-        self.feature_names_ = list(X_gate.columns) if isinstance(X_gate, pd.DataFrame) else []
         return self
 
-    def _transform_gate_features(self, X_sensors: pd.DataFrame) -> pd.DataFrame:
+    def _post_cluster(self, X_sensors: pd.DataFrame) -> np.ndarray:
+        """Raw sensors -> impute -> SmartCorrelatedSelection (post-cluster frame)."""
         out = self.feature_pipe_.transform(X_sensors)
         if not isinstance(out, pd.DataFrame):
             out = pd.DataFrame(out, index=X_sensors.index)
-        return out.astype("float64")
+        self.feature_names_ = list(out.columns)
+        return out.to_numpy(dtype="float64")
+
+    def _scale_clip(self, post: np.ndarray) -> np.ndarray:
+        """RobustScaler transform clipped to +/-self.clip so spikes can't dominate."""
+        return np.clip(self.scaler_.transform(post), -self.clip, self.clip)
 
     def _gate_matrix(self, X: pd.DataFrame) -> np.ndarray:
-        sensor_cols = sensor_value_columns(X.columns)
-        frame = self._transform_gate_features(X[sensor_cols])
-        return frame.to_numpy(dtype="float64")
+        post = self._post_cluster(X[self.sensor_cols_])
+        return self._scale_clip(post)
 
     def t2_q_scores(self, X: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
         return self.efa_.t2_q(self._gate_matrix(X))
@@ -190,12 +203,13 @@ class EFAGate:
     def config(self) -> dict:
         return {
             "logic": self.logic,
-            "feature_stage": "post_cluster_efa",
+            "feature_stage": "post_cluster_efa_scaled",
             "method": "regularized_efa_t2_q",
             "n_factors": getattr(self, "n_factors_", self.n_factors),
             "t2_alpha": self.t2_alpha,
             "q_alpha": self.q_alpha,
             "gate_corr_threshold": self.gate_corr_threshold,
+            "clip": self.clip,
             "t2_ucl": getattr(self, "t2_ucl_", None),
             "q_ucl": getattr(self, "q_ucl_", None),
             "n_features": getattr(self, "n_features_", None),

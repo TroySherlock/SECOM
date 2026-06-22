@@ -124,10 +124,10 @@ def holdout_df(payload: dict[str, Any], key: str = "holdout") -> pd.DataFrame:
 
 
 def holdout_comparison_df(payload: dict[str, Any]) -> pd.DataFrame:
-    """One row per model under its own track: that track's CV PR-AUC vs its holdout PR-AUC.
+    """Two rows per model (one per track): that track's CV PR-AUC vs holdout PR-AUC.
 
-    Interpolation models use stratified CV + random holdout; extrapolation models use
-    blocked time CV + temporal holdout. The two tracks have disjoint model ids.
+    The same unified grid runs on both tracks; interpolation rows use stratified CV +
+    random holdout, extrapolation rows use blocked time CV + temporal holdout.
     """
     cv_df = cv_leaderboard_df(payload)
     cv_blocked_df = cv_leaderboard_blocked_df(payload)
@@ -186,12 +186,86 @@ def holdout_conditional_df(
     return pd.DataFrame(rows)
 
 
-def risk_coverage_df(payload: dict[str, Any]) -> pd.DataFrame:
-    """Extrapolation gate risk-coverage sweep: one row per (pipeline, coverage)."""
-    rows = payload.get("risk_coverage") or []
+def risk_coverage_df(payload: dict[str, Any], key: str = "risk_coverage") -> pd.DataFrame:
+    """Gate risk-coverage sweep: one row per (pipeline, coverage) for a given key."""
+    rows = payload.get(key) or []
     if not rows:
         return pd.DataFrame()
     return pd.DataFrame(rows)
+
+
+# --- Gate reports (both gates x both tracks, persisted in `gate_reports`) ----
+# Dashboard track -> benchmark protocol key used inside `gate_reports`.
+_TRACK_TO_PROTOCOL = {"interpolation": "random", "extrapolation": "temporal"}
+# Metric radio label -> column stem in the gate/holdout rows.
+DELTA_METRIC_COLS = {"PR-AUC": "pr_auc", "ROC-AUC": "roc_auc"}
+
+
+def _gate_block(payload: dict[str, Any], track: str, gate: str) -> dict[str, Any]:
+    proto = _TRACK_TO_PROTOCOL.get(track, track)
+    reports = payload.get("gate_reports") or {}
+    return ((reports.get(proto) or {}).get(gate)) or {}
+
+
+def gate_conditional_df(payload: dict[str, Any], track: str, gate: str) -> pd.DataFrame:
+    """Conditional + coverage rows for one gate on one track (efa | bayes)."""
+    rows = _gate_block(payload, track, gate).get("conditional") or []
+    return pd.DataFrame(rows) if rows else pd.DataFrame()
+
+
+def gate_risk_coverage_df(payload: dict[str, Any], track: str, gate: str) -> pd.DataFrame:
+    """Risk-coverage sweep rows for one gate on one track."""
+    rows = _gate_block(payload, track, gate).get("risk_coverage") or []
+    return pd.DataFrame(rows) if rows else pd.DataFrame()
+
+
+def gate_config(payload: dict[str, Any], track: str, gate: str) -> dict[str, Any]:
+    """Fitted-gate config (control limits, factors, logic) for one gate/track."""
+    return dict(_gate_block(payload, track, gate).get("config") or {})
+
+
+def holdout_delta_df(payload: dict[str, Any], metric: str) -> pd.DataFrame:
+    """Per model: interpolation vs extrapolation holdout metric and their delta.
+
+    ``metric`` is a column stem (``pr_auc`` / ``roc_auc``). ``delta`` is
+    interpolation - extrapolation (positive = interpolation higher = drift cost).
+    """
+    interp = holdout_df(payload, "holdout_random")
+    extrap = holdout_df(payload, "holdout")
+    if interp.empty or extrap.empty or metric not in interp or metric not in extrap:
+        return pd.DataFrame()
+    i = interp[["pipeline", metric]].rename(columns={metric: "interpolation"})
+    e = extrap[["pipeline", metric]].rename(columns={metric: "extrapolation"})
+    out = i.merge(e, on="pipeline", how="inner")
+    out["delta"] = out["interpolation"] - out["extrapolation"]
+    return out
+
+
+def gate_lift_df(
+    payload: dict[str, Any], track: str, gate: str, metric: str
+) -> pd.DataFrame:
+    """Per model gate lift: conditional (kept wafers) minus global (no gate)."""
+    df = gate_conditional_df(payload, track, gate)
+    cond_col, glob_col = f"conditional_{metric}", f"global_{metric}"
+    if df.empty or cond_col not in df or glob_col not in df:
+        return pd.DataFrame()
+    out = df[["pipeline", cond_col, glob_col]].copy()
+    out["delta"] = out[cond_col] - out[glob_col]
+    return out.dropna(subset=["delta"])
+
+
+def gate_vs_gate_df(payload: dict[str, Any], track: str, metric: str) -> pd.DataFrame:
+    """Per model EFA-minus-Bayes conditional metric on one track."""
+    efa = gate_conditional_df(payload, track, "efa")
+    bayes = gate_conditional_df(payload, track, "bayes")
+    col = f"conditional_{metric}"
+    if efa.empty or bayes.empty or col not in efa or col not in bayes:
+        return pd.DataFrame()
+    e = efa[["pipeline", col]].rename(columns={col: "efa"})
+    b = bayes[["pipeline", col]].rename(columns={col: "bayes"})
+    out = e.merge(b, on="pipeline", how="inner")
+    out["delta"] = out["efa"] - out["bayes"]
+    return out.dropna(subset=["delta"])
 
 
 def process_gate_meta(payload: dict[str, Any]) -> dict[str, Any]:

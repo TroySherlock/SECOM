@@ -5,11 +5,39 @@ import streamlit as st
 
 from secom.dashboard import render_blue_note
 from secom.dashboard.charts import fig_hotelling_t2_intuition
+from secom.dashboard.data import DELTA_METRIC_COLS
 from secom.dashboard.model_views import (
     load_payload,
+    render_gate_lift,
     render_gate_section,
     render_risk_coverage,
 )
+
+
+def _render_gate_track(payload: dict, *, track: str) -> None:
+    """Both gates on one track: lift deltas, gate-vs-gate, both risk-coverage curves."""
+    metric = st.radio(
+        "Metric",
+        list(DELTA_METRIC_COLS),
+        horizontal=True,
+        key=f"gate_metric_{track}",
+    )
+    render_gate_lift(payload, track=track, metric=metric)
+
+    st.markdown("**Risk–coverage curves** — keep the least-suspicious fraction, then rescore")
+    st.caption(
+        "Coverage runs high→low left→right, so abstention increases to the right; coverage=1.0 is "
+        "the global metric. The dashed line marks each gate's actual operating coverage. This is "
+        "where the Hotelling-T²/EFA curve appears on both tracks, beside the sBFA→BGM curve."
+    )
+    left, right = st.columns(2)
+    with left:
+        render_risk_coverage(payload, track=track, gate="efa", metric=metric)
+    with right:
+        render_risk_coverage(payload, track=track, gate="bayes", metric=metric)
+
+    render_gate_section(payload, track=track, gate="efa")
+    render_gate_section(payload, track=track, gate="bayes")
 
 
 def main() -> None:
@@ -43,15 +71,17 @@ def main() -> None:
             key="p5_hotelling_intuition",
         )
 
+    st.caption(
+        "Both gates (EFA → T²+Q and sBFA → BGM+Q) are fit and scored on **both** protocols, so "
+        "you can compare each gate against no gate and against the other on the same track."
+    )
     tab_interp, tab_extrap = st.tabs(
-        ["Interpolation gate (EFA → T²+Q)", "Extrapolation gate (sBFA → BGM+Q)"]
+        ["Interpolation (random holdout)", "Extrapolation (temporal holdout)"]
     )
     with tab_interp:
-        render_gate_section(payload, blocked=False)
+        _render_gate_track(payload, track="interpolation")
     with tab_extrap:
-        cond_df = render_gate_section(payload, blocked=True)
-        if cond_df is not None:
-            render_risk_coverage(payload, cond_df)
+        _render_gate_track(payload, track="extrapolation")
 
     render_blue_note(
         "**Honest conclusion.** With only ~17-20 holdout fails, conditional metrics have wide "
