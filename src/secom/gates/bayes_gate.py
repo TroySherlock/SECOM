@@ -177,7 +177,13 @@ class BayesGate:
         X_sensors = X_train[sensor_cols]
         self.feature_pipe_.fit(X_sensors, y_arr)
 
-        post = self._post_cluster(X_sensors)
+        post_df = self.feature_pipe_.transform(X_sensors)
+        if isinstance(post_df, pd.DataFrame):
+            self.feature_names_ = [str(c) for c in post_df.columns]
+            post = post_df.to_numpy(dtype="float64")
+        else:
+            post = np.asarray(post_df, dtype="float64")
+            self.feature_names_ = [f"feature_{i}" for i in range(post.shape[1])]
         # Robust (median/IQR) scaling fit on all wafers; _scale_clip then clips the
         # tails RobustScaler leaves intact so spikes can't dominate the Gaussian
         # sBFA/BGM/SPE.
@@ -213,6 +219,11 @@ class BayesGate:
         self.ref_q_ = self._q_from_matrix(ref)
         self.density_lcl_ = float(np.quantile(self.ref_density_, self.density_alpha))
         self.q_ucl_ = float(np.quantile(self.ref_q_, 1.0 - self.q_alpha))
+
+        # Member-0 representative latent scores of the passing-train reference,
+        # for the sBFA factor-space / loadings drift visuals (the seed ensemble's
+        # axes are not rotation-aligned, so the visuals use a single fit).
+        self.ref_scores_ = self.members_[0][0].transform(ref)
 
         self.n_reference_ = int(ref.shape[0])
         self.n_features_ = int(ref.shape[1])
@@ -266,6 +277,45 @@ class BayesGate:
         )
         anomaly_q = np.array([float(np.mean(ref_q <= v)) for v in q], dtype="float64")
         return np.maximum(anomaly_density, anomaly_q)
+
+    def factor_scores(self, X: pd.DataFrame) -> np.ndarray:
+        """Member-0 sBFA latent factor scores (n, n_factors) for the geometry views."""
+        return self.members_[0][0].transform(self._gate_matrix(X))
+
+    def loadings(self) -> np.ndarray:
+        """Member-0 sparse loadings ``W_`` (n_features, n_factors)."""
+        return self.members_[0][0].W_
+
+    def bgm_params(self) -> dict[str, np.ndarray]:
+        """Member-0 BGM component means/covariances/weights (the learned envelope)."""
+        bgm = self.members_[0][1]
+        return {
+            "means": bgm.means_,
+            "covariances": bgm.covariances_,
+            "weights": bgm.weights_,
+        }
+
+    def diagnostics(self, X: pd.DataFrame) -> dict[str, np.ndarray]:
+        """Per-wafer control statistics + OOC flags for the gate-monitor charts.
+
+        One pass over the scaled/clipped gate matrix yields the BGM log-density,
+        the Q/SPE residual, and the density/Q/combined out-of-control masks at the
+        fitted control limits. Computed over all wafers (not just fails), so the
+        distributions are well-sampled even when fails are scarce.
+        """
+        std = self._gate_matrix(X)
+        density = self._density_from_matrix(std)
+        q = self._q_from_matrix(std)
+        density_ooc = np.asarray(density < self.density_lcl_, dtype=bool)
+        q_ooc = np.asarray(q > self.q_ucl_, dtype=bool)
+        ooc = density_ooc & q_ooc if self.logic == "and" else density_ooc | q_ooc
+        return {
+            "density": density,
+            "q": q,
+            "density_ooc": density_ooc,
+            "q_ooc": q_ooc,
+            "ooc": ooc,
+        }
 
     def flag_masks(self, X: pd.DataFrame) -> dict[str, np.ndarray]:
         density_ooc = np.asarray(self.density_scores(X) < self.density_lcl_, dtype=bool)

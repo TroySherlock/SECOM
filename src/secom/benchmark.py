@@ -628,14 +628,135 @@ def _fit_gate(gate_cls, X_train, y_train):
     return gate_cls().fit(X_train, y_train)
 
 
+def _bayes_gate_diagnostics(
+    bayes_gate: BayesGate,
+    y_test: pd.Series,
+    X_test: pd.DataFrame,
+    timestamps: pd.Series | None,
+    *,
+    include_sbfa: bool = False,
+) -> dict:
+    """Per-wafer BGM control statistics for the gate-monitor charts (Tier 1/2).
+
+    The reference distribution is the passing-train density/Q the gate stored at
+    fit; the holdout block carries per-wafer density/Q/flags (+ timestamps on the
+    temporal track) so the dashboard can plot the distribution shift and the
+    time-ordered MSPC control chart without refitting the gate. When
+    ``include_sbfa`` is set (temporal track only) an ``sbfa`` block freezes the
+    member-0 latent-factor scores, sparse loadings and BGM envelope for the
+    Tier-2 factor-space / root-cause visuals.
+    """
+    diag = bayes_gate.diagnostics(X_test)
+    holdout = {
+        "density": diag["density"],
+        "q": diag["q"],
+        "y_true": np.asarray(y_test).astype(int),
+        "density_ooc": diag["density_ooc"],
+        "q_ooc": diag["q_ooc"],
+        "ooc": diag["ooc"],
+    }
+    if timestamps is not None:
+        holdout["ts"] = [str(t) for t in pd.Series(timestamps).to_numpy()]
+    result = {
+        "reference": {
+            "density": bayes_gate.ref_density_,
+            "q": bayes_gate.ref_q_,
+        },
+        "holdout": holdout,
+        "limits": {
+            "density_lcl": float(bayes_gate.density_lcl_),
+            "q_ucl": float(bayes_gate.q_ucl_),
+        },
+    }
+    if include_sbfa:
+        bgm = bayes_gate.bgm_params()
+        result["sbfa"] = {
+            "loadings": bayes_gate.loadings(),
+            "feature_names": list(bayes_gate.feature_names_),
+            "bgm": {
+                "means": bgm["means"],
+                "covariances": bgm["covariances"],
+                "weights": bgm["weights"],
+            },
+            "reference_scores": bayes_gate.ref_scores_,
+            "holdout_scores": bayes_gate.factor_scores(X_test),
+            "y_true": np.asarray(y_test).astype(int),
+            "flagged": diag["ooc"],
+        }
+    return result
+
+
+def _efa_gate_diagnostics(
+    efa_gate: EFAGate,
+    y_test: pd.Series,
+    X_test: pd.DataFrame,
+    timestamps: pd.Series | None,
+    *,
+    include_factor: bool = False,
+) -> dict:
+    """Per-wafer Hotelling T2 / Q control statistics for the 5.2 gate-monitor charts.
+
+    Mirrors ``_bayes_gate_diagnostics``: reference is the passing-train T2/Q the
+    gate stored at fit; the holdout block carries per-wafer T2/Q/flags (+ temporal
+    timestamps). When ``include_factor`` is set (temporal track) a ``factor`` block
+    freezes the EFA factor scores, dense loadings and score-Gaussian for the
+    factor-space (Hotelling ellipse) and loadings root-cause visuals.
+    """
+    diag = efa_gate.diagnostics(X_test)
+    holdout = {
+        "t2": diag["t2"],
+        "q": diag["q"],
+        "y_true": np.asarray(y_test).astype(int),
+        "t2_ooc": diag["t2_ooc"],
+        "q_ooc": diag["q_ooc"],
+        "ooc": diag["ooc"],
+    }
+    if timestamps is not None:
+        holdout["ts"] = [str(t) for t in pd.Series(timestamps).to_numpy()]
+    result = {
+        "reference": {
+            "t2": efa_gate.efa_.t2_ref_,
+            "q": efa_gate.efa_.q_ref_,
+        },
+        "holdout": holdout,
+        "limits": {
+            "t2_ucl": float(efa_gate.t2_ucl_),
+            "q_ucl": float(efa_gate.q_ucl_),
+        },
+    }
+    if include_factor:
+        score_mean, score_cov = efa_gate.score_gaussian()
+        result["factor"] = {
+            "loadings": efa_gate.loadings(),
+            "feature_names": list(efa_gate.feature_names_),
+            "score_mean": score_mean,
+            "score_cov": score_cov,
+            "t2_alpha": float(efa_gate.t2_alpha),
+            "reference_scores": efa_gate.ref_scores_,
+            "holdout_scores": efa_gate.factor_scores(X_test),
+            "y_true": np.asarray(y_test).astype(int),
+            "flagged": diag["ooc"],
+        }
+    return result
+
+
 def _protocol_gate_reports(
     scores: dict[str, np.ndarray],
     y_test: pd.Series,
     X_test: pd.DataFrame,
     efa_gate: EFAGate,
     bayes_gate: BayesGate,
+    *,
+    timestamps: pd.Series | None = None,
+    include_sbfa: bool = False,
 ) -> dict:
-    """Conditional + risk-coverage for BOTH standalone gates on one protocol."""
+    """Conditional + risk-coverage for BOTH standalone gates on one protocol.
+
+    Both blocks also carry frozen per-wafer ``diagnostics`` (EFA T2/Q and BGM
+    drift monitors); ``timestamps`` (temporal track only) enables the control
+    charts and ``include_sbfa`` freezes the Tier-2 EFA/sBFA latent + loadings
+    artifacts.
+    """
     return {
         "efa": {
             "config": efa_gate.config(),
@@ -645,6 +766,9 @@ def _protocol_gate_reports(
             "risk_coverage": gate_risk_coverage(
                 scores, y_test, efa_gate, X_test
             ).to_dict(orient="records"),
+            "diagnostics": _efa_gate_diagnostics(
+                efa_gate, y_test, X_test, timestamps, include_factor=include_sbfa
+            ),
         },
         "bayes": {
             "config": bayes_gate.config(),
@@ -654,6 +778,9 @@ def _protocol_gate_reports(
             "risk_coverage": gate_risk_coverage(
                 scores, y_test, bayes_gate, X_test
             ).to_dict(orient="records"),
+            "diagnostics": _bayes_gate_diagnostics(
+                bayes_gate, y_test, X_test, timestamps, include_sbfa=include_sbfa
+            ),
         },
     }
 
@@ -810,7 +937,13 @@ def main(argv=None) -> None:
     efa_gate_temporal = _fit_gate(EFAGate, X_train, y_train)
     bayes_gate_temporal = _fit_gate(BayesGate, X_train, y_train)
     gate_temporal = _protocol_gate_reports(
-        scores_temporal, y_test, X_test, efa_gate_temporal, bayes_gate_temporal
+        scores_temporal,
+        y_test,
+        X_test,
+        efa_gate_temporal,
+        bayes_gate_temporal,
+        timestamps=test_df[TIMESTAMP_COL],
+        include_sbfa=True,
     )
     holdout_conditional = pd.DataFrame(gate_temporal["bayes"]["conditional"])
     risk_coverage = pd.DataFrame(gate_temporal["bayes"]["risk_coverage"])

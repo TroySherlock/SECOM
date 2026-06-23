@@ -213,6 +213,142 @@ def gate_config(payload: dict[str, Any], track: str, gate: str) -> dict[str, Any
     return dict(_gate_block(payload, track, gate).get("config") or {})
 
 
+def gate_diagnostics(
+    payload: dict[str, Any], track: str, gate: str = "bayes"
+) -> dict[str, Any]:
+    """Frozen per-wafer control statistics for the gate-monitor charts (Tier 1).
+
+    Returns the ``{reference, holdout, limits}`` block persisted by the benchmark
+    (BGM density/Q over reference + holdout wafers, control limits, and temporal
+    timestamps). Empty dict when absent (older benchmark JSON / EFA gate).
+    """
+    return dict(_gate_block(payload, track, gate).get("diagnostics") or {})
+
+
+def gate_drift_stats(
+    payload: dict[str, Any],
+    gate: str = "bayes",
+    track: str = "extrapolation",
+    stats: list[tuple[str, str]] | None = None,
+) -> pd.DataFrame:
+    """Honest in-control population drift scalars per control statistic.
+
+    For each statistic (``stats`` is a list of ``(holdout_key, label)``; defaults
+    to the BGM log-density + Q/SPE) computes the 2-sample Kolmogorov-Smirnov
+    distance (+ p-value) and a separability AUC between the passing-train
+    ``reference`` and the **passing** wafers of the holdout (fails removed via the
+    frozen ``y_true``). Restricting to passing wafers isolates sensor/process drift
+    from the yield mix; for the extrapolation track this is passing-early-train vs
+    passing-late-holdout. Computed over all passing wafers, so it is the
+    statistically solid drift evidence. Empty when diagnostics are absent.
+    """
+    import numpy as np
+    from scipy.stats import ks_2samp
+    from sklearn.metrics import roc_auc_score
+
+    if stats is None:
+        stats = [("density", "BGM log-density"), ("q", "Q / SPE")]
+    diag = gate_diagnostics(payload, track, gate)
+    ref = diag.get("reference") or {}
+    hold = diag.get("holdout") or {}
+    y_hold = np.asarray(hold.get("y_true", []), dtype=int)
+    rows = []
+    for key, label in stats:
+        a = np.asarray(ref.get(key, []), dtype=float)
+        b = np.asarray(hold.get(key, []), dtype=float)
+        # Restrict the holdout to passing wafers so the scalar measures in-control
+        # process drift, not the pass/fail mix.
+        if y_hold.size == b.size and y_hold.size:
+            b = b[y_hold == 0]
+        a = a[np.isfinite(a)]
+        b = b[np.isfinite(b)]
+        if a.size == 0 or b.size == 0:
+            continue
+        ks = ks_2samp(a, b)
+        labels = np.concatenate([np.zeros(a.size), np.ones(b.size)])
+        values = np.concatenate([a, b])
+        try:
+            auc = float(roc_auc_score(labels, values))
+        except ValueError:
+            auc = float("nan")
+        rows.append(
+            {
+                "statistic": label,
+                "ks_distance": float(ks.statistic),
+                "ks_pvalue": float(ks.pvalue),
+                # Directionless separability: 0.5 = no drift, 1.0 = fully separable.
+                "separability_auc": max(auc, 1.0 - auc),
+                "n_reference": int(a.size),
+                "n_holdout": int(b.size),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def sbfa_diagnostics(
+    payload: dict[str, Any], track: str = "extrapolation", gate: str = "bayes"
+) -> dict[str, Any]:
+    """Frozen member-0 sBFA artifacts (loadings, BGM envelope, factor scores).
+
+    Returns the ``sbfa`` sub-block of the gate diagnostics (Tier-2 latent-space /
+    root-cause visuals). Empty dict when absent (random track / older JSON).
+    """
+    return dict(gate_diagnostics(payload, track, gate).get("sbfa") or {})
+
+
+def efa_factor_diagnostics(
+    payload: dict[str, Any], track: str = "extrapolation"
+) -> dict[str, Any]:
+    """Frozen EFA factor artifacts (dense loadings, score Gaussian, factor scores).
+
+    Returns the ``factor`` sub-block of the EFA gate diagnostics (5.2 factor-space
+    / root-cause visuals). Empty dict when absent (random track / older JSON).
+    """
+    return dict(gate_diagnostics(payload, track, "efa").get("factor") or {})
+
+
+def factor_drift_ranking(sbfa: dict[str, Any]) -> pd.DataFrame:
+    """Rank sBFA factors by in-dist->holdout score drift, with heavy-loading sensors.
+
+    For each latent factor, the KS distance between the reference and holdout
+    score distributions; the heavy-loading sensors are the largest-|loading|
+    features for that factor. Sorted by drift descending. Empty when no sbfa.
+    """
+    import numpy as np
+    from scipy.stats import ks_2samp
+
+    ref = np.asarray(sbfa.get("reference_scores", []), dtype=float)
+    hold = np.asarray(sbfa.get("holdout_scores", []), dtype=float)
+    loadings = np.asarray(sbfa.get("loadings", []), dtype=float)
+    names = list(sbfa.get("feature_names", []))
+    if ref.ndim != 2 or hold.ndim != 2 or ref.shape[1] == 0:
+        return pd.DataFrame()
+
+    n_factors = ref.shape[1]
+    rows = []
+    for f in range(n_factors):
+        a = ref[:, f]
+        b = hold[:, f]
+        ks = ks_2samp(a[np.isfinite(a)], b[np.isfinite(b)])
+        top_sensors = ""
+        if loadings.ndim == 2 and f < loadings.shape[1] and names:
+            order = np.argsort(np.abs(loadings[:, f]))[::-1][:3]
+            top_sensors = ", ".join(
+                str(names[i]) for i in order if i < len(names)
+            )
+        rows.append(
+            {
+                "factor": f + 1,
+                "factor_idx": f,
+                "ks_distance": float(ks.statistic),
+                "ks_pvalue": float(ks.pvalue),
+                "mean_shift": float(np.nanmean(b) - np.nanmean(a)),
+                "top_sensors": top_sensors,
+            }
+        )
+    return pd.DataFrame(rows).sort_values("ks_distance", ascending=False).reset_index(drop=True)
+
+
 def holdout_delta_df(payload: dict[str, Any], metric: str) -> pd.DataFrame:
     """Per model: interpolation vs extrapolation holdout metric and their delta.
 

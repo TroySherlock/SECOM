@@ -530,7 +530,7 @@ BAYES_CALIB_CV = 2
 # diagnostic sweep (lambda=0 recovers the unweighted headline model). Decay is
 # no longer tuned; the benchmark sweeps these lambdas and scores the temporal
 # holdout so the effect of recency weighting can be read off directly.
-DECAY_LAMBDA_GRID = [0.0, 0.25, 0.5, 1.0, 2.0, 4.0]
+DECAY_LAMBDA_GRID = [0.0]
 
 # --- Standalone gates (risk-coverage tools, not pipeline steps) --------------
 # EFA gate: Regularized EFA -> Hotelling T2 + Q (SPE).
@@ -556,7 +556,7 @@ GATE_CORR_THRESHOLD = CORRELATED_SELECTION_THRESHOLD
 
 # Risk-coverage sweep: keep the least-suspicious fraction of holdout wafers at
 # each coverage and rescore (1.0 == global holdout metric).
-RISK_COVERAGE_GRID = [1.0, 0.99, 0.95, 0.9, 0.85, 0.8, 0.7, 0.6, 0.5]
+RISK_COVERAGE_GRID = [1.0, 0.99, 0.95, 0.9, 0.85, 0.8]
 
 
 # --- Estimator builders ------------------------------------------------------

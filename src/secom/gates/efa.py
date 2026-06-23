@@ -126,6 +126,10 @@ class EFAGate:
         self.t2_ucl_ = float(np.quantile(self.efa_.t2_ref_, 1.0 - self.t2_alpha))
         self.q_ucl_ = float(np.quantile(self.efa_.q_ref_, 1.0 - self.q_alpha))
 
+        # Reference factor scores for the EFA factor-space / loadings drift visuals
+        # (mirrors BayesGate.ref_scores_; frequentist single fit, no seed ensemble).
+        self.ref_scores_ = self.efa_.fa_.transform(ref)
+
         self.n_reference_ = int(ref.shape[0])
         self.n_features_ = int(ref.shape[1])
         self.n_factors_ = int(self.efa_.n_factors_)
@@ -155,6 +159,37 @@ class EFAGate:
 
     def q_scores(self, X: pd.DataFrame) -> np.ndarray:
         return self.t2_q_scores(X)[1]
+
+    def diagnostics(self, X: pd.DataFrame) -> dict[str, np.ndarray]:
+        """Per-wafer control statistics + OOC flags for the gate-monitor charts.
+
+        One pass yields Hotelling T2, Q/SPE, and the T2/Q/combined out-of-control
+        masks at the fitted upper control limits, over all wafers (mirrors
+        ``BayesGate.diagnostics`` for the 5.2 distribution-shift / control chart).
+        """
+        t2, q = self.t2_q_scores(X)
+        t2_ooc = np.asarray(t2 > self.t2_ucl_, dtype=bool)
+        q_ooc = np.asarray(q > self.q_ucl_, dtype=bool)
+        ooc = t2_ooc & q_ooc if self.logic == "and" else t2_ooc | q_ooc
+        return {
+            "t2": t2,
+            "q": q,
+            "t2_ooc": t2_ooc,
+            "q_ooc": q_ooc,
+            "ooc": ooc,
+        }
+
+    def factor_scores(self, X: pd.DataFrame) -> np.ndarray:
+        """EFA latent factor scores (n, n_factors) for the geometry views."""
+        return self.efa_.fa_.transform(self._gate_matrix(X))
+
+    def loadings(self) -> np.ndarray:
+        """Dense regularized EFA loadings ``Wᵀ`` (n_features, n_factors)."""
+        return self.efa_.fa_.components_.T
+
+    def score_gaussian(self) -> tuple[np.ndarray, np.ndarray]:
+        """Factor-score Gaussian (mean, covariance) for the Hotelling control ellipse."""
+        return self.efa_.score_mean_, np.linalg.inv(self.efa_.score_precision_)
 
     def flag_masks(self, X: pd.DataFrame) -> dict[str, np.ndarray]:
         t2, q = self.t2_q_scores(X)
