@@ -34,15 +34,13 @@ def main() -> None:
         f"reporting-only (`holdout_is_reporting_only={payload.get('holdout_is_reporting_only', True)}`)."
     )
 
-    tab_cv, tab_holdout, tab_model = st.tabs(
-        ["CV leaderboard (5×2)", "Holdout", "Deep-dive"]
-    )
-    with tab_cv:
+    render_holdout_validation(payload, track="interpolation")
+
+    with st.expander("Cross-validation leaderboard (5×2 stratified)", expanded=False):
         render_cv_leaderboard(payload)
-    with tab_holdout:
-        render_holdout_validation(payload, track="interpolation")
-    with tab_model:
-        render_model_deepdive(payload, track="interpolation")
+
+    st.divider()
+    render_model_deepdive(payload, track="interpolation")
 
 
 main()

@@ -80,6 +80,37 @@ def pr_curve_payload(
     }
 
 
+# --- Per-wafer score payload (BER sweep + calibration) -----------------------
+def scores_payload(
+    y_cv: pd.Series | None,
+    score_cv: np.ndarray | None,
+    y_ho: pd.Series,
+    score_ho: np.ndarray,
+) -> dict:
+    """JSON-serializable per-wafer ``(y_true, y_score)`` for the BER-threshold
+    sweep and the calibration diagram.
+
+    The ``cv`` block is the in-distribution CV out-of-fold scores (empty for the
+    temporal track, which has no CV); the ``holdout`` block is this track's
+    holdout. Storing raw scores lets the dashboard recompute BER across a
+    threshold grid and bin a reliability curve without a model refit.
+    """
+    if y_cv is None or score_cv is None or len(y_cv) == 0:
+        cv_block = {"y_true": [], "y_score": []}
+    else:
+        cv_block = {
+            "y_true": np.asarray(y_cv, dtype=int).tolist(),
+            "y_score": np.asarray(score_cv, dtype=float).tolist(),
+        }
+    return {
+        "cv": cv_block,
+        "holdout": {
+            "y_true": np.asarray(y_ho, dtype=int).tolist(),
+            "y_score": np.asarray(score_ho, dtype=float).tolist(),
+        },
+    }
+
+
 # --- Global feature importance ----------------------------------------------
 def scaled_matrix(pipeline, X: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
     """Transform to scaled feature space; return (matrix, feature_names)."""

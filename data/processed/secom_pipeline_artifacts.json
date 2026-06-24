@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-23T00:30:21.671445+00:00",
+  "generated_at": "2026-06-23T22:46:50.311442+00:00",
   "holdout_split": {
     "split_mode": "temporal",
     "test_size": 0.2,
@@ -20,30 +20,30 @@
     "cluster_config": {
       "library": "feature_engine",
       "method": "spearman",
-      "threshold": 0.9,
+      "threshold": 0.99,
       "selection_method": "corr_with_target"
     },
     "spearman_cluster_example": {
-      "representative": "c_147",
+      "representative": "c_205",
       "members": [
-        "c_147",
-        "c_282",
-        "c_420"
+        "c_205",
+        "c_341",
+        "c_477"
       ],
       "correlations": [
         [
           1.0,
-          0.9978751836651665,
-          0.9999368449261746
+          0.9611578221809867,
+          0.9974274937177778
         ],
         [
-          0.9978751836651665,
+          0.9611578221809867,
           1.0,
-          0.9979010359157046
+          0.9581458040607307
         ],
         [
-          0.9999368449261746,
-          0.9979010359157046,
+          0.9974274937177778,
+          0.9581458040607307,
           1.0
         ]
       ]
@@ -53,31 +53,25 @@
     "hsic_enet": {
       "family": "linear",
       "stages": {
-        "stg_sensors": 591,
+        "stg_sensors": 590,
         "mart_sensors": 422,
-        "dbt_dropped_sensors": 169,
+        "dbt_dropped_sensors": 168,
         "auxiliary_features": 35,
         "after_impute": 844,
-        "after_cluster": 706,
-        "drop_correlated": 126,
+        "after_cluster": 529,
+        "drop_correlated": 303,
         "after_selection": 30,
-        "after_hub_interactions": 41,
-        "after_preprocess": 76,
-        "classifier_input": 76
+        "after_hub_interactions": 31,
+        "after_preprocess": 66,
+        "classifier_input": 66
       },
       "rf_selection": null,
       "hub_interactions": {
         "top_k_requested": 30,
-        "n_hubs_requested": 5,
-        "n_hubs_selected": 5,
-        "n_interaction_features": 10,
-        "hub_sensors": [
-          "c_59",
-          "c_65",
-          "c_341_rz",
-          "c_510",
-          "c_573_rz"
-        ],
+        "n_hubs_requested": 0,
+        "n_hubs_selected": 0,
+        "n_interaction_features": 0,
+        "hub_sensors": [],
         "selected_features": [
           "c_59",
           "c_65",
@@ -91,33 +85,33 @@
           "c_333",
           "c_430",
           "c_38",
+          "c_520_rz",
           "c_64",
           "c_67_rz",
           "c_584",
           "c_120_rz",
           "c_301",
           "c_298",
-          "c_520_rz",
-          "c_341",
           "c_333_rz",
-          "c_386_rz",
-          "c_287",
           "c_367_rz",
           "c_0",
           "c_41",
           "c_63",
           "c_475_rz",
+          "c_152",
           "c_365_rz",
-          "c_61"
+          "c_61",
+          "c_33_rz",
+          "c_23_rz"
         ]
       }
     },
     "hsic_rf": {
       "family": "topk",
       "stages": {
-        "stg_sensors": 591,
+        "stg_sensors": 590,
         "mart_sensors": 422,
-        "dbt_dropped_sensors": 169,
+        "dbt_dropped_sensors": 168,
         "auxiliary_features": 35,
         "after_impute": 844,
         "after_cluster": 706,
@@ -202,9 +196,9 @@
     "hsic_bayes": {
       "family": "linear",
       "stages": {
-        "stg_sensors": 591,
+        "stg_sensors": 590,
         "mart_sensors": 422,
-        "dbt_dropped_sensors": 169,
+        "dbt_dropped_sensors": 168,
         "auxiliary_features": 35,
         "after_impute": 844,
         "after_cluster": 377,
@@ -269,305 +263,25 @@
     "rfsel_enet": {
       "family": "linear",
       "stages": {
-        "stg_sensors": 591,
+        "stg_sensors": 590,
         "mart_sensors": 422,
-        "dbt_dropped_sensors": 169,
-        "auxiliary_features": 35,
-        "after_impute": 844,
-        "after_cluster": 706,
-        "drop_correlated": 126,
-        "after_selection": 70,
-        "after_hub_interactions": 81,
-        "after_preprocess": 116,
-        "classifier_input": 116
-      },
-      "rf_selection": {
-        "top_k": 70,
-        "selected_count": 70,
-        "selected_features": [
-          "c_0",
-          "c_10",
-          "c_103",
-          "c_121",
-          "c_122",
-          "c_125",
-          "c_127",
-          "c_129",
-          "c_130",
-          "c_152",
-          "c_155",
-          "c_17",
-          "c_182",
-          "c_197",
-          "c_21",
-          "c_28",
-          "c_280",
-          "c_282",
-          "c_287",
-          "c_288",
-          "c_290",
-          "c_33",
-          "c_333",
-          "c_341",
-          "c_348",
-          "c_351",
-          "c_40",
-          "c_41",
-          "c_445",
-          "c_460",
-          "c_468",
-          "c_477",
-          "c_510",
-          "c_571",
-          "c_58",
-          "c_59",
-          "c_64",
-          "c_65",
-          "c_78",
-          "c_79",
-          "c_90",
-          "c_0_rz",
-          "c_130_rz",
-          "c_133_rz",
-          "c_145_rz",
-          "c_152_rz",
-          "c_153_rz",
-          "c_200_rz",
-          "c_25_rz",
-          "c_269_rz",
-          "c_307_rz",
-          "c_32_rz",
-          "c_33_rz",
-          "c_333_rz",
-          "c_336_rz",
-          "c_339_rz",
-          "c_341_rz",
-          "c_343_rz",
-          "c_37_rz",
-          "c_391_rz",
-          "c_443_rz",
-          "c_477_rz",
-          "c_485_rz",
-          "c_486_rz",
-          "c_573_rz",
-          "c_575_rz",
-          "c_576_rz",
-          "c_59_rz",
-          "c_76_rz",
-          "c_90_rz"
-        ],
-        "importances": [
-          {
-            "feature": "c_59",
-            "importance": 0.02913588754201867
-          },
-          {
-            "feature": "c_64",
-            "importance": 0.009754691873017817
-          },
-          {
-            "feature": "c_33",
-            "importance": 0.009482399340471778
-          },
-          {
-            "feature": "c_59_rz",
-            "importance": 0.009432472156819558
-          },
-          {
-            "feature": "c_65",
-            "importance": 0.008991587075997684
-          },
-          {
-            "feature": "c_460",
-            "importance": 0.008595353046216237
-          },
-          {
-            "feature": "c_133_rz",
-            "importance": 0.008488696789811893
-          },
-          {
-            "feature": "c_103",
-            "importance": 0.008484960721954609
-          },
-          {
-            "feature": "c_477",
-            "importance": 0.00805118092177913
-          },
-          {
-            "feature": "c_290",
-            "importance": 0.007933915245683487
-          },
-          {
-            "feature": "c_129",
-            "importance": 0.007641363957015707
-          },
-          {
-            "feature": "c_510",
-            "importance": 0.007121373299492488
-          },
-          {
-            "feature": "c_341",
-            "importance": 0.006545252549800563
-          },
-          {
-            "feature": "c_130",
-            "importance": 0.006315069947471798
-          },
-          {
-            "feature": "c_348",
-            "importance": 0.005870698340117888
-          },
-          {
-            "feature": "c_152",
-            "importance": 0.00580086809093776
-          },
-          {
-            "feature": "c_37_rz",
-            "importance": 0.005554140541846186
-          },
-          {
-            "feature": "c_573_rz",
-            "importance": 0.00544905228849918
-          },
-          {
-            "feature": "c_468",
-            "importance": 0.005448972328419581
-          },
-          {
-            "feature": "c_287",
-            "importance": 0.005213206258663526
-          },
-          {
-            "feature": "c_155",
-            "importance": 0.0049350312902552585
-          },
-          {
-            "feature": "c_477_rz",
-            "importance": 0.004923771610234578
-          },
-          {
-            "feature": "c_79",
-            "importance": 0.004739274675051308
-          },
-          {
-            "feature": "c_28",
-            "importance": 0.004659543691107858
-          },
-          {
-            "feature": "c_33_rz",
-            "importance": 0.0045381946380146955
-          },
-          {
-            "feature": "c_282",
-            "importance": 0.004524810410907035
-          },
-          {
-            "feature": "c_21",
-            "importance": 0.004522688238831691
-          },
-          {
-            "feature": "c_0",
-            "importance": 0.004500538758590019
-          },
-          {
-            "feature": "c_445",
-            "importance": 0.004208681428454052
-          },
-          {
-            "feature": "c_90_rz",
-            "importance": 0.004191092318402511
-          }
-        ]
-      },
-      "hub_interactions": {
-        "top_k_requested": 70,
-        "n_hubs_requested": 5,
-        "n_hubs_selected": 5,
-        "n_interaction_features": 10,
-        "hub_sensors": [
-          "c_59",
-          "c_64",
-          "c_33",
-          "c_59_rz",
-          "c_65"
-        ],
-        "interaction_pairs": [
-          {
-            "a": "c_59",
-            "b": "c_64",
-            "column": "interact_c_59__c_64"
-          },
-          {
-            "a": "c_59",
-            "b": "c_33",
-            "column": "interact_c_59__c_33"
-          },
-          {
-            "a": "c_59",
-            "b": "c_59_rz",
-            "column": "interact_c_59__c_59_rz"
-          },
-          {
-            "a": "c_59",
-            "b": "c_65",
-            "column": "interact_c_59__c_65"
-          },
-          {
-            "a": "c_64",
-            "b": "c_33",
-            "column": "interact_c_64__c_33"
-          },
-          {
-            "a": "c_64",
-            "b": "c_59_rz",
-            "column": "interact_c_64__c_59_rz"
-          },
-          {
-            "a": "c_64",
-            "b": "c_65",
-            "column": "interact_c_64__c_65"
-          },
-          {
-            "a": "c_33",
-            "b": "c_59_rz",
-            "column": "interact_c_33__c_59_rz"
-          },
-          {
-            "a": "c_33",
-            "b": "c_65",
-            "column": "interact_c_33__c_65"
-          },
-          {
-            "a": "c_59_rz",
-            "b": "c_65",
-            "column": "interact_c_59_rz__c_65"
-          }
-        ]
-      }
-    },
-    "rfsel_rf": {
-      "family": "topk",
-      "stages": {
-        "stg_sensors": 591,
-        "mart_sensors": 422,
-        "dbt_dropped_sensors": 169,
+        "dbt_dropped_sensors": 168,
         "auxiliary_features": 35,
         "after_impute": 844,
         "after_cluster": 529,
         "drop_correlated": 303,
-        "after_selection": 70,
-        "after_hub_interactions": 81,
-        "after_preprocess": 116,
-        "classifier_input": 116
+        "after_selection": 50,
+        "after_hub_interactions": 51,
+        "after_preprocess": 86,
+        "classifier_input": 86
       },
       "rf_selection": {
-        "top_k": 70,
-        "selected_count": 70,
+        "top_k": 50,
+        "selected_count": 50,
         "selected_features": [
           "c_0",
           "c_10",
           "c_103",
-          "c_11",
           "c_121",
           "c_122",
           "c_125",
@@ -575,46 +289,31 @@
           "c_129",
           "c_130",
           "c_152",
-          "c_19",
           "c_21",
-          "c_210",
           "c_28",
           "c_282",
           "c_288",
           "c_290",
-          "c_31",
           "c_33",
           "c_333",
           "c_348",
-          "c_351",
           "c_377",
-          "c_390",
-          "c_44",
           "c_445",
           "c_460",
           "c_468",
           "c_477",
-          "c_491",
           "c_510",
-          "c_55",
           "c_58",
           "c_59",
-          "c_63",
           "c_64",
           "c_65",
-          "c_78",
           "c_79",
           "c_115_rz",
           "c_130_rz",
           "c_133_rz",
           "c_152_rz",
           "c_153_rz",
-          "c_200_rz",
-          "c_25_rz",
           "c_27_rz",
-          "c_280_rz",
-          "c_307_rz",
-          "c_32_rz",
           "c_33_rz",
           "c_333_rz",
           "c_336_rz",
@@ -625,14 +324,10 @@
           "c_407_rz",
           "c_475_rz",
           "c_477_rz",
-          "c_479_rz",
           "c_486_rz",
-          "c_487_rz",
-          "c_525_rz",
           "c_573_rz",
           "c_575_rz",
           "c_59_rz",
-          "c_76_rz",
           "c_90_rz"
         ],
         "importances": [
@@ -759,77 +454,222 @@
         ]
       },
       "hub_interactions": {
-        "top_k_requested": 70,
-        "n_hubs_requested": 5,
-        "n_hubs_selected": 5,
-        "n_interaction_features": 10,
-        "hub_sensors": [
-          "c_59",
-          "c_59_rz",
+        "top_k_requested": 50,
+        "n_hubs_requested": 0,
+        "n_hubs_selected": 0,
+        "n_interaction_features": 0,
+        "hub_sensors": [],
+        "interaction_pairs": []
+      }
+    },
+    "rfsel_rf": {
+      "family": "topk",
+      "stages": {
+        "stg_sensors": 590,
+        "mart_sensors": 422,
+        "dbt_dropped_sensors": 168,
+        "auxiliary_features": 35,
+        "after_impute": 844,
+        "after_cluster": 377,
+        "drop_correlated": 455,
+        "after_selection": 50,
+        "after_hub_interactions": 51,
+        "after_preprocess": 86,
+        "classifier_input": 86
+      },
+      "rf_selection": {
+        "top_k": 50,
+        "selected_count": 50,
+        "selected_features": [
+          "c_0",
+          "c_10",
+          "c_102",
+          "c_103",
+          "c_125",
+          "c_129",
+          "c_130",
+          "c_152",
+          "c_21",
+          "c_28",
+          "c_280",
+          "c_282",
+          "c_288",
+          "c_290",
+          "c_31",
           "c_33",
+          "c_333",
+          "c_348",
+          "c_35",
+          "c_351",
+          "c_445",
+          "c_460",
+          "c_468",
+          "c_477",
+          "c_510",
+          "c_571",
+          "c_58",
+          "c_59",
+          "c_63",
           "c_65",
-          "c_103"
+          "c_79",
+          "c_115_rz",
+          "c_133_rz",
+          "c_152_rz",
+          "c_153_rz",
+          "c_197_rz",
+          "c_200_rz",
+          "c_282_rz",
+          "c_33_rz",
+          "c_333_rz",
+          "c_336_rz",
+          "c_37_rz",
+          "c_407_rz",
+          "c_475_rz",
+          "c_477_rz",
+          "c_486_rz",
+          "c_575_rz",
+          "c_59_rz",
+          "c_76_rz",
+          "c_90_rz"
         ],
-        "interaction_pairs": [
+        "importances": [
           {
-            "a": "c_59",
-            "b": "c_59_rz",
-            "column": "interact_c_59__c_59_rz"
+            "feature": "c_59",
+            "importance": 0.04484458328588195
           },
           {
-            "a": "c_59",
-            "b": "c_33",
-            "column": "interact_c_59__c_33"
+            "feature": "c_59_rz",
+            "importance": 0.013842713569600379
           },
           {
-            "a": "c_59",
-            "b": "c_65",
-            "column": "interact_c_59__c_65"
+            "feature": "c_103",
+            "importance": 0.012654382530892362
           },
           {
-            "a": "c_59",
-            "b": "c_103",
-            "column": "interact_c_59__c_103"
+            "feature": "c_33",
+            "importance": 0.012318994149940416
           },
           {
-            "a": "c_59_rz",
-            "b": "c_33",
-            "column": "interact_c_59_rz__c_33"
+            "feature": "c_65",
+            "importance": 0.011684199540548333
           },
           {
-            "a": "c_59_rz",
-            "b": "c_65",
-            "column": "interact_c_59_rz__c_65"
+            "feature": "c_477",
+            "importance": 0.011598096244913638
           },
           {
-            "a": "c_59_rz",
-            "b": "c_103",
-            "column": "interact_c_59_rz__c_103"
+            "feature": "c_129",
+            "importance": 0.010461465252855828
           },
           {
-            "a": "c_33",
-            "b": "c_65",
-            "column": "interact_c_33__c_65"
+            "feature": "c_133_rz",
+            "importance": 0.010015260717999174
           },
           {
-            "a": "c_33",
-            "b": "c_103",
-            "column": "interact_c_33__c_103"
+            "feature": "c_460",
+            "importance": 0.009778453229273407
           },
           {
-            "a": "c_65",
-            "b": "c_103",
-            "column": "interact_c_65__c_103"
+            "feature": "c_290",
+            "importance": 0.009510397292106404
+          },
+          {
+            "feature": "c_33_rz",
+            "importance": 0.009028156129109243
+          },
+          {
+            "feature": "c_152",
+            "importance": 0.00867391583237532
+          },
+          {
+            "feature": "c_130",
+            "importance": 0.008511261292235074
+          },
+          {
+            "feature": "c_37_rz",
+            "importance": 0.008145374280672028
+          },
+          {
+            "feature": "c_445",
+            "importance": 0.007680412725856006
+          },
+          {
+            "feature": "c_21",
+            "importance": 0.007554153643323078
+          },
+          {
+            "feature": "c_510",
+            "importance": 0.007512477598896386
+          },
+          {
+            "feature": "c_90_rz",
+            "importance": 0.007511705330108516
+          },
+          {
+            "feature": "c_468",
+            "importance": 0.007409433850667489
+          },
+          {
+            "feature": "c_575_rz",
+            "importance": 0.007307873414003749
+          },
+          {
+            "feature": "c_0",
+            "importance": 0.007014685731927676
+          },
+          {
+            "feature": "c_28",
+            "importance": 0.006860801767513589
+          },
+          {
+            "feature": "c_282",
+            "importance": 0.006853209548170621
+          },
+          {
+            "feature": "c_288",
+            "importance": 0.0066705582765258006
+          },
+          {
+            "feature": "c_333",
+            "importance": 0.006393034382073668
+          },
+          {
+            "feature": "c_79",
+            "importance": 0.005716375040776707
+          },
+          {
+            "feature": "c_477_rz",
+            "importance": 0.005689909802038793
+          },
+          {
+            "feature": "c_280",
+            "importance": 0.005673433422181561
+          },
+          {
+            "feature": "c_351",
+            "importance": 0.005519403146858868
+          },
+          {
+            "feature": "c_348",
+            "importance": 0.0054660040693927745
           }
         ]
+      },
+      "hub_interactions": {
+        "top_k_requested": 50,
+        "n_hubs_requested": 0,
+        "n_hubs_selected": 0,
+        "n_interaction_features": 0,
+        "hub_sensors": [],
+        "interaction_pairs": []
       }
     },
     "rfsel_bayes": {
       "family": "linear",
       "stages": {
-        "stg_sensors": 591,
+        "stg_sensors": 590,
         "mart_sensors": 422,
-        "dbt_dropped_sensors": 169,
+        "dbt_dropped_sensors": 168,
         "auxiliary_features": 35,
         "after_impute": 844,
         "after_cluster": 377,
@@ -1071,9 +911,9 @@
     "pls_enet": {
       "family": "linear",
       "stages": {
-        "stg_sensors": 591,
+        "stg_sensors": 590,
         "mart_sensors": 422,
-        "dbt_dropped_sensors": 169,
+        "dbt_dropped_sensors": 168,
         "auxiliary_features": 35,
         "after_impute": 844,
         "after_cluster": 706,
@@ -1087,9 +927,9 @@
     "pls_rf": {
       "family": "topk",
       "stages": {
-        "stg_sensors": 591,
+        "stg_sensors": 590,
         "mart_sensors": 422,
-        "dbt_dropped_sensors": 169,
+        "dbt_dropped_sensors": 168,
         "auxiliary_features": 35,
         "after_impute": 844,
         "after_cluster": 529,
@@ -1103,9 +943,9 @@
     "pls_bayes": {
       "family": "linear",
       "stages": {
-        "stg_sensors": 591,
+        "stg_sensors": 590,
         "mart_sensors": 422,
-        "dbt_dropped_sensors": 169,
+        "dbt_dropped_sensors": 168,
         "auxiliary_features": 35,
         "after_impute": 844,
         "after_cluster": 377,

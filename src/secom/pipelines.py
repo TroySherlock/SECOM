@@ -46,7 +46,6 @@ from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     balanced_accuracy_score,
-    fbeta_score,
     make_scorer,
     recall_score,
 )
@@ -84,7 +83,7 @@ NARRATIVES_PATH = OUTPUT_DIR / "extrap_wafer_narratives.json"
 TARGET_COL = "target"
 TIMESTAMP_COL = "measurement_ts"
 ID_COL = "observation_id"
-N_SENSORS = 591
+N_SENSORS = 590
 
 RANDOM_SEED = 42
 TEST_SIZE = 0.20
@@ -106,7 +105,7 @@ RF_N_ESTIMATORS = 1000
 RF_MAX_DEPTH = 5
 RF_MIN_SAMPLES_LEAF = 10
 
-CORRELATED_SELECTION_THRESHOLD = 0.9
+CORRELATED_SELECTION_THRESHOLD = 0.99
 CORRELATED_SELECTION_THRESHOLD_GRID = [0.9, 0.95, 0.99]
 CORRELATED_SELECTION_METHOD = "spearman"
 CORRELATED_SELECTION_CRITERION = "corr_with_target"
@@ -422,43 +421,51 @@ def threshold_profile_sweep(
     *,
     grid: np.ndarray = THRESHOLD_GRID,
 ) -> dict[str, dict]:
-    """Sweep ``grid`` to pick a best threshold per profile from scores alone.
+    """Sweep ``grid`` to pick the BER-band thresholds from scores alone.
 
-    Returns ``{profile_id: {"best_threshold", "best_score", "objective"}}`` in
-    the shape ``secom.costs.resolve_threshold_profiles`` consumes. Pure in
-    ``(y_true, probs)`` so the sklearn and Bayesian harnesses share it.
+    Returns ``{profile_id: {"best_threshold", "best_score", "objective"}}`` for
+    the conservative / ber / aggressive band, in the shape
+    ``secom.costs.resolve_threshold_profiles`` consumes. ``ber`` is the
+    BER-minimising threshold; conservative / aggressive are the high / low ends
+    of the band within ``BER_BAND_TOLERANCE`` absolute BER points of that
+    minimum. Pure in ``(y_true, probs)`` so the sklearn and Bayesian harnesses
+    share it.
     """
-    from secom.costs import THRESHOLD_PROFILES
+    from secom.costs import BER_BAND_TOLERANCE
 
     y = np.asarray(y_true, dtype=int)
     p = np.asarray(probs, dtype=float)
     grid = np.asarray(grid, dtype=float)
-    out: dict[str, dict] = {}
-    for pid, profile in THRESHOLD_PROFILES.items():
-        best_thr = 0.5
-        if profile.objective == "ber":
-            best_score = np.inf
-            for thr in grid:
-                preds = (p >= thr).astype(int)
-                # balanced error rate = 1 - balanced accuracy
-                ber = 1.0 - balanced_accuracy_score(y, preds)
-                if ber < best_score:
-                    best_score, best_thr = ber, float(thr)
-        else:
-            best_score = -np.inf
-            for thr in grid:
-                preds = (p >= thr).astype(int)
-                score = fbeta_score(
-                    y, preds, beta=float(profile.beta), zero_division=0
-                )
-                if score > best_score:
-                    best_score, best_thr = float(score), float(thr)
-        out[str(pid)] = {
-            "best_threshold": float(best_thr),
-            "best_score": float(best_score),
-            "objective": profile.objective,
+
+    ber_by_thr: dict[float, float] = {}
+    eligible: dict[float, float] = {}
+    for thr in grid:
+        preds = (p >= thr).astype(int)
+        # balanced error rate (%) = 100 * (1 - balanced accuracy)
+        ber = 100.0 * (1.0 - balanced_accuracy_score(y, preds))
+        ber_by_thr[float(thr)] = ber
+        if preds.sum() > 0:  # TPR can be > 0 only when some positives predicted
+            eligible[float(thr)] = ber
+
+    pool = eligible if eligible else ber_by_thr
+    ber_min_thr = min(pool, key=pool.get)
+    ber_min = pool[ber_min_thr]
+    band = [thr for thr, ber in pool.items() if ber <= ber_min + BER_BAND_TOLERANCE]
+    if not band:
+        band = [ber_min_thr]
+    best_thresholds = {
+        "conservative": float(max(band)),
+        "ber": float(ber_min_thr),
+        "aggressive": float(min(band)),
+    }
+    return {
+        pid: {
+            "best_threshold": thr,
+            "best_score": float(ber_by_thr[thr]),
+            "objective": "ber",
         }
-    return out
+        for pid, thr in best_thresholds.items()
+    }
 
 
 # --- Model grid: 3 front-ends x 3 classifiers, both protocols ----------------
@@ -501,23 +508,23 @@ REFERENCE_MODELS = {"linear": "rfsel_enet", "topk": "rfsel_rf"}
 # Selection front-ends (HSIC / RF) screen K sensors then expand the top n_hubs
 # into pairwise interaction features; sPLS aggregates into K latent components.
 TOP_K_DEFAULT = 35
-TOP_K_GRID = [30, 35, 50, 70]
+TOP_K_GRID = [30, 35, 50]
 N_HUBS_DEFAULT = 5
-N_HUBS_GRID = [5, 10]
+N_HUBS_GRID = [0, 5, 10]
 PLS_N_COMPONENTS_DEFAULT = 25 
-PLS_N_COMPONENTS_GRID = [25, 35, 50]
+PLS_N_COMPONENTS_GRID = [25, 30, 35]
 
 # --- Classifier head grids ---------------------------------------------------
 # Elastic-net LR (saga) slope prior.
 C_GRID = [0.0075, 0.01, 0.1]
 L1_RATIO_GRID = [0.3, 0.5]
 # RF classifier depth.
-RF_MAX_DEPTH_GRID = [3, 5]
+RF_MAX_DEPTH_GRID = [3, 5, 8]
 
 # Bayesian elastic-net head: kept deliberately tiny (each grid point is a full
 # ADVI fit x calibration folds x CV folds x 2 protocols).
-BAYES_C_GRID = [0.0075]
-BAYES_L1_RATIO_GRID = [0.3]
+BAYES_C_GRID = [0.0075, 0.01, 0.1]
+BAYES_L1_RATIO_GRID = [0.3, 0.5]
 BAYES_POS_WEIGHT_GRID = [15.0]
 BAYES_TOP_K = 35
 BAYES_N_HUBS = 5
@@ -684,7 +691,7 @@ def pipelines_frozen_config_fragment() -> dict:
 # --- Frozen config aggregator ------------------------------------------------
 def frozen_config() -> dict:
     """Reproducibility snapshot of the full pipeline configuration."""
-    from secom.costs import threshold_profile_config
+    from secom.costs import PROFILE_IDS, threshold_profile_config
 
     config = {
         "random_seed": RANDOM_SEED,
@@ -697,7 +704,7 @@ def frozen_config() -> dict:
         "knn_impute_neighbors": int(KNN_IMPUTE_NEIGHBORS),
         "tuning_protocol": "sequential_pr_auc_hyperparams_multi_threshold",
         "primary_tuning_metric": PRIMARY_TUNING_METRIC,
-        "threshold_tuning_profiles": ["f0_5", "f2", "f4", "ber"],
+        "threshold_tuning_profiles": list(PROFILE_IDS),
         "threshold_grid": [float(t) for t in THRESHOLD_GRID],
         "classifier_calibration_method": str(CLASSIFIER_CALIBRATION_METHOD),
         "classifier_calibration_cv": int(CLASSIFIER_CALIBRATION_CV),

@@ -12,12 +12,14 @@ from secom.dashboard.charts import (
     fig_sensor_drift_heatmap,
     fig_sensor_histogram,
     fig_sensor_multicollinearity,
+    fig_two_track_schematic,
 )
 from secom.dashboard.pipeline import render_pipeline_flowchart
 from secom.dashboard.stg import (
     STG_RELATION,
     StgSnapshot,
     build_stg_snapshot,
+    era_drift_summary,
     slice_stg_for_display,
     stg_available,
 )
@@ -32,15 +34,17 @@ def load_stg_snapshot() -> StgSnapshot:
     return build_stg_snapshot()
 
 
-def _stg_data_dictionary_md() -> str:
+def _stg_data_dictionary_md(stats: dict) -> str:
+    n_obs = stats.get("n_obs", 0)
+    n_sensors = stats.get("n_sensors", 0)
     return f"""
 | Field | Role |
 |-------|------|
 | `{TIMESTAMP_COL}` | Parsed measurement time |
 | `{TARGET_COL}` | **0 = pass**, **1 = fail** |
-| `c_0` … `c_590` | 591 sensor readings; `NaN` = missing |
+| `c_*` | {n_sensors:,} sensor readings; `NaN` = missing |
 
-**1,567 rows × 591 sensors.** Missingness clusters by sensor and time window.
+**{n_obs:,} rows × {n_sensors:,} sensors.** Missingness clusters by sensor and time window.
 """
 
 
@@ -74,13 +78,42 @@ def main() -> None:
     df = snapshot.df
     sensor_cols = snapshot.sensor_cols
     stats = snapshot.stats
-    pass_rate = 100 * (1 - stats["fail_rate"])
+    fail_pct = 100 * stats["fail_rate"]
 
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Total wafers processed", f"{stats['n_obs']:,}", border=True)
-    k2.metric("Detected failures", f"{stats['n_fail']:,}", border=True)
-    k3.metric("Baseline sensors", f"{stats['n_sensors']:,}", border=True)
-    k4.metric("Yield pass rate", f"{pass_rate:.1f}%", border=True)
+    k1, k2, k3, k4, k5 = st.columns(5)
+    k1.metric("Wafers", f"{stats['n_obs']:,}", border=True)
+    k2.metric("Fails", f"{stats['n_fail']:,}", border=True)
+    k3.metric("Fail prevalence", f"{fail_pct:.1f}%", border=True)
+    k4.metric("Sensor channels", f"{stats['n_sensors']:,}", border=True)
+    k5.metric("Campaign window", stats["date_range"], border=True)
+    st.caption(
+        f"Positive class = **fail** (engineering convention); fails are the rare class at "
+        f"{fail_pct:.1f}% prevalence. These are labelled outcomes of a curated benchmark set "
+        f"(class balance), not a fab line-yield figure. The cleaned `stg_secom` view exposes "
+        f"{stats['n_sensors']:,} sensor channels (the classic SECOM feature count); the dbt "
+        "feature funnel on the Pipeline page counts 591 raw staged columns before cleaning."
+    )
+
+    st.divider()
+    st.subheader("Two evaluation tracks")
+    render_blue_note(
+        "Every model is scored two ways. **Interpolation** uses a random train/test split "
+        "(can the model fit the process as sampled?). **Extrapolation** uses a temporal forward "
+        "holdout — train on the earliest 80% by time, test on the latest 20% — which is the "
+        "realistic deployment question: does a model fit on the past still hold up on a later, "
+        "drifted regime? Pages 3 and 4 report these two tracks."
+    )
+    st.plotly_chart(
+        fig_two_track_schematic(
+            df,
+            timestamp_col=TIMESTAMP_COL,
+            target_col=TARGET_COL,
+            test_size=TEST_SIZE,
+        ),
+        width="stretch",
+        theme="streamlit",
+        key="p1_two_track",
+    )
 
     st.divider()
     st.subheader("Project pipeline")
@@ -89,47 +122,79 @@ def main() -> None:
 
     st.divider()
 
-    tab_drift, tab_sensor, tab_data = st.tabs(
+    tab_balance, tab_drift, tab_quality, tab_sensor, tab_data = st.tabs(
         [
-            "Factory drift",
+            "Class balance & time",
+            "Drift",
+            "Data quality",
             "Sensor explorer",
             "Staged data inventory",
         ]
     )
 
-    with tab_drift:
-        st.subheader("Multivariate process signals")
+    with tab_balance:
+        st.subheader("Rare fails across the campaign")
         show_weekly = st.checkbox("Show weekly fail rate overlay", value=False, key="p1_weekly")
-        drift_left, drift_right = st.columns(2, gap="large")
-        with drift_left:
+        balance_left, balance_right = st.columns(2, gap="large")
+        with balance_left:
             st.plotly_chart(
                 fig_fails_over_time(
                     df,
                     timestamp_col=TIMESTAMP_COL,
                     target_col=TARGET_COL,
                     show_weekly=show_weekly,
+                    prevalence=stats["fail_rate"],
                 ),
                 width="stretch",
                 theme="streamlit",
                 key="p1_fails_time",
             )
-        with drift_right:
+        with balance_right:
             st.plotly_chart(
                 fig_class_donut(df, TARGET_COL),
                 width="stretch",
                 theme="streamlit",
                 key="p1_class_donut",
             )
+        st.caption(
+            f"Fails are the rare positive class at {100 * stats['fail_rate']:.1f}% prevalence — "
+            "this is the no-skill baseline the precision–recall curves on pages 3 and 4 are scored "
+            "against (enable the weekly overlay to see it as a dotted line)."
+        )
 
-        st.markdown("---")
+    with tab_drift:
         st.subheader("Sensor drift — what extrapolation works against")
+        drift = era_drift_summary(
+            df,
+            timestamp_col=TIMESTAMP_COL,
+            sensor_cols=sensor_cols,
+            test_size=TEST_SIZE,
+        )
+        d1, d2, d3 = st.columns(3)
+        d1.metric(
+            f"Sensors drifting >{drift['z_threshold']:.0f}σ",
+            f"{drift['pct_drifted']:.0f}%",
+            border=True,
+        )
+        d2.metric(
+            "Drifting / evaluated",
+            f"{drift['n_drifted']:,} / {drift['n_evaluated']:,}",
+            border=True,
+        )
+        d3.metric(
+            "Median |shift| (holdout)",
+            f"{drift['median_abs_shift']:.2f}σ",
+            border=True,
+        )
         render_blue_note(
             "Each row is one of the most drift-prone sensors; each column is a time window. "
             "Colour is the sensor's mean **standardized against the training era** (first 80% by "
             "time), so blue/red cells show how far later wafers drift from what the models were "
             "fit on. The dashed line marks the temporal holdout (latest 20%): the extrapolation "
             "track must predict on this drifted regime, which is why selection-based models that "
-            "lock onto era-specific sensors degrade there while aggregation (sPLS) holds up."
+            "lock onto era-specific sensors degrade there while aggregation (sPLS) holds up. The "
+            "scalars above quantify the heatmap: the share of sensors whose holdout-era mean lands "
+            f"beyond {drift['z_threshold']:.0f} SD of their training-era baseline."
         )
         st.plotly_chart(
             fig_sensor_drift_heatmap(
@@ -143,11 +208,13 @@ def main() -> None:
             key="p1_sensor_drift",
         )
 
-        st.markdown("---")
+    with tab_quality:
         st.subheader("Missingness and redundancy")
         render_blue_note(
-            "We can see that missing values are structured in our dataset and not completely random."
-            "We can also see that there are some sensors that are highly correlated with each other."
+            "Missingness is structured, not missing-at-random: NaNs cluster by sensor and by time "
+            "window (recipe / tool-state changes), and many sensors are near-duplicates with "
+            "pairwise |r| above 0.9. Both properties motivate the imputation and correlated-"
+            "selection steps on the Pipeline page."
         )
         miss_col, corr_col = st.columns(2, gap="large")
         with miss_col:
@@ -181,9 +248,10 @@ def main() -> None:
             key="p1_missing_rate",
         )
         render_blue_note(
-            "I chose to drop sensors with >10% missing rate and zero variance."
+            "Sensors with a >10% missing rate or zero variance are dropped upstream in dbt "
+            f"before the mart: {stats['n_sensors']:,} staged channels reduce to the mart feature "
+            "set used for training (see the reduction funnel on the Pipeline page)."
         )
-        
 
     with tab_sensor:
         st.subheader("Individual channel distributions")
@@ -217,7 +285,7 @@ def main() -> None:
         dict_col, table_col = st.columns([1, 2.5], gap="large")
         with dict_col:
             with st.container(border=True):
-                st.markdown(_stg_data_dictionary_md())
+                st.markdown(_stg_data_dictionary_md(stats))
         with table_col:
             filt_col, ncol_col = st.columns(2)
             with filt_col:

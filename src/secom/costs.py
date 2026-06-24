@@ -1,6 +1,10 @@
-"""F-beta threshold profile definitions for Stage 2 tuning.
+"""BER-band threshold profile definitions for Stage 2 tuning.
 
-Edit F0_5_BETA / F2_BETA / F4_BETA below, then re-run threshold tuning and benchmark.
+The operating points come from the balanced-error-rate (BER) curve itself: the
+``ber`` profile is the BER-minimising threshold, and ``conservative`` /
+``aggressive`` are the high / low ends of the BER tolerance band (all thresholds
+within ``BER_BAND_TOLERANCE`` absolute BER points of that minimum). Edit
+``BER_BAND_TOLERANCE`` below, then re-run threshold tuning and benchmark.
 """
 from __future__ import annotations
 
@@ -11,17 +15,17 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import fbeta_score
 
-ProfileId = Literal["f0_5", "f2", "f4", "ber"]
+ProfileId = Literal["conservative", "ber", "aggressive"]
 
-# --- Editable F-beta values (sklearn beta parameter) -------------------------
+# --- BER tolerance band ------------------------------------------------------
+# Absolute balanced-error-rate tolerance (in BER points) around the minimum that
+# defines the conservative / aggressive operating band. Must match the units of
+# the BER values produced by the threshold sweep.
+BER_BAND_TOLERANCE = 2.0
 
-F0_5_BETA = 0.5  # conservative (precision-weighted)
-F2_BETA = 2.0  # neutral (~4:1 recall emphasis); default deployment threshold
-F4_BETA = 4.0  # aggressive (~16:1 recall emphasis)
+DEFAULT_PROFILE_ID: ProfileId = "ber"
 
-DEFAULT_PROFILE_ID: ProfileId = "f2"
-
-PROFILE_IDS: tuple[ProfileId, ...] = ("f0_5", "f2", "f4", "ber")
+PROFILE_IDS: tuple[ProfileId, ...] = ("conservative", "ber", "aggressive")
 
 
 @dataclass(frozen=True)
@@ -34,40 +38,35 @@ class ThresholdProfile:
 
 
 THRESHOLD_PROFILES: dict[ProfileId, ThresholdProfile] = {
-    "f0_5": ThresholdProfile(
-        profile_id="f0_5",
-        beta=F0_5_BETA,
-        display_name="F0.5 — conservative",
+    "conservative": ThresholdProfile(
+        profile_id="conservative",
+        beta=None,
+        display_name="Conservative — high threshold",
         description=(
-            "Maximise F0.5 on CV validation folds; precision-weighted scoring "
-            "(fewer false line stops among the F-beta profiles)."
+            "Highest threshold still within the BER tolerance band (BER-min + "
+            f"{BER_BAND_TOLERANCE:g} pts). Precision-leaning: fewer positives, "
+            "fewer false line stops, lower recall."
         ),
-    ),
-    "f2": ThresholdProfile(
-        profile_id="f2",
-        beta=F2_BETA,
-        display_name="F2 — neutral",
-        description=(
-            "Maximise F2 on CV validation folds; mid recall emphasis (~4:1). "
-            "Used as the default classifier threshold in tuned pipelines."
-        ),
-    ),
-    "f4": ThresholdProfile(
-        profile_id="f4",
-        beta=F4_BETA,
-        display_name="F4 — aggressive",
-        description=(
-            "Maximise F4 on CV validation folds; stronger recall emphasis (~16:1), "
-            "catches more anomalies at the cost of more false stops."
-        ),
+        objective="ber",
     ),
     "ber": ThresholdProfile(
         profile_id="ber",
         beta=None,
-        display_name="BER — minimum balanced error",
+        display_name="BER-min — balanced",
         description=(
             "Minimise mean CV balanced error rate (BER) on the threshold grid; "
-            "symmetric pass/fail misclassification cost."
+            "symmetric pass/fail misclassification cost. Default deploy threshold."
+        ),
+        objective="ber",
+    ),
+    "aggressive": ThresholdProfile(
+        profile_id="aggressive",
+        beta=None,
+        display_name="Aggressive — low threshold",
+        description=(
+            "Lowest threshold still within the BER tolerance band (BER-min + "
+            f"{BER_BAND_TOLERANCE:g} pts). Recall-leaning: catches more fails at "
+            "the cost of more false stops."
         ),
         objective="ber",
     ),
@@ -77,9 +76,7 @@ THRESHOLD_PROFILES: dict[ProfileId, ThresholdProfile] = {
 def threshold_profile_config() -> dict[str, float | str]:
     """Snapshot for JSON artifacts and the dashboard."""
     return {
-        "f0_5_beta": float(F0_5_BETA),
-        "f2_beta": float(F2_BETA),
-        "f4_beta": float(F4_BETA),
+        "ber_band_tolerance": float(BER_BAND_TOLERANCE),
         "default_profile": DEFAULT_PROFILE_ID,
     }
 

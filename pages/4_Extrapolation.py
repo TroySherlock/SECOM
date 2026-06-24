@@ -14,35 +14,10 @@ from secom.dashboard.model_views import (
     load_payload,
     render_holdout_validation,
     render_model_deepdive,
-    render_time_decay_sweep,
 )
 
 
-def main() -> None:
-    st.title("Extrapolation — forward-in-time test")
-    st.caption(
-        "The hard, honest case: every model is tuned once in-distribution, then refit on the "
-        "temporal train and scored on a forward holdout (latest 20% by measurement time). "
-        "Models trained on the past meet a later, drifted regime — the realistic fab "
-        "deployment setting."
-    )
-
-    try:
-        payload = load_payload()
-    except FileNotFoundError as exc:
-        st.error(str(exc))
-        return
-
-    render_blue_note(
-        "**Forward view.** Hyperparameters come from the single in-distribution 5×2 stratified "
-        "CV (no separate temporal tuning — blocked CV collapsed to one noisy fold, so it was "
-        "dropped). The headline holdout is unweighted; the **Time-decay sweep** tab shows whether "
-        "recency weighting would help. The drop from the Interpolation page is the cost of drift; "
-        "selection-based models that lock onto era-specific sensors degrade most here. All holdout "
-        f"metrics are reporting-only (`holdout_is_reporting_only={payload.get('holdout_is_reporting_only', True)}`)."
-    )
-
-    st.subheader("Cost of drift — interpolation minus extrapolation holdout")
+def _render_drift_cost(payload: dict) -> None:
     drift_metric = st.radio(
         "Metric",
         list(DELTA_METRIC_COLS),
@@ -75,24 +50,48 @@ def main() -> None:
 
     comparison_df = holdout_comparison_df(payload)
     if not comparison_df.empty:
-        with st.expander("Per-model detail — in-dist CV vs holdout PR-AUC (both tracks)", expanded=False):
-            st.dataframe(comparison_df, width="stretch", hide_index=True)
-            st.caption(
-                "Each model under its own track. `cv_pr_auc` is the shared in-distribution 5×2 "
-                "stratified CV reference; `holdout_pr_auc` is the matching holdout (random for "
-                "interpolation, temporal forward for extrapolation). The "
-                "interpolation-minus-extrapolation gap is the drift penalty."
-            )
+        st.dataframe(comparison_df, width="stretch", hide_index=True)
+        st.caption(
+            "Each model under its own track. `cv_pr_auc` is the shared in-distribution 5×2 "
+            "stratified CV reference; `holdout_pr_auc` is the matching holdout (random for "
+            "interpolation, temporal forward for extrapolation). The "
+            "interpolation-minus-extrapolation gap is the drift penalty."
+        )
 
-    tab_holdout, tab_model, tab_sweep = st.tabs(
-        ["Holdout", "Deep-dive", "Time-decay sweep"]
+
+def main() -> None:
+    st.title("Extrapolation — forward-in-time test")
+    st.caption(
+        "The hard, honest case: every model is tuned once in-distribution, then refit on the "
+        "temporal train and scored on a forward holdout (latest 20% by measurement time). "
+        "Models trained on the past meet a later, drifted regime — the realistic fab "
+        "deployment setting."
     )
-    with tab_holdout:
-        render_holdout_validation(payload, track="extrapolation")
-    with tab_model:
-        render_model_deepdive(payload, track="extrapolation")
-    with tab_sweep:
-        render_time_decay_sweep(payload)
+
+    try:
+        payload = load_payload()
+    except FileNotFoundError as exc:
+        st.error(str(exc))
+        return
+
+    render_blue_note(
+        "**Forward view.** Hyperparameters come from the single in-distribution 5×2 stratified "
+        "CV (no separate temporal tuning — blocked CV collapsed to one noisy fold, so it was "
+        "dropped). The headline holdout is unweighted: recency weighting needs a temporal-CV "
+        "validation signal we do not have, so we do not sweep λ on a single forward holdout. The "
+        "drop from the Interpolation page is the cost of drift; selection-based models that lock "
+        "onto era-specific sensors degrade most here. All holdout metrics are reporting-only "
+        f"(`holdout_is_reporting_only={payload.get('holdout_is_reporting_only', True)}`)."
+    )
+
+    render_holdout_validation(payload, track="extrapolation")
+
+    st.divider()
+    render_model_deepdive(payload, track="extrapolation")
+
+    st.divider()
+    with st.expander("Cost of drift — interpolation minus extrapolation holdout", expanded=False):
+        _render_drift_cost(payload)
 
 
 main()

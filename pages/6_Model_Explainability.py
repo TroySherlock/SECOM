@@ -141,7 +141,7 @@ def main() -> None:
     predicted = "Fail" if result.predicted_label == 1 else "Pass"
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Actual", actual, border=True)
-    m2.metric("Predicted (F2 threshold)", predicted, border=True)
+    m2.metric("Predicted (BER-min threshold)", predicted, border=True)
     m3.metric("P(fail)", f"{100 * result.fail_probability:.1f}%", border=True)
     m4.metric("Deploy threshold", f"{result.threshold:.4f}", border=True)
 

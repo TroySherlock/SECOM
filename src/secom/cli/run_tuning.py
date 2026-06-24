@@ -50,19 +50,11 @@ def _tune_model(model_id: str, spec, X_train, y_train) -> None:
         spec, X_train, y_train, cv_summary, cv=cv
     )
     for pid, prof in threshold_result["profiles"].items():
-        if prof.get("objective") == "ber":
-            print(
-                f"  {pid}: threshold={prof['best_threshold']:.4f}, "
-                f"mean_ber={prof['mean_ber_percent']:.2f}%",
-                flush=True,
-            )
-        else:
-            print(
-                f"  {pid}: threshold={prof['best_threshold']:.4f}, "
-                f"mean_fbeta={prof['mean_fbeta']:.4f}, "
-                f"mean_ber={prof['mean_ber_percent']:.2f}%",
-                flush=True,
-            )
+        print(
+            f"  {pid}: threshold={prof['best_threshold']:.4f}, "
+            f"mean_ber={prof['mean_ber_percent']:.2f}%",
+            flush=True,
+        )
     out_path = tuned_params_path(model_id)
     save_tuned_params(
         spec,

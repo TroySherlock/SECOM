@@ -39,3 +39,24 @@ def load_pr_curves(
     ber = pr.get("ber_point")
     ber_point = (float(ber[0]), float(ber[1])) if ber else None
     return cv_curve, ho_curve, ber_point
+
+
+@st.cache_data(show_spinner=False)
+def load_model_scores(
+    model_id: str, track: str = DEFAULT_TRACK
+) -> dict[str, dict[str, np.ndarray]]:
+    """Frozen per-wafer ``(y_true, y_score)`` for the BER sweep + calibration.
+
+    Returns ``{"cv": {"y_true", "y_score"}, "holdout": {...}}`` as numpy arrays.
+    The ``cv`` block is empty for the temporal track (no CV); either block is
+    empty when the report cache predates the scores artifact (re-run needed).
+    """
+    raw = report_entry(track, model_id).get("scores") or {}
+    out: dict[str, dict[str, np.ndarray]] = {}
+    for split in ("cv", "holdout"):
+        block = raw.get(split) or {}
+        out[split] = {
+            "y_true": np.asarray(block.get("y_true", []), dtype=int),
+            "y_score": np.asarray(block.get("y_score", []), dtype=float),
+        }
+    return out

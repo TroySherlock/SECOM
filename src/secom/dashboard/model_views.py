@@ -6,17 +6,18 @@ from __future__ import annotations
 
 import streamlit as st
 
-from secom.costs import PROFILE_IDS, THRESHOLD_PROFILES
+from secom.costs import BER_BAND_TOLERANCE, PROFILE_IDS, THRESHOLD_PROFILES
 from secom.dashboard import render_blue_note
 from secom.dashboard.charts import (
     C_PURPLE,
     fig_benchmark_leaderboard,
+    fig_ber_threshold_sweep,
+    fig_calibration,
     fig_cv_vs_holdout_validation,
     fig_delta_bar,
     fig_holdout_confusion,
-    fig_pr_curve_cv_holdout,
+    fig_pr_curve_clean,
     fig_risk_coverage,
-    fig_time_decay_sweep,
 )
 from secom.dashboard.data import (
     DELTA_METRIC_COLS,
@@ -33,9 +34,10 @@ from secom.dashboard.data import (
     list_model_ids,
     load_benchmark_results,
     model_info,
-    time_decay_sweep_df,
+    operating_table_df,
+    resolved_threshold_profile_config,
 )
-from secom.dashboard.pr_curves import load_pr_curves
+from secom.dashboard.pr_curves import load_model_scores, load_pr_curves
 
 # Gate identity per (track, gate) -> display label + flagged-count column stem.
 GATE_LABELS = {
@@ -49,9 +51,6 @@ _CV_METRIC_SPECS_STRATIFIED: dict[str, tuple[str, str, str]] = {
     "PR-AUC": ("mean_pr_auc", "std_pr_auc", "Mean PR AUC (5×2 repeated stratified CV)"),
     "ROC-AUC": ("mean_roc_auc", "std_roc_auc", "Mean ROC AUC (5×2 repeated stratified CV)"),
 }
-
-_PROFILE_RADIO_LABELS = {pid: THRESHOLD_PROFILES[pid].display_name for pid in PROFILE_IDS}
-
 
 @st.cache_data(show_spinner=False)
 def load_payload() -> dict:
@@ -123,10 +122,11 @@ def render_cv_leaderboard(payload: dict) -> None:
     for col in display_cv.columns:
         if display_cv[col].dtype.kind == "f":
             display_cv[col] = display_cv[col].round(3)
-    st.dataframe(display_cv, width="stretch", hide_index=True)
-    st.caption(
-        f"Rankings use mean {cv_metric} across all CV folds; error bars show ±1 SD."
-    )
+    with st.expander("CV leaderboard table", expanded=False):
+        st.dataframe(display_cv, width="stretch", hide_index=True)
+        st.caption(
+            f"Rankings use mean {cv_metric} across all CV folds; error bars show ±1 SD."
+        )
 
 
 def render_holdout_validation(payload: dict, *, track: str) -> None:
@@ -193,7 +193,12 @@ def render_holdout_validation(payload: dict, *, track: str) -> None:
             "gap is the drift cost; recency weighting is explored in the Time-decay sweep tab."
         )
 
-    st.dataframe(holdout_auc_summary_df(view_ho_df), width="stretch", hide_index=True)
+    with st.expander("Holdout metrics table (PR-AUC / ROC-AUC / BER, with 95% CIs)", expanded=False):
+        st.dataframe(holdout_auc_summary_df(view_ho_df), width="stretch", hide_index=True)
+        st.caption(
+            "Point estimates with stratified bootstrap 95% CIs. BER is the balanced error rate at "
+            "the default BER-min operating threshold; lower is better."
+        )
 
 
 def render_model_deepdive(payload: dict, *, track: str) -> None:
@@ -227,129 +232,251 @@ def render_model_deepdive(payload: dict, *, track: str) -> None:
                 "holdout (no separate temporal tuning)."
             )
 
-    st.markdown("#### Threshold profiles")
-    st.markdown(
-        "**F-beta tuning** (edit `F0_5_BETA` / `F2_BETA` / `F4_BETA` in "
-        "`src/secom/costs.py`, then re-tune). **BER** minimises balanced error on the "
-        "same threshold grid."
-    )
-    for _pid, prof in THRESHOLD_PROFILES.items():
-        st.caption(f"**{prof.display_name}:** {prof.description}")
-
-    if not benchmark_has_multi_profile_thresholds(payload):
-        st.warning(
-            "Tuned JSONs lack f0_5/f2/f4/ber `threshold_profiles`. Re-run Stage 2 tuning and "
-            "`python -m secom.cli.benchmark` to populate holdout confusion matrices."
-        )
-
-    try:
-        cv_curve, ho_curve, ber_point = load_pr_curves(selected_id, track)
-    except FileNotFoundError as exc:
-        st.info(str(exc))
-    else:
-        st.plotly_chart(
-            fig_pr_curve_cv_holdout(
-                cv_curve,
-                ho_curve,
-                ber_point=ber_point,
-                title=f"Precision–recall — {info.display_name}",
-            ),
-            width="stretch",
-            theme="streamlit",
-            key=f"pr_curve_{track}_{selected_id}",
-        )
-    if is_extrap:
-        st.caption(
-            "Temporal forward holdout PR curve only (no temporal CV — the models are "
-            "tuned in-distribution). Yellow: temporal holdout. Blue dashed: random "
-            "baseline (positive-class prevalence). Green diamond: BER-min threshold "
-            "operating point on holdout."
-        )
-    else:
-        st.caption(
-            "Purple: 5×2 stratified CV out-of-fold PR curve (in-distribution). Yellow: "
-            "random stratified holdout PR curve. Blue dashed: random baseline "
-            "(positive-class prevalence). Green diamond: BER-min threshold operating "
-            "point on holdout."
-        )
-
-    profile_choice = st.radio(
-        "Threshold profile (holdout confusion matrix)",
-        options=list(PROFILE_IDS),
-        format_func=lambda pid: _PROFILE_RADIO_LABELS[pid],
-        horizontal=True,
-        key=f"profile_radio_{track}",
-    )
-
     deepdive_ho_df = holdout_df(
         payload, key="holdout" if is_extrap else "holdout_random"
     )
-    cms = holdout_confusion_by_profile(deepdive_ho_df, selected_id)
-    cm = cms.get(profile_choice)
     ho_row = (
         deepdive_ho_df.loc[deepdive_ho_df["pipeline"] == selected_id].iloc[0]
         if not deepdive_ho_df.empty
         and selected_id in deepdive_ho_df["pipeline"].values
         else None
     )
-    thr_val = None
-    if ho_row is not None:
-        thr_col = f"{profile_choice}_threshold"
-        if thr_col in ho_row.index:
-            thr_val = ho_row[thr_col]
-    prof = THRESHOLD_PROFILES[profile_choice]
-    thr_txt = f"threshold = {float(thr_val):.4f}" if thr_val is not None else ""
-    st.markdown(f"**{prof.display_name}** — {thr_txt}")
 
-    if cm is not None:
-        st.plotly_chart(
-            fig_holdout_confusion(cm, prof.display_name, height=320),
-            width="stretch",
-            theme="streamlit",
-            key=f"cm_{track}_{selected_id}_{profile_choice}",
+    def _row_val(col: str) -> float | None:
+        if ho_row is None or col not in ho_row.index:
+            return None
+        val = ho_row[col]
+        return None if val is None else float(val)
+
+    scores = load_model_scores(selected_id, track)
+    ho_scores = scores.get("holdout") or {}
+    ho_y = ho_scores.get("y_true")
+    ho_s = ho_scores.get("y_score")
+    cms = holdout_confusion_by_profile(deepdive_ho_df, selected_id)
+
+    tab_dive, tab_thresh = st.tabs(["Deep-dive", "Thresholding (cost system)"])
+
+    with tab_dive:
+        _render_deepdive_tab(
+            info,
+            track=track,
+            is_extrap=is_extrap,
+            selected_id=selected_id,
+            ap=_row_val("pr_auc"),
+            ap_ci=(_row_val("pr_auc_ci_low"), _row_val("pr_auc_ci_high")),
+            ber_threshold=_row_val("ber_threshold"),
+            ber_percent=_row_val("ber_ber_percent"),
+            ber_tpr=_row_val("ber_true_positive_percent"),
+            ber_tnr=_row_val("ber_true_negative_percent"),
+            ber_cm=cms.get("ber"),
+            cal_scores=scores.get("holdout" if is_extrap else "cv") or {},
         )
-    else:
-        st.caption("Re-run `python -m secom.cli.benchmark` after tuning.")
 
-    render_blue_note(
-        "**F0.5 (conservative) thresholds** lean on well-ranked scores near the high-precision "
-        "tail; all heads here are isotonic-calibrated, but the **elastic-net** and **Bayesian** "
-        "linear heads can still miss more true fails (higher BER) under a stricter fail-class "
-        "cutoff than the **Random Forest** head. **F2** is the default deploy profile; "
-        "**BER** picks the symmetric misclassification minimum on the threshold grid."
-    )
-
-
-def render_time_decay_sweep(payload: dict) -> None:
-    """Diagnostic: temporal-holdout PR/ROC across time-decay λ (headline is λ=0)."""
-    st.subheader("Time-decay sweep (temporal holdout, diagnostic)")
-    metric = st.radio(
-        "Metric",
-        list(DELTA_METRIC_COLS),
-        horizontal=True,
-        key="decay_sweep_metric",
-    )
-    metric_col = DELTA_METRIC_COLS[metric]
-    sweep_df = time_decay_sweep_df(payload, metric_col)
-    if sweep_df.empty:
-        st.warning(
-            "No `time_decay_sweep` rows in benchmark JSON. Re-run "
-            "`python -m secom.benchmark`."
+    with tab_thresh:
+        _render_thresholding_tab(
+            payload,
+            info,
+            track=track,
+            selected_id=selected_id,
+            deepdive_ho_df=deepdive_ho_df,
+            ho_y=ho_y,
+            ho_s=ho_s,
+            profile_thresholds={
+                THRESHOLD_PROFILES[pid].display_name: _row_val(f"{pid}_threshold")
+                for pid in PROFILE_IDS
+            },
+            cms=cms,
         )
-        return
+
+
+def _render_deepdive_tab(
+    info,
+    *,
+    track: str,
+    is_extrap: bool,
+    selected_id: str,
+    ap: float | None,
+    ap_ci: tuple[float | None, float | None],
+    ber_threshold: float | None,
+    ber_percent: float | None,
+    ber_tpr: float | None,
+    ber_tnr: float | None,
+    ber_cm,
+    cal_scores: dict,
+) -> None:
+    """Deep-dive tab: clean PR curve, calibration, and the BER-min operating point."""
+    st.markdown("#### Precision–recall")
+    try:
+        cv_curve, ho_curve, ber_point = load_pr_curves(selected_id, track)
+    except FileNotFoundError as exc:
+        st.info(str(exc))
+        cv_curve = ho_curve = ber_point = None
+    line_curve = ho_curve if is_extrap else cv_curve
+    line_name = "Holdout (temporal)" if is_extrap else "CV out-of-fold (in-distribution)"
+    baseline = ho_curve.baseline if ho_curve is not None else None
     st.plotly_chart(
-        fig_time_decay_sweep(sweep_df, metric=metric_col),
+        fig_pr_curve_clean(
+            line_curve,
+            ap=ap,
+            ap_ci=ap_ci,
+            ber_point=ber_point,
+            baseline=baseline,
+            draw_line=line_curve is not None,
+            line_name=line_name,
+            title=f"Precision–recall — {info.display_name}",
+        ),
         width="stretch",
         theme="streamlit",
-        key="time_decay_sweep_chart",
+        key=f"pr_curve_{track}_{selected_id}",
     )
-    st.caption(
-        "Each line refits a model on the temporal train with exponential recency "
-        "weights at that λ and scores the forward holdout. λ=0 is the headline "
-        "(unweighted) model; an upward slope means recency weighting would help that "
-        "model resist drift, a downward slope means it hurts. Diagnostic only — the "
-        "headline numbers stay at λ=0."
+    if is_extrap:
+        st.caption(
+            "Yellow: the single temporal-forward holdout PR step-line (the only forward data; "
+            "jagged at ~17-20 fails by nature). Blue dashed: prevalence baseline. Green diamond: "
+            "BER-min operating point. Holdout AP with 95% bootstrap CI is annotated."
+        )
+    else:
+        st.caption(
+            "Purple: 5×2 stratified CV out-of-fold PR curve (the well-sampled, trustworthy shape). "
+            "Blue dashed: prevalence baseline. Green diamond: BER-min operating point. The random "
+            "holdout AP (with 95% bootstrap CI) is annotated rather than drawn as a second jagged line."
+        )
+
+    st.markdown("#### Calibration")
+    cal_y = cal_scores.get("y_true")
+    cal_s = cal_scores.get("y_score")
+    if cal_y is not None and len(cal_y):
+        st.plotly_chart(
+            fig_calibration(cal_y, cal_s, title=f"Calibration — {info.display_name}"),
+            width="stretch",
+            theme="streamlit",
+            key=f"calibration_{track}_{selected_id}",
+        )
+        source = (
+            "the temporal forward holdout (so it shows calibration **under drift**)"
+            if is_extrap
+            else "the in-distribution CV out-of-fold scores (the well-sampled reliability check)"
+        )
+        st.caption(
+            f"Reliability curve on {source}; quantile bins of predicted fail probability vs the "
+            "observed fail fraction. On the diagonal = well-calibrated. Axes are zoomed to the "
+            "predicted-probability range (imbalanced + isotonic-calibrated -> most probabilities "
+            "are small); the faint histogram shows where that mass sits. Brier (lower = better) is in the title."
+        )
+    else:
+        st.info(
+            "Per-wafer scores are not in the report cache yet. Re-run "
+            "`python -m secom.benchmark` to populate the calibration diagram."
+        )
+
+    st.markdown("#### Operating point (BER-min)")
+    if ber_threshold is not None:
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Threshold", f"{ber_threshold:.4f}")
+        m2.metric("BER", f"{ber_percent:.1f}%" if ber_percent is not None else "n/a")
+        m3.metric("TPR (recall)", f"{ber_tpr:.1f}%" if ber_tpr is not None else "n/a")
+        m4.metric("TNR", f"{ber_tnr:.1f}%" if ber_tnr is not None else "n/a")
+    if ber_cm is not None:
+        st.plotly_chart(
+            fig_holdout_confusion(ber_cm, "BER-min", height=300),
+            width="stretch",
+            theme="streamlit",
+            key=f"cm_bermin_{track}_{selected_id}",
+        )
+    else:
+        st.caption("Re-run `python -m secom.benchmark` after tuning to populate the confusion matrix.")
+
+
+def _render_thresholding_tab(
+    payload: dict,
+    info,
+    *,
+    track: str,
+    selected_id: str,
+    deepdive_ho_df,
+    ho_y,
+    ho_s,
+    profile_thresholds: dict,
+    cms: dict,
+) -> None:
+    """Thresholding tab: the BER-band cost system, sweep, table, and per-band confusion."""
+    tol = float(
+        (resolved_threshold_profile_config(payload) or {}).get(
+            "ber_band_tolerance", BER_BAND_TOLERANCE
+        )
     )
+    st.markdown(
+        "Operating points come from the **balanced-error-rate (BER) curve** itself, not F-beta. "
+        f"**BER-min** is the threshold with the lowest CV balanced error; the band is every "
+        f"threshold within **epsilon = {tol:g} BER points** of that minimum. Its two ends give:"
+    )
+    st.markdown(
+        "- **Conservative** (high threshold): fewer positives -> higher precision / fewer false "
+        "line stops, lower recall.\n"
+        "- **BER-min** (balanced): the symmetric pass/fail optimum; the default deploy threshold.\n"
+        "- **Aggressive** (low threshold): more positives -> higher recall (catches more fails) at "
+        "the cost of more false stops."
+    )
+    render_blue_note(
+        "The band is chosen on the **CV** BER curve (more positives, smoother, leakage-safe), then "
+        "applied unchanged to the holdout. Because BER is symmetric, all three points stay within "
+        f"{tol:g} BER points of optimal - the band only trades a bounded amount of balanced error "
+        "for precision vs recall."
+    )
+
+    if not benchmark_has_multi_profile_thresholds(payload):
+        st.warning(
+            "Tuned JSONs lack the conservative/ber/aggressive `threshold_profiles`. Re-run Stage 2 "
+            "tuning (`python -m secom.cli.run_tuning`) and `python -m secom.benchmark`."
+        )
+
+    st.markdown("#### BER vs threshold")
+    if ho_y is not None and len(ho_y):
+        st.plotly_chart(
+            fig_ber_threshold_sweep(
+                ho_y,
+                ho_s,
+                profile_thresholds=profile_thresholds,
+                title=f"BER vs threshold — {info.display_name}",
+            ),
+            width="stretch",
+            theme="streamlit",
+            key=f"ber_sweep_{track}_{selected_id}",
+        )
+        st.caption(
+            "BER swept across the decision threshold on this track's holdout; the green diamond is "
+            "the empirical minimum and the orange dotted lines mark the tuned conservative / BER-min "
+            "/ aggressive thresholds. A flat valley means BER is insensitive to the exact cut."
+        )
+    else:
+        st.info(
+            "Per-wafer holdout scores are not in the report cache yet. Re-run "
+            "`python -m secom.benchmark` to populate the BER sweep."
+        )
+
+    st.markdown("#### Operating points")
+    op_df = operating_table_df(deepdive_ho_df, selected_id)
+    if not op_df.empty:
+        st.dataframe(op_df, width="stretch", hide_index=True)
+        st.caption(
+            "Holdout operating point per band threshold: threshold, balanced error rate, and the "
+            "true-positive / true-negative rates. BER is the symmetric (prevalence-free) summary."
+        )
+
+    st.markdown("#### Confusion matrix per band point")
+    cm_cols = st.columns(len(PROFILE_IDS))
+    for col, pid in zip(cm_cols, PROFILE_IDS):
+        with col:
+            cm = cms.get(pid)
+            if cm is not None:
+                st.plotly_chart(
+                    fig_holdout_confusion(cm, THRESHOLD_PROFILES[pid].display_name, height=260),
+                    width="stretch",
+                    theme="streamlit",
+                    key=f"cm_{track}_{selected_id}_{pid}",
+                )
+            else:
+                st.caption(f"{THRESHOLD_PROFILES[pid].display_name}: n/a")
 
 
 def render_gate_lift(payload: dict, *, track: str, metric: str) -> None:

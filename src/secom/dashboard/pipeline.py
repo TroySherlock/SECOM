@@ -27,17 +27,20 @@ flowchart LR
 
 PREPROCESSING_MERMAID = """
 flowchart LR
-  stg["stg_secom"]
-  int_f["int_secom_features"]
-  meta["int_secom_column_metadata"]
   mart["mart_secom_features"]
   imp["Median impute"]
-  cluster["Spearman cluster"]
-  hubs["RF + T² + hub pairs"]
+  cluster["Variance + Spearman cluster"]
+  hsic["HSIC-Lasso top-k + T2 + hubs"]
+  rfsel["RF top-k + T2 + hubs"]
+  pls["sPLS components"]
   scale["RobustScaler"]
-  clf["Classifier"]
+  clf["Isotonic-calibrated classifier"]
 
-  stg --> int_f --> meta --> mart --> imp --> cluster --> hubs --> scale --> clf
+  mart --> imp --> cluster
+  cluster -->|hsic| hsic --> scale
+  cluster -->|rfsel| rfsel --> scale
+  cluster -->|pls| pls --> scale
+  scale --> clf
 """
 
 _MERMAID_INIT = """

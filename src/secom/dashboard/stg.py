@@ -97,6 +97,60 @@ def stg_summary_stats(df: pd.DataFrame) -> dict[str, Any]:
     }
 
 
+def era_drift_summary(
+    df: pd.DataFrame,
+    *,
+    timestamp_col: str = TIMESTAMP_COL,
+    sensor_cols: list[str] | None = None,
+    test_size: float = 0.20,
+    z_threshold: float = 2.0,
+) -> dict[str, Any]:
+    """Quantify era drift: share of sensors whose holdout-era mean shifts past
+    ``z_threshold`` SD from the training-era baseline (first ``1 - test_size`` by time).
+
+    Mirrors the standardisation in ``charts.fig_sensor_drift_heatmap`` so the headline
+    scalar and the heatmap agree. Returns counts plus the median absolute shift.
+    """
+    sensor_cols = sensor_cols or sensor_columns(df)
+    empty = {
+        "n_evaluated": 0,
+        "n_drifted": 0,
+        "pct_drifted": 0.0,
+        "median_abs_shift": 0.0,
+        "z_threshold": float(z_threshold),
+    }
+    if not sensor_cols:
+        return empty
+
+    ts = pd.to_datetime(df[timestamp_col], errors="coerce")
+    order = ts.sort_values().index
+    values = df.loc[order, sensor_cols].astype(float)
+    values = values.fillna(values.median(numeric_only=True))
+
+    n_rows = len(values)
+    train_n = int(round(n_rows * (1.0 - test_size)))
+    if n_rows < 4 or train_n < 2 or train_n >= n_rows:
+        return empty
+
+    base = values.iloc[:train_n]
+    base_std = base.std(ddof=0)
+    keep = base_std[base_std > 0].index.tolist()
+    if not keep:
+        return empty
+
+    z = (values[keep] - base.mean()[keep]) / base_std[keep]
+    holdout_shift = z.iloc[train_n:].mean().abs()
+    n_drifted = int((holdout_shift > z_threshold).sum())
+    n_eval = len(keep)
+    return {
+        "n_evaluated": n_eval,
+        "n_drifted": n_drifted,
+        "pct_drifted": 100.0 * n_drifted / n_eval if n_eval else 0.0,
+        "median_abs_shift": float(holdout_shift.median()),
+        "z_threshold": float(z_threshold),
+    }
+
+
 def slice_stg_for_display(
     df: pd.DataFrame,
     *,

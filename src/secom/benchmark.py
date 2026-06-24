@@ -19,7 +19,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sklearn.base import clone
 from sklearn.metrics import (
     average_precision_score,
     roc_auc_score,
@@ -50,6 +49,7 @@ from secom.reporting import (
     collect_cv_oof_proba,
     compute_global_importance,
     pr_curve_payload,
+    scores_payload,
 )
 from secom.pipelines import (
     BENCHMARK_RESULTS_PATH,
@@ -58,7 +58,6 @@ from secom.pipelines import (
     REPORT_CACHE_PATH,
     CV_N_JOBS,
     CV_SCORING,
-    DECAY_LAMBDA_GRID,
     RANDOM_SEED,
     RF_MAX_DEPTH,
     RF_N_ESTIMATORS,
@@ -79,7 +78,6 @@ from secom.pipelines import (
     make_repeated_stratified_cv,
     split_train_test,
     split_train_test_random,
-    time_decay_weights,
 )
 from secom.utils import (
     json_safe,
@@ -167,51 +165,6 @@ def run_pipeline_benchmark(
         CV_SORT_COL, ascending=False, kind="mergesort"
     )
     return leaderboard.reset_index(drop=True)
-
-
-def run_time_decay_sweep(
-    pipelines: dict,
-    X_train: pd.DataFrame,
-    y_train: pd.Series,
-    train_timestamps: pd.Series,
-    X_test: pd.DataFrame,
-    y_test: pd.Series,
-    *,
-    grid=DECAY_LAMBDA_GRID,
-    show_progress: bool = True,
-) -> pd.DataFrame:
-    """Temporal-holdout PR/ROC vs time-decay lambda (diagnostic, not tuned).
-
-    For each model and lambda, refit on the full temporal train with recency
-    weights and score the forward holdout. ``lambda=0`` reproduces the headline
-    unweighted holdout, so the sweep shows whether recency weighting would help.
-    """
-    grid = [float(x) for x in grid]
-    rows = []
-    if show_progress:
-        print(f"Time-decay sweep: {len(pipelines)} pipelines x {len(grid)} lambdas")
-    for name, pipeline in pipelines.items():
-        for decay_lambda in grid:
-            weights = (
-                time_decay_weights(train_timestamps, decay_lambda)
-                if decay_lambda
-                else None
-            )
-            fitted, _ = fit_pipeline_weighted(
-                clone(pipeline), X_train, y_train, weights
-            )
-            proba = fitted.predict_proba(X_test)[:, 1]
-            rows.append(
-                {
-                    "pipeline": name,
-                    "decay_lambda": decay_lambda,
-                    "pr_auc": float(average_precision_score(y_test, proba)),
-                    "roc_auc": float(roc_auc_score(y_test, proba)),
-                }
-            )
-        if show_progress:
-            print(f"  swept {name}")
-    return pd.DataFrame(rows)
 
 
 def fit_holdout_pipelines(
@@ -455,7 +408,7 @@ def run_holdout_benchmark(
             print(
                 f"  {name}: holdout PR AUC {row['pr_auc']:.3f}{pr_ci}, "
                 f"ROC AUC {row['roc_auc']:.3f}{roc_ci}, "
-                f"BER (F2 threshold) {row['ber_percent']:.1f}%{ber_ci}"
+                f"BER (BER-min threshold) {row['ber_percent']:.1f}%{ber_ci}"
             )
 
     holdout = pd.DataFrame(rows).sort_values(
@@ -486,7 +439,6 @@ def save_benchmark_results(
     holdout_conditional_random: pd.DataFrame | None = None,
     risk_coverage: pd.DataFrame | None = None,
     risk_coverage_random: pd.DataFrame | None = None,
-    time_decay_sweep: pd.DataFrame | None = None,
     gate_reports: dict | None = None,
     holdout_split: dict | None = None,
     holdout_split_random: dict | None = None,
@@ -585,8 +537,6 @@ def save_benchmark_results(
         payload["risk_coverage"] = risk_coverage.to_dict(orient="records")
     if risk_coverage_random is not None:
         payload["risk_coverage_random"] = risk_coverage_random.to_dict(orient="records")
-    if time_decay_sweep is not None:
-        payload["time_decay_sweep"] = time_decay_sweep.to_dict(orient="records")
     if gate_reports is not None:
         payload["gate_reports"] = gate_reports
     if process_gate is not None:
@@ -817,8 +767,13 @@ def _report_entries_for_track(
         pr_curve = pr_curve_payload(
             y_cv, score_cv, y_test, scores[name], ber_threshold
         )
+        score_block = scores_payload(y_cv, score_cv, y_test, scores[name])
         importance = compute_global_importance(name, fitted[name], X_train)
-        entries[name] = {"pr_curve": pr_curve, "global_importance": importance}
+        entries[name] = {
+            "pr_curve": pr_curve,
+            "global_importance": importance,
+            "scores": score_block,
+        }
         if show_progress:
             print(f"  report cache: {name}")
     return entries
@@ -908,7 +863,6 @@ def main(argv=None) -> None:
     y_train = train_df[TARGET_COL].astype(int)
     X_test = test_df[cols]
     y_test = test_df[TARGET_COL].astype(int)
-    train_ts = train_df[TIMESTAMP_COL].reset_index(drop=True)
 
     # Reuse the single in-distribution `tuned/` params; the temporal holdout is
     # an unweighted forward test of those hyperparameters (no separate tuning).
@@ -921,17 +875,6 @@ def main(argv=None) -> None:
     scores_temporal = holdout_scores(fitted_temporal, X_test)
     print("\nTemporal holdout (extrapolation):")
     holdout = run_holdout_benchmark(scores_temporal, y_test, tuned)
-
-    print("\nTime-decay sweep (temporal holdout vs lambda, diagnostic):")
-    time_decay_sweep = run_time_decay_sweep(
-        build_benchmark_pipelines(tuned, model_ids=selected),
-        X_train,
-        y_train,
-        train_ts,
-        X_test,
-        y_test,
-        show_progress=True,
-    )
 
     print("\nStandalone gates on the temporal holdout:")
     efa_gate_temporal = _fit_gate(EFAGate, X_train, y_train)
@@ -998,7 +941,6 @@ def main(argv=None) -> None:
         holdout_conditional_random=holdout_conditional_random,
         risk_coverage=risk_coverage,
         risk_coverage_random=risk_coverage_random,
-        time_decay_sweep=time_decay_sweep,
         gate_reports=gate_reports,
         holdout_split=split_meta,
         holdout_split_random=split_meta_random,

@@ -104,6 +104,7 @@ def fig_fails_over_time(
     target_col: str,
     row_index_col: str = ROW_INDEX_COL,
     show_weekly: bool,
+    prevalence: float | None = None,
 ) -> go.Figure:
     plot_df = df[[row_index_col, timestamp_col, target_col]].copy()
     plot_df[timestamp_col] = pd.to_datetime(plot_df[timestamp_col])
@@ -156,6 +157,18 @@ def fig_fails_over_time(
                 hovertemplate="Week of %{x|%Y-%m-%d}<br>Fail rate %{y:.1%}<extra></extra>",
             )
         )
+        if prevalence is not None:
+            fig.add_trace(
+                go.Scatter(
+                    x=[weekly[timestamp_col].min(), weekly[timestamp_col].max()],
+                    y=[prevalence, prevalence],
+                    mode="lines",
+                    name=f"Overall prevalence ({prevalence:.1%})",
+                    yaxis="y2",
+                    line=dict(color=C_PURPLE, width=1.5, dash="dot"),
+                    hovertemplate=f"Prevalence baseline {prevalence:.1%}<extra></extra>",
+                )
+            )
         layout_y2 = dict(
             overlaying="y",
             side="right",
@@ -255,6 +268,79 @@ def fig_missingness_structure(
         showlegend=True,
     )
     return _sized(fig, height=400, margin=dict(t=80))
+
+
+def fig_two_track_schematic(
+    df: pd.DataFrame,
+    *,
+    timestamp_col: str,
+    target_col: str,
+    test_size: float = 0.20,
+) -> go.Figure:
+    """Two-lane evaluation schematic: interpolation (random split) vs extrapolation
+    (temporal forward holdout), sharing one time axis with the 80/20 cut marked.
+
+    Top lane shows the random holdout sampled across the whole campaign; bottom lane
+    shows the temporal holdout (latest ``test_size`` by time) shaded. Frames pages 3-4.
+    """
+    work = df[[timestamp_col, target_col]].copy()
+    work["_ts"] = pd.to_datetime(work[timestamp_col], errors="coerce")
+    work = work.sort_values("_ts").reset_index(drop=True)
+    n_rows = len(work)
+    if n_rows < 4:
+        return _sized(go.Figure(), height=300)
+
+    ts = work["_ts"]
+    train_n = int(round(n_rows * (1.0 - test_size)))
+    cut_ts = ts.iloc[min(train_n, n_rows - 1)]
+    rng = np.random.default_rng(42)
+    # Random holdout: ~test_size of rows sampled uniformly across the whole span.
+    rand_holdout = rng.random(n_rows) < test_size
+    is_fail = work[target_col].astype(int).to_numpy() == 1
+
+    fig = go.Figure()
+
+    def _lane(y: float, mask_holdout: np.ndarray, lane: str) -> None:
+        for held, name, color, op in [
+            (False, "Train", C_BLUE, 0.35),
+            (True, "Holdout", C_YELLOW, 0.9),
+        ]:
+            sel = (mask_holdout == held)
+            fig.add_trace(
+                go.Scatter(
+                    x=ts[sel],
+                    y=np.full(int(sel.sum()), y) + rng.uniform(-0.04, 0.04, int(sel.sum())),
+                    mode="markers",
+                    name=f"{name}",
+                    legendgroup=name,
+                    showlegend=(lane == "interpolation"),
+                    marker=dict(color=color, size=5, opacity=op,
+                                symbol="diamond" if held else "circle"),
+                    hovertemplate=f"{lane} · {name}<br>%{{x|%Y-%m-%d}}<extra></extra>",
+                )
+            )
+
+    _lane(1.0, rand_holdout, "interpolation")
+    _lane(0.0, ts.index.to_numpy() >= train_n, "extrapolation")
+
+    # Temporal cut marker (only meaningful for the extrapolation lane).
+    fig.add_vline(x=cut_ts, line=dict(color=C_YELLOW, width=2, dash="dash"))
+    fig.add_annotation(
+        x=cut_ts, y=1.12, yref="paper", showarrow=False,
+        text=f"80/20 temporal cut ({cut_ts:%Y-%m-%d})",
+        font=dict(size=11, color=C_YELLOW),
+    )
+    fig.update_layout(
+        title=dict(text="Two evaluation tracks on one campaign timeline"),
+        xaxis_title="Measurement time",
+        yaxis=dict(
+            tickvals=[0.0, 1.0],
+            ticktext=["Extrapolation<br>(temporal holdout)", "Interpolation<br>(random split)"],
+            range=[-0.4, 1.4],
+        ),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+    )
+    return _sized(fig, height=320, margin=dict(l=140, r=40, t=86, b=50))
 
 
 def fig_sensor_drift_heatmap(
@@ -761,6 +847,47 @@ def fig_reduction_impact_from_stages(profile: dict[str, int]) -> go.Figure:
     return fig_reduction_impact(stage_counts)
 
 
+def fig_reduction_sankey(profile: dict[str, int]) -> go.Figure:
+    """Sankey of the dbt sensor-drop: staged sensors split into the kept mart set and
+    the high-missing / zero-variance sensors dropped before the mart.
+
+    Kept to the sensor unit on purpose: this is the one stage where the counts conserve
+    (stg = mart + dropped). The downstream sklearn steps change units (raw+rz doubling,
+    hub/T2 additions, auxiliary features), so they are shown as a separate bar snapshot.
+    """
+    stg = int(profile.get("stg_sensors", 0))
+    mart = int(profile.get("mart_sensors", 0))
+    dbt_dropped = int(profile.get("dbt_dropped_sensors", max(0, stg - mart)))
+    if not stg or not mart:
+        return _sized(go.Figure(), height=320)
+
+    labels = [
+        f"Staged sensors ({stg})",                            # 0
+        f"Kept to dbt mart ({mart})",                         # 1
+        f"Dropped: >10% missing / zero-variance ({dbt_dropped})",  # 2
+    ]
+    fig = go.Figure(
+        go.Sankey(
+            arrangement="snap",
+            node=dict(
+                label=labels,
+                color=[C_BLUE, C_GREEN, C_RED],
+                pad=22,
+                thickness=18,
+                line=dict(color="rgba(0,0,0,0)", width=0),
+            ),
+            link=dict(
+                source=[0, 0],
+                target=[1, 2],
+                value=[mart, dbt_dropped],
+                color=["rgba(169,182,101,0.45)", "rgba(234,105,98,0.40)"],
+            ),
+        )
+    )
+    fig.update_layout(title=dict(text="dbt sensor profiling: kept vs dropped"))
+    return _sized(fig, height=320, margin=dict(l=20, r=20, t=72, b=20))
+
+
 def fig_benchmark_leaderboard(
     df: pd.DataFrame,
     *,
@@ -969,43 +1096,39 @@ def _pr_axis_limits(
     return recall_hi, precision_hi
 
 
-def fig_pr_curve_cv_holdout(
-    cv_curve: PRCurve | None,
-    ho_curve: PRCurve | None,
+def fig_pr_curve_clean(
+    curve: PRCurve | None,
     *,
+    ap: float | None = None,
+    ap_ci: tuple[float, float] | None = None,
     ber_point: tuple[float, float] | None = None,
+    baseline: float | None = None,
+    draw_line: bool = True,
+    line_name: str = "CV (out-of-fold)",
     title: str = "Precision–recall curve",
 ) -> go.Figure:
-    """CV (purple) and holdout (yellow) PR curves with BER operating point and baseline."""
+    """Decluttered PR view: one line max, one operating point, AP as a number.
+
+    ``curve`` is the single smooth curve to draw (CV-OOF for interpolation);
+    pass ``draw_line=False`` (extrapolation) to suppress the jagged small-sample
+    staircase and show only the BER operating point against the prevalence
+    baseline. Holdout AP (+ optional CI) is annotated as text, not a band.
+    """
     fig = go.Figure()
-    if cv_curve is not None:
+    if draw_line and curve is not None and curve.recall.size:
         fig.add_trace(
             go.Scatter(
-                x=cv_curve.recall,
-                y=cv_curve.precision,
+                x=curve.recall,
+                y=curve.precision,
                 mode="lines",
-                name="CV (5-fold OOF)",
-                line=dict(color=C_PURPLE, width=2.5),
-                hovertemplate="Recall=%{x:.3f}<br>Precision=%{y:.3f}<extra></extra>",
-            )
-        )
-    if ho_curve is not None:
-        fig.add_trace(
-            go.Scatter(
-                x=ho_curve.recall,
-                y=ho_curve.precision,
-                mode="lines",
-                name="Holdout",
-                line=dict(color=C_YELLOW, width=2.5),
+                name=line_name,
+                line=dict(color=C_PURPLE, width=2.5, shape="hv"),
                 hovertemplate="Recall=%{x:.3f}<br>Precision=%{y:.3f}<extra></extra>",
             )
         )
 
-    baseline = None
-    if cv_curve is not None:
-        baseline = cv_curve.baseline
-    elif ho_curve is not None:
-        baseline = ho_curve.baseline
+    if baseline is None and curve is not None:
+        baseline = curve.baseline
     if baseline is not None:
         fig.add_hline(
             y=baseline,
@@ -1021,15 +1144,32 @@ def fig_pr_curve_cv_holdout(
                 x=[ber_point[0]],
                 y=[ber_point[1]],
                 mode="markers",
-                name="BER min (holdout)",
-                marker=dict(color=C_GREEN, size=12, symbol="diamond"),
+                name="BER-min (holdout)",
+                marker=dict(color=C_GREEN, size=13, symbol="diamond"),
                 hovertemplate=(
-                    "BER threshold<br>Recall=%{x:.3f}<br>Precision=%{y:.3f}<extra></extra>"
+                    "BER-min threshold<br>Recall=%{x:.3f}<br>Precision=%{y:.3f}<extra></extra>"
                 ),
             )
         )
 
-    recall_hi, precision_hi = _pr_axis_limits(cv_curve, ho_curve, ber_point)
+    if ap is not None:
+        ap_txt = f"Holdout AP = {ap:.3f}"
+        if ap_ci is not None and all(v is not None for v in ap_ci):
+            ap_txt += f"  [{ap_ci[0]:.3f}, {ap_ci[1]:.3f}]"
+        fig.add_annotation(
+            x=0.98,
+            y=0.98,
+            xref="paper",
+            yref="paper",
+            text=ap_txt,
+            showarrow=False,
+            align="right",
+            font=dict(size=13, color=C_YELLOW),
+            bgcolor="rgba(0,0,0,0.25)",
+            borderpad=4,
+        )
+
+    recall_hi, precision_hi = _pr_axis_limits(curve if draw_line else None, None, ber_point)
     fig.update_layout(
         title=dict(text=title),
         xaxis_title="Recall",
@@ -1039,6 +1179,180 @@ def fig_pr_curve_cv_holdout(
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
     )
     return _sized(fig, height=440, margin=dict(l=56, r=48, t=72, b=48))
+
+
+def _ber_curve(y_true: np.ndarray, y_score: np.ndarray, thresholds: np.ndarray) -> np.ndarray:
+    """Balanced error rate (%) at each threshold (fail = positive)."""
+    pos = y_true == 1
+    neg = ~pos
+    n_pos = max(int(pos.sum()), 1)
+    n_neg = max(int(neg.sum()), 1)
+    out = np.empty(thresholds.size, dtype=float)
+    for i, t in enumerate(thresholds):
+        pred = y_score >= t
+        tpr = float(np.sum(pred & pos)) / n_pos
+        tnr = float(np.sum(~pred & neg)) / n_neg
+        out[i] = 100.0 * (1.0 - 0.5 * (tpr + tnr))
+    return out
+
+
+def fig_ber_threshold_sweep(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    *,
+    profile_thresholds: dict[str, float] | None = None,
+    title: str = "Balanced error rate vs threshold",
+) -> go.Figure:
+    """BER across the threshold grid with the tuned profile thresholds marked."""
+    fig = go.Figure()
+    y_true = np.asarray(y_true, dtype=int)
+    y_score = np.asarray(y_score, dtype=float)
+    if y_true.size == 0 or y_score.size == 0:
+        return _sized(
+            fig.update_layout(title=dict(text=title)),
+            height=420,
+            margin=dict(l=56, r=48, t=72, b=48),
+        )
+
+    grid = np.unique(np.clip(y_score, 0.0, 1.0))
+    if grid.size > 400:
+        grid = np.quantile(grid, np.linspace(0.0, 1.0, 400))
+    ber = _ber_curve(y_true, y_score, grid)
+    fig.add_trace(
+        go.Scatter(
+            x=grid,
+            y=ber,
+            mode="lines",
+            name="BER",
+            line=dict(color=C_AQUA, width=2.5),
+            hovertemplate="threshold=%{x:.3f}<br>BER=%{y:.1f}%<extra></extra>",
+        )
+    )
+    # Empirical minimum on this holdout.
+    imin = int(np.argmin(ber))
+    fig.add_trace(
+        go.Scatter(
+            x=[grid[imin]],
+            y=[ber[imin]],
+            mode="markers",
+            name="BER-min (empirical)",
+            marker=dict(color=C_GREEN, size=12, symbol="diamond"),
+            hovertemplate="BER-min<br>threshold=%{x:.3f}<br>BER=%{y:.1f}%<extra></extra>",
+        )
+    )
+
+    for label, thr in (profile_thresholds or {}).items():
+        if thr is None or not np.isfinite(thr):
+            continue
+        fig.add_vline(
+            x=float(thr),
+            line_dash="dot",
+            line_color=C_ORANGE,
+            annotation_text=label,
+            annotation_position="top",
+        )
+
+    fig.update_layout(
+        title=dict(text=title),
+        xaxis_title="Decision threshold (fail-class probability)",
+        yaxis_title="Balanced error rate (%)",
+        xaxis=dict(gridcolor="rgba(200, 200, 200, 0.15)"),
+        yaxis=dict(gridcolor="rgba(200, 200, 200, 0.15)"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+    )
+    return _sized(fig, height=420, margin=dict(l=56, r=48, t=72, b=48))
+
+
+def fig_calibration(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    *,
+    n_bins: int = 5,
+    title: str = "Calibration (reliability) curve",
+) -> go.Figure:
+    """Reliability curve (binned observed vs predicted) + diagonal; Brier in title.
+
+    Axes are zoomed to the predicted-probability range actually emitted (an
+    isotonic-calibrated model on imbalanced data predicts mostly small
+    probabilities, so a fixed [0,1] view looks empty). A faint predicted-score
+    histogram on a secondary axis shows where the mass sits.
+    """
+    from sklearn.calibration import calibration_curve
+    from sklearn.metrics import brier_score_loss
+
+    fig = go.Figure()
+    y_true = np.asarray(y_true, dtype=int)
+    y_score = np.asarray(y_score, dtype=float)
+    if y_true.size == 0 or y_score.size == 0 or len(np.unique(y_true)) < 2:
+        return _sized(
+            fig.update_layout(title=dict(text=title)),
+            height=420,
+            margin=dict(l=56, r=48, t=72, b=48),
+        )
+
+    brier = float(brier_score_loss(y_true, y_score))
+    try:
+        prob_true, prob_pred = calibration_curve(
+            y_true, y_score, n_bins=n_bins, strategy="quantile"
+        )
+    except ValueError:
+        prob_true, prob_pred = np.array([]), np.array([])
+
+    # Zoom to the data range so the curve fills the panel.
+    hi = float(np.max(y_score)) if y_score.size else 1.0
+    if prob_pred.size:
+        hi = max(hi, float(np.max(prob_pred)), float(np.max(prob_true)))
+    axis_hi = float(min(1.0, hi * 1.1 + 0.02))
+
+    # Predicted-score histogram (secondary axis) to show where the mass sits.
+    fig.add_trace(
+        go.Histogram(
+            x=y_score,
+            nbinsx=40,
+            name="Predicted scores",
+            marker=dict(color=C_BLUE),
+            opacity=0.25,
+            yaxis="y2",
+            hovertemplate="score=%{x:.3f}<br>count=%{y}<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=[0, axis_hi],
+            y=[0, axis_hi],
+            mode="lines",
+            name="Perfect calibration",
+            line=dict(color=C_BLUE, width=1.5, dash="dash"),
+            hoverinfo="skip",
+        )
+    )
+    if prob_pred.size:
+        fig.add_trace(
+            go.Scatter(
+                x=prob_pred,
+                y=prob_true,
+                mode="lines+markers",
+                name="Model",
+                line=dict(color=C_PURPLE, width=2.5),
+                marker=dict(size=8),
+                hovertemplate="predicted=%{x:.3f}<br>observed=%{y:.3f}<extra></extra>",
+            )
+        )
+    fig.update_layout(
+        title=dict(text=f"{title} — Brier = {brier:.3f}"),
+        xaxis_title="Mean predicted fail probability",
+        yaxis_title="Observed fail fraction",
+        xaxis=dict(range=[0, axis_hi], gridcolor="rgba(200, 200, 200, 0.15)"),
+        yaxis=dict(range=[0, axis_hi], gridcolor="rgba(200, 200, 200, 0.15)"),
+        yaxis2=dict(
+            overlaying="y",
+            side="right",
+            showgrid=False,
+            title="Predicted-score count",
+        ),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+    )
+    return _sized(fig, height=420, margin=dict(l=56, r=48, t=72, b=48))
 
 
 def fig_risk_coverage(
@@ -1097,62 +1411,6 @@ def fig_risk_coverage(
         xaxis_title="Coverage (fraction of wafers kept)",
         yaxis_title=f"Conditional {metric_label}",
         xaxis=dict(autorange="reversed", gridcolor="rgba(200, 200, 200, 0.15)"),
-        yaxis=dict(gridcolor="rgba(200, 200, 200, 0.15)"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-    )
-    return _sized(fig, height=440, margin=dict(l=56, r=48, t=72, b=48))
-
-
-def fig_time_decay_sweep(
-    df: pd.DataFrame,
-    *,
-    metric: str = "pr_auc",
-    title: str = "Temporal holdout vs time-decay λ",
-) -> go.Figure:
-    """One line per pipeline of temporal-holdout metric vs decay λ.
-
-    λ=0 is the headline (unweighted) operating point, marked with a dashed line;
-    points to the right show whether recency weighting would help the forward
-    holdout. ``metric`` is ``"pr_auc"`` or ``"roc_auc"``.
-    """
-    fig = go.Figure()
-    if df is None or df.empty or metric not in df.columns:
-        return _sized(
-            fig.update_layout(title=dict(text=title)),
-            height=440,
-            margin=dict(l=56, r=48, t=72, b=48),
-        )
-
-    metric_label = "PR-AUC" if metric == "pr_auc" else "ROC-AUC"
-    pipelines = sorted(df["pipeline"].unique())
-    for i, name in enumerate(pipelines):
-        sub = df[df["pipeline"] == name].sort_values("decay_lambda")
-        fig.add_trace(
-            go.Scatter(
-                x=sub["decay_lambda"],
-                y=sub[metric],
-                mode="lines+markers",
-                name=name,
-                line=dict(color=C[i % len(C)], width=2.5),
-                marker=dict(size=6),
-                hovertemplate=(
-                    f"{name}<br>λ=%{{x:.2f}}<br>{metric_label}=%{{y:.3f}}<extra></extra>"
-                ),
-            )
-        )
-
-    fig.add_vline(
-        x=0.0,
-        line_dash="dash",
-        line_color=C_BLUE,
-        annotation_text="λ=0 (headline)",
-        annotation_position="top",
-    )
-    fig.update_layout(
-        title=dict(text=title),
-        xaxis_title="Time-decay λ (recency weighting)",
-        yaxis_title=f"Temporal holdout {metric_label}",
-        xaxis=dict(gridcolor="rgba(200, 200, 200, 0.15)"),
         yaxis=dict(gridcolor="rgba(200, 200, 200, 0.15)"),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
     )

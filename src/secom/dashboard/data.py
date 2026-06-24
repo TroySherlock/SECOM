@@ -10,6 +10,7 @@ import pandas as pd
 
 from secom.costs import (
     PROFILE_IDS,
+    THRESHOLD_PROFILES,
     has_multi_profile_thresholds,
     threshold_profile_config,
 )
@@ -409,22 +410,6 @@ def t2_gate_meta(payload: dict[str, Any]) -> dict[str, Any]:
     return process_gate_meta(payload)
 
 
-def time_decay_sweep_df(payload: dict[str, Any], metric: str = "pr_auc") -> pd.DataFrame:
-    """Temporal-holdout diagnostic sweep: one row per (pipeline, decay_lambda).
-
-    ``metric`` selects which score column (``pr_auc`` / ``roc_auc``) to surface
-    alongside ``pipeline`` and ``decay_lambda``; lambda=0 is the headline model.
-    """
-    rows = payload.get("time_decay_sweep") or []
-    if not rows:
-        return pd.DataFrame()
-    df = pd.DataFrame(rows)
-    keep = [c for c in ("pipeline", "decay_lambda", metric) if c in df.columns]
-    if "pipeline" not in keep or "decay_lambda" not in keep or metric not in keep:
-        return pd.DataFrame()
-    return df[keep].sort_values(["pipeline", "decay_lambda"]).reset_index(drop=True)
-
-
 HOLDOUT_AUC_DISPLAY_COLS = [
     "pipeline",
     "pr_auc",
@@ -433,11 +418,14 @@ HOLDOUT_AUC_DISPLAY_COLS = [
     "roc_auc",
     "roc_auc_ci_low",
     "roc_auc_ci_high",
+    "ber_percent",
+    "ber_percent_ci_low",
+    "ber_percent_ci_high",
 ]
 
 
 def holdout_auc_summary_df(ho_df: pd.DataFrame) -> pd.DataFrame:
-    """Holdout point estimates + bootstrap CIs for PR-AUC and ROC-AUC only."""
+    """Holdout point estimates + bootstrap CIs for PR-AUC, ROC-AUC, and BER."""
     cols = [c for c in HOLDOUT_AUC_DISPLAY_COLS if c in ho_df.columns]
     if not cols:
         return pd.DataFrame()
@@ -445,6 +433,40 @@ def holdout_auc_summary_df(ho_df: pd.DataFrame) -> pd.DataFrame:
     for col in out.select_dtypes(include="float").columns:
         out[col] = out[col].round(3)
     return out
+
+
+def operating_table_df(ho_df: pd.DataFrame, pipeline_id: str) -> pd.DataFrame:
+    """Per-threshold-profile operating point for one pipeline.
+
+    One row per profile (``conservative/ber/aggressive``) with the holdout threshold, BER%,
+    and TPR/TNR pulled from the per-profile columns already in ``holdout_df``.
+    Empty when the pipeline/columns are absent.
+    """
+    if ho_df.empty or "pipeline" not in ho_df.columns:
+        return pd.DataFrame()
+    rows = ho_df.loc[ho_df["pipeline"] == pipeline_id]
+    if rows.empty:
+        return pd.DataFrame()
+    row = rows.iloc[0]
+    out = []
+    for pid in PROFILE_IDS:
+        thr = row.get(f"{pid}_threshold")
+        ber = row.get(f"{pid}_ber_percent")
+        tpr = row.get(f"{pid}_true_positive_percent")
+        tnr = row.get(f"{pid}_true_negative_percent")
+        if thr is None and ber is None:
+            continue
+        label = THRESHOLD_PROFILES[pid].display_name if pid in THRESHOLD_PROFILES else pid
+        out.append(
+            {
+                "Profile": label,
+                "Threshold": round(float(thr), 4) if thr is not None else None,
+                "BER %": round(float(ber), 1) if ber is not None else None,
+                "TPR %": round(float(tpr), 1) if tpr is not None else None,
+                "TNR %": round(float(tnr), 1) if tnr is not None else None,
+            }
+        )
+    return pd.DataFrame(out)
 
 
 def model_info(model_id: str) -> ModelInfo:
@@ -505,14 +527,10 @@ def resolved_threshold_profile_config(
     if isinstance(cfg, dict) and cfg:
         return dict(cfg)
     frozen = payload.get("frozen_config") or {}
-    if isinstance(frozen, dict) and (
-        frozen.get("f0_5_beta") is not None or frozen.get("f2_beta") is not None
-    ):
+    if isinstance(frozen, dict) and frozen.get("ber_band_tolerance") is not None:
         return {
-            "f0_5_beta": frozen.get("f0_5_beta"),
-            "f2_beta": frozen.get("f2_beta"),
-            "f4_beta": frozen.get("f4_beta"),
-            "default_profile": frozen.get("default_profile", "f2"),
+            "ber_band_tolerance": frozen.get("ber_band_tolerance"),
+            "default_profile": frozen.get("default_profile", "ber"),
         }
     return threshold_profile_config()
 

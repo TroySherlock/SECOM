@@ -15,6 +15,7 @@ from sklearn.pipeline import Pipeline
 
 from secom.progress import tqdm_joblib_context
 from secom.costs import (
+    BER_BAND_TOLERANCE,
     DEFAULT_PROFILE_ID,
     PROFILE_IDS,
     THRESHOLD_PROFILES,
@@ -613,12 +614,6 @@ def tune_classifier_threshold_profiles(
         fold_probas.append(fold_pipe.predict_proba(X_val)[:, 1])
         fold_y_val.append(y_val)
 
-    fbeta_profile_ids = [
-        pid for pid in PROFILE_IDS if THRESHOLD_PROFILES[pid].objective == "fbeta"
-    ]
-    mean_fbeta_by_profile: dict[str, dict[float, float]] = {
-        pid: {} for pid in fbeta_profile_ids
-    }
     mean_ber_by_threshold: dict[float, float] = {}
     mean_tpr_by_threshold: dict[float, float] = {}
 
@@ -628,24 +623,27 @@ def tune_classifier_threshold_profiles(
         )
         mean_ber_by_threshold[threshold] = float(np.mean(fold_bers))
         mean_tpr_by_threshold[threshold] = float(np.mean(fold_tprs))
-        for pid in fbeta_profile_ids:
-            beta = THRESHOLD_PROFILES[pid].beta
-            fold_fbetas, _, _ = _fold_metrics_at_threshold(
-                fold_probas, fold_y_val, threshold, beta=beta
-            )
-            mean_fbeta_by_profile[pid][threshold] = float(np.mean(fold_fbetas))
 
-    best_thresholds: dict[str, float] = {
-        pid: max(scores, key=scores.get)
-        for pid, scores in mean_fbeta_by_profile.items()
-    }
+    # BER-tolerance band: minimise mean BER on the eligible (TPR>0) pool, then
+    # take the high/low ends of the band within BER_BAND_TOLERANCE of that min.
     ber_eligible = {
         thr: ber
         for thr, ber in mean_ber_by_threshold.items()
         if mean_tpr_by_threshold[thr] > 0.0
     }
     ber_pool = ber_eligible if ber_eligible else mean_ber_by_threshold
-    best_thresholds["ber"] = min(ber_pool, key=ber_pool.get)
+    ber_min_thr = min(ber_pool, key=ber_pool.get)
+    ber_min = ber_pool[ber_min_thr]
+    band = [
+        thr for thr, ber in ber_pool.items() if ber <= ber_min + BER_BAND_TOLERANCE
+    ]
+    if not band:
+        band = [ber_min_thr]
+    best_thresholds: dict[str, float] = {
+        "conservative": float(max(band)),
+        "ber": float(ber_min_thr),
+        "aggressive": float(min(band)),
+    }
 
     profiles = {
         pid: _profile_result_at_best(
@@ -653,26 +651,20 @@ def tune_classifier_threshold_profiles(
             best_thresholds[pid],
             fold_probas,
             fold_y_val,
-            beta=THRESHOLD_PROFILES[pid].beta,
-            objective=THRESHOLD_PROFILES[pid].objective,
+            beta=None,
+            objective="ber",
         )
         for pid in PROFILE_IDS
     }
 
-    curve_cols = {
-        "threshold": threshold_grid,
-        "mean_ber_percent": [mean_ber_by_threshold[t] for t in threshold_grid],
-        **{
-            f"mean_fbeta_{pid}": [
-                mean_fbeta_by_profile[pid][t] for t in threshold_grid
-            ]
-            for pid in fbeta_profile_ids
-        },
-    }
-    objective_curves = pd.DataFrame(curve_cols)
+    objective_curves = pd.DataFrame(
+        {
+            "threshold": threshold_grid,
+            "mean_ber_percent": [mean_ber_by_threshold[t] for t in threshold_grid],
+        }
+    )
 
     default_prof = profiles[DEFAULT_PROFILE_ID]
-    neutral_col = f"mean_fbeta_{DEFAULT_PROFILE_ID}"
     per_threshold_mean_ber = (
         objective_curves[["threshold", "mean_ber_percent"]]
         .sort_values("mean_ber_percent", ascending=True, kind="mergesort")
@@ -681,15 +673,11 @@ def tune_classifier_threshold_profiles(
         "profiles": profiles,
         "threshold_grid": threshold_grid,
         "objective_curves": objective_curves,
+        "ber_band_tolerance": float(BER_BAND_TOLERANCE),
         "best_threshold": default_prof["best_threshold"],
-        "mean_fbeta": default_prof["mean_fbeta"],
-        "std_fbeta": default_prof["std_fbeta"],
         "mean_ber_percent": default_prof["mean_ber_percent"],
         "std_ber_percent": default_prof["std_ber_percent"],
         "per_threshold_mean_ber": per_threshold_mean_ber,
-        f"per_threshold_mean_fbeta_{DEFAULT_PROFILE_ID}": objective_curves[
-            ["threshold", neutral_col]
-        ].sort_values(neutral_col, ascending=False, kind="mergesort"),
         "fold_results_at_best_threshold": default_prof[
             "fold_results_at_best_threshold"
         ],
@@ -718,10 +706,9 @@ def save_tuned_params(
         profile_map.get(DEFAULT_PROFILE_ID) if profile_map else None
     )
     if default_profile is None and profile_map:
-        default_profile = profile_map.get("ber") or profile_map.get("f4") or profile_map.get("f2")
+        default_profile = profile_map.get("ber")
 
     if default_profile is not None:
-        summary_out["mean_fbeta_at_threshold"] = default_profile.get("mean_fbeta")
         summary_out["mean_ber_percent_at_threshold"] = default_profile["mean_ber_percent"]
         summary_out["std_ber_percent_at_threshold"] = default_profile["std_ber_percent"]
         summary_out["classifier_threshold"] = default_profile["best_threshold"]
@@ -732,7 +719,6 @@ def save_tuned_params(
             "mean_true_negative_percent"
         ]
     elif threshold_result is not None:
-        summary_out["mean_fbeta_at_threshold"] = threshold_result.get("mean_fbeta")
         summary_out["mean_ber_percent_at_threshold"] = threshold_result.get(
             "mean_ber_percent"
         )
@@ -778,23 +764,13 @@ def save_tuned_params(
             if default_profile
             else threshold_result["fold_results_at_best_threshold"]
         )
-        per_thresh = threshold_result.get(
-            f"per_threshold_mean_fbeta_{DEFAULT_PROFILE_ID}"
-        )
-        if per_thresh is None:
-            per_thresh = threshold_result.get("per_threshold_mean_fbeta_f4")
-        if per_thresh is None:
-            per_thresh = threshold_result.get("per_threshold_mean_ber")
+        per_thresh = threshold_result.get("per_threshold_mean_ber")
         payload["threshold_tuning"] = json_safe(
             {
-                "metric": "fbeta",
+                "metric": "ber_band",
                 "default_profile": DEFAULT_PROFILE_ID,
+                "ber_band_tolerance": threshold_result.get("ber_band_tolerance"),
                 "best_threshold": best_threshold,
-                "mean_fbeta": (
-                    default_profile.get("mean_fbeta")
-                    if default_profile
-                    else threshold_result.get("mean_fbeta")
-                ),
                 "mean_ber_percent": (
                     default_profile["mean_ber_percent"]
                     if default_profile
