@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-23T22:46:50.311442+00:00",
+  "generated_at": "2026-06-25T01:10:57.140061+00:00",
   "holdout_split": {
     "split_mode": "temporal",
     "test_size": 0.2,
@@ -948,8 +948,8 @@
         "dbt_dropped_sensors": 168,
         "auxiliary_features": 35,
         "after_impute": 844,
-        "after_cluster": 377,
-        "drop_correlated": 455,
+        "after_cluster": 706,
+        "drop_correlated": 126,
         "after_preprocess": 60,
         "classifier_input": 60
       },

@@ -116,10 +116,10 @@ CV_N_JOBS = -1
 ESTIMATOR_N_JOBS = 1
 
 PRIMARY_TUNING_METRIC = "pr_auc"
-THRESHOLD_GRID = np.linspace(0.001, 0.999, num=2000)
+THRESHOLD_GRID = np.linspace(0.0001, 0.2, num=2000)
 
-CLASSIFIER_CALIBRATION_METHOD = "isotonic"
-CLASSIFIER_CALIBRATION_CV = 3
+CLASSIFIER_CALIBRATION_METHOD = "sigmoid"
+CLASSIFIER_CALIBRATION_CV = 5
 
 HOLDOUT_BOOTSTRAP_N = 1000
 HOLDOUT_BOOTSTRAP_CI = 0.95
@@ -538,7 +538,7 @@ BAYES_N_HUBS = 5
 BAYES_PLS_COMPONENTS = 25
 BAYES_SVI_STEPS = 1000
 # Each calibration fold is a full ADVI refit -> use fewer folds than LR/RF.
-BAYES_CALIB_CV = 2
+BAYES_CALIB_CV = 3
 
 # Exponential time-decay (recency weighting) grid for the temporal-holdout
 # diagnostic sweep (lambda=0 recovers the unweighted headline model). Decay is
