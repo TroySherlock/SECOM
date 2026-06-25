@@ -151,6 +151,44 @@ def era_drift_summary(
     }
 
 
+def per_sensor_era_drift(
+    df: pd.DataFrame,
+    *,
+    timestamp_col: str = TIMESTAMP_COL,
+    sensor_cols: list[str] | None = None,
+    test_size: float = 0.20,
+) -> pd.Series:
+    """Per-sensor holdout-era mean shift in training-era SD units.
+
+    Same standardisation as :func:`era_drift_summary` (and the drift heatmap),
+    but returns the full per-sensor shift Series (signed) instead of aggregates,
+    so callers can flag whether an individual contributor sensor is drifting.
+    Empty Series when the timeline is too short.
+    """
+    sensor_cols = sensor_cols or sensor_columns(df)
+    if not sensor_cols:
+        return pd.Series(dtype=float)
+
+    ts = pd.to_datetime(df[timestamp_col], errors="coerce")
+    order = ts.sort_values().index
+    values = df.loc[order, sensor_cols].astype(float)
+    values = values.fillna(values.median(numeric_only=True))
+
+    n_rows = len(values)
+    train_n = int(round(n_rows * (1.0 - test_size)))
+    if n_rows < 4 or train_n < 2 or train_n >= n_rows:
+        return pd.Series(dtype=float)
+
+    base = values.iloc[:train_n]
+    base_std = base.std(ddof=0)
+    keep = base_std[base_std > 0].index.tolist()
+    if not keep:
+        return pd.Series(dtype=float)
+
+    z = (values[keep] - base.mean()[keep]) / base_std[keep]
+    return z.iloc[train_n:].mean()
+
+
 def slice_stg_for_display(
     df: pd.DataFrame,
     *,

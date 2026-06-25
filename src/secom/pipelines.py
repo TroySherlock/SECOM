@@ -77,8 +77,10 @@ BENCHMARK_RESULTS_PATH = OUTPUT_DIR / "secom_pipeline_benchmark.json"
 PIPELINE_ARTIFACTS_PATH = OUTPUT_DIR / "secom_pipeline_artifacts.json"
 # Frozen PR-curve + global-importance cache the dashboard reads (per track/model).
 REPORT_CACHE_PATH = OUTPUT_DIR / "secom_report_cache.json"
-# Pre-generated wafer narratives for the narrative model (hsic_bayes).
+# Pre-generated wafer narratives. The narrative model is track-dependent:
+# extrapolation/temporal -> pls_bayes, interpolation/random -> hsic_rf.
 NARRATIVES_PATH = OUTPUT_DIR / "extrap_wafer_narratives.json"
+INTERP_NARRATIVES_PATH = OUTPUT_DIR / "interp_wafer_narratives.json"
 
 TARGET_COL = "target"
 TIMESTAMP_COL = "measurement_ts"
@@ -514,6 +516,11 @@ N_HUBS_GRID = [0, 5, 10]
 PLS_N_COMPONENTS_DEFAULT = 25 
 PLS_N_COMPONENTS_GRID = [25, 30, 35]
 
+# Ablation knob: keep ("passthrough") or drop ("drop") the calendar/time-feature
+# branch of the preprocess ColumnTransformer. Default (passthrough) preserves the
+# existing frozen pipelines; "drop" lets a re-tune test parsimony without them.
+CALENDAR_ABLATION_GRID = ("passthrough", "drop")
+
 # --- Classifier head grids ---------------------------------------------------
 # Elastic-net LR (saga) slope prior.
 C_GRID = [0.0075, 0.01, 0.1]
@@ -658,6 +665,7 @@ def pipelines_frozen_config_fragment() -> dict:
         "n_hubs_grid": [int(k) for k in N_HUBS_GRID],
         "pls_n_components_default": int(PLS_N_COMPONENTS_DEFAULT),
         "pls_n_components_grid": [int(k) for k in PLS_N_COMPONENTS_GRID],
+        "calendar_ablation_grid": [str(v) for v in CALENDAR_ABLATION_GRID],
         "c_grid": [float(c) for c in C_GRID],
         "l1_ratio_grid": [float(r) for r in L1_RATIO_GRID],
         "rf_max_depth_grid": [int(d) for d in RF_MAX_DEPTH_GRID],

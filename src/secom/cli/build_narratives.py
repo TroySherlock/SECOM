@@ -1,4 +1,11 @@
-"""Batch-generate frozen Gemma narratives for all hsic_bayes holdout wafers."""
+"""Batch-generate frozen Gemma wafer narratives for both tracks.
+
+The narrative model is track-dependent: the random/in-distribution track uses
+``hsic_rf`` and the temporal track uses ``pls_bayes``. Each track is written to
+its own artifact (``interp_wafer_narratives.json`` / ``extrap_wafer_narratives.json``).
+
+Requires a local llama-server (see secom.dashboard.narrator for env vars).
+"""
 from __future__ import annotations
 
 import argparse
@@ -9,7 +16,7 @@ from tqdm import tqdm
 
 from secom.dashboard.explainability import cached_wafer_explanation, holdout_wafer_ids
 from secom.dashboard.narrator import (
-    NARRATIVE_MODEL_ID,
+    NARRATIVE_MODEL_BY_TRACK,
     LLMNarrativeError,
     build_narratives_artifact,
     build_wafer_facts,
@@ -17,10 +24,11 @@ from secom.dashboard.narrator import (
     generate_narrative_via_llm,
     llm_config,
     load_narratives,
+    narrative_model_for_track,
+    narratives_path_for_track,
     resolve_llm_model,
     write_narratives_artifact,
 )
-from secom.pipelines import NARRATIVES_PATH
 
 MAX_RETRIES = 3
 RETRY_BACKOFF_SEC = 2.0
@@ -41,21 +49,63 @@ def _generate_with_retries(facts: dict, *, model: str) -> str:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate frozen Gemma wafer narratives for hsic_bayes holdout wafers."
+        description="Generate frozen Gemma wafer narratives per track."
+    )
+    parser.add_argument(
+        "--track",
+        choices=sorted(NARRATIVE_MODEL_BY_TRACK),
+        default=None,
+        help="Only generate for one track (default: both).",
     )
     parser.add_argument(
         "--wafer-id",
         type=str,
         default=None,
-        help="Regenerate a single holdout wafer (merges into existing artifact if present).",
-    )
-    parser.add_argument(
-        "--output",
-        type=str,
-        default=str(NARRATIVES_PATH),
-        help=f"Output JSON path (default: {NARRATIVES_PATH})",
+        help="Regenerate a single holdout wafer (merges into the existing artifact).",
     )
     return parser.parse_args()
+
+
+def _run_track(track: str, *, model: str, wafer_id: str | None) -> int:
+    narrative_model = narrative_model_for_track(track)
+    output_path = str(narratives_path_for_track(track))
+
+    wafer_ids = holdout_wafer_ids(track)
+    if wafer_id is not None:
+        wafer_ids = [w for w in wafer_ids if str(w) == wafer_id] or [wafer_id]
+
+    existing: dict[str, str] = {}
+    try:
+        prior = load_narratives(output_path)
+        existing = dict(prior.get("narratives") or {})
+    except FileNotFoundError:
+        pass
+
+    narratives: dict[str, str] = dict(existing) if wafer_id else {}
+
+    for wid in tqdm(wafer_ids, desc=f"Gemma narratives [{track}]", unit="wafer"):
+        result = cached_wafer_explanation(narrative_model, wid, track)
+        if result is None:
+            print(f"ERROR: wafer {wid!r} not found in {track} holdout", file=sys.stderr)
+            return 1
+        facts = build_wafer_facts(narrative_model, result, track)
+        try:
+            narratives[str(wid)] = _generate_with_retries(facts, model=model)
+        except LLMNarrativeError as exc:
+            print(f"ERROR: wafer {wid}: {exc}", file=sys.stderr)
+            return 1
+
+    base_url, _, _ = llm_config()
+    payload = build_narratives_artifact(
+        narratives,
+        model_id=narrative_model,
+        track=track,
+        llm_base_url=base_url,
+        llm_model=model,
+    )
+    out = write_narratives_artifact(payload, output_path)
+    print(f"Wrote {len(narratives)} narratives ({track}, {narrative_model}) to {out}")
+    return 0
 
 
 def main() -> int:
@@ -68,48 +118,11 @@ def main() -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
-    wafer_ids = holdout_wafer_ids()
-    if args.wafer_id is not None:
-        target = args.wafer_id
-        if target not in {str(w) for w in wafer_ids} and not any(
-            str(w) == target for w in wafer_ids
-        ):
-            print(f"ERROR: wafer id {target!r} not in holdout split", file=sys.stderr)
-            return 1
-        wafer_ids = [w for w in wafer_ids if str(w) == target]
-        if not wafer_ids:
-            wafer_ids = [args.wafer_id]
-
-    existing: dict[str, str] = {}
-    output_path = args.output
-    try:
-        prior = load_narratives(output_path)
-        existing = dict(prior.get("narratives") or {})
-    except FileNotFoundError:
-        pass
-
-    narratives: dict[str, str] = dict(existing) if args.wafer_id else {}
-
-    for wafer_id in tqdm(wafer_ids, desc="Gemma narratives", unit="wafer"):
-        result = cached_wafer_explanation(NARRATIVE_MODEL_ID, wafer_id)
-        if result is None:
-            print(f"ERROR: wafer {wafer_id!r} not found in holdout split", file=sys.stderr)
-            return 1
-        facts = build_wafer_facts(NARRATIVE_MODEL_ID, result)
-        key = str(wafer_id)
-        try:
-            narratives[key] = _generate_with_retries(facts, model=model)
-        except LLMNarrativeError as exc:
-            print(f"ERROR: wafer {key}: {exc}", file=sys.stderr)
-            return 1
-
-    payload = build_narratives_artifact(
-        narratives,
-        llm_base_url=base_url,
-        llm_model=model,
-    )
-    out = write_narratives_artifact(payload, output_path)
-    print(f"Wrote {len(narratives)} narratives to {out}")
+    tracks = [args.track] if args.track else sorted(NARRATIVE_MODEL_BY_TRACK)
+    for track in tracks:
+        rc = _run_track(track, model=model, wafer_id=args.wafer_id)
+        if rc != 0:
+            return rc
     return 0
 
 

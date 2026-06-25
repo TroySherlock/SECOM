@@ -20,32 +20,56 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
 from secom.dashboard.data import model_info
 from secom.dashboard.explainability import (
     WaferExplanation,
-    fit_holdout_pipeline,
-    load_holdout_split,
-    scaled_matrix,
+    cached_bayes_hdis,
+    cached_pls_sensor_robust_map,
+    is_pls_model,
 )
-from secom.pipelines import ID_COL, NARRATIVES_PATH
+from secom.pipelines import INTERP_NARRATIVES_PATH, NARRATIVES_PATH
 
-NARRATIVE_MODEL_ID = "hsic_bayes"
-PROMPT_VERSION = "statistical-interpreter-v1"
+# The narrative model is track-dependent: the random/in-distribution track uses
+# the RF-selection tree head, the temporal track uses the PLS Bayesian champion.
+NARRATIVE_MODEL_BY_TRACK: dict[str, str] = {
+    "interpolation": "hsic_rf",
+    "extrapolation": "pls_bayes",
+}
+NARRATIVE_PATH_BY_TRACK = {
+    "interpolation": INTERP_NARRATIVES_PATH,
+    "extrapolation": NARRATIVES_PATH,
+}
+# Back-compat default (temporal champion).
+NARRATIVE_MODEL_ID = NARRATIVE_MODEL_BY_TRACK["extrapolation"]
+PROMPT_VERSION = "statistical-interpreter-v3-rca"
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8080/v1"
 DEFAULT_MODEL = "gemma"
 LLM_TIMEOUT_SEC = 45
-LLM_MAX_TOKENS = 120
+LLM_MAX_TOKENS = 160
 
 _SYSTEM_PROMPT = (
     "You are a Statistical Interpreter for semiconductor wafer screening models. "
     "Restate only the numeric facts in the user JSON. Do not invent fab processes, "
     "equipment names, or root causes. Do not mention features not listed. "
+    "There is no real sensor-to-tool/chamber mapping, so never describe sensors as "
+    "physical equipment. Treat every attribution as "
+    "associational, not causal. When an SPC z-score or drift flag is given, you may "
+    "restate it as 'unusual vs the in-control baseline' or 'drifting over time'. "
     "Write 3–5 concise sentences in plain English."
 )
+
+
+def narrative_model_for_track(track: str) -> str:
+    """Designated narrative model id for a dashboard track."""
+    return NARRATIVE_MODEL_BY_TRACK.get(track, NARRATIVE_MODEL_ID)
+
+
+def narratives_path_for_track(track: str):
+    """Frozen narratives artifact path for a dashboard track."""
+    return NARRATIVE_PATH_BY_TRACK.get(track, NARRATIVES_PATH)
 
 
 class LLMNarrativeError(RuntimeError):
@@ -56,77 +80,87 @@ def _label_text(label: int) -> str:
     return "Fail" if label == 1 else "Pass"
 
 
-def _linear_z_scores(
-    pipeline,
-    observation_id: object,
-    feature_names: list[str],
-) -> dict[str, float]:
-    split = load_holdout_split()
-    mask = split.test_df[ID_COL] == observation_id
-    X_row = split.X_test.loc[mask]
-    X_train_scaled, names = scaled_matrix(pipeline, split.X_train)
-    row_scaled, _ = scaled_matrix(pipeline, X_row)
-    mean = X_train_scaled.mean(axis=0)
-    std = X_train_scaled.std(axis=0)
-    std = np.where(std < 1e-12, 1.0, std)
-    name_to_idx = {str(n): i for i, n in enumerate(names)}
-    out: dict[str, float] = {}
-    for feat in feature_names:
-        idx = name_to_idx.get(str(feat))
-        if idx is None:
-            continue
-        out[str(feat)] = float((row_scaled[0, idx] - mean[idx]) / std[idx])
-    return out
+def _robust_map(model_id: str, track: str) -> dict[str, bool]:
+    """Attribution-robustness lookup (HDI excludes 0) for Bayesian heads."""
+    if model_info(model_id).explainability != "bayesian":
+        return {}
+    if is_pls_model(model_id):
+        return cached_pls_sensor_robust_map(model_id, track)
+    hdi = cached_bayes_hdis(model_id, track)
+    if hdi is None or hdi.empty:
+        return {}
+    return {str(r.feature): bool(r.robust) for r in hdi.itertuples()}
 
 
-def _local_rows(local_df: pd.DataFrame) -> list[dict[str, Any]]:
+def _contributor_rows(local_df: pd.DataFrame, robust_map: dict[str, bool]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    has_coef = "coefficient" in local_df.columns
     for _, row in local_df.iterrows():
+        feat = str(row["feature"])
+        contribution = float(row["contribution"])
         entry: dict[str, Any] = {
-            "feature": str(row["feature"]),
-            "contribution": float(row["contribution"]),
+            "feature": feat,
+            "contribution": round(contribution, 4),
         }
-        if "coefficient" in row.index and pd.notna(row["coefficient"]):
-            entry["coefficient"] = float(row["coefficient"])
+        if has_coef and pd.notna(row.get("coefficient")):
+            entry["direction"] = "positive" if float(row["coefficient"]) > 0 else "negative"
+        else:
+            entry["direction"] = (
+                "raises_fail_risk" if contribution > 0 else "lowers_fail_risk"
+            )
+        spc = row.get("spc_z")
+        if spc is not None and pd.notna(spc):
+            entry["spc_z"] = round(float(spc), 2)
+        entry["drifting"] = bool(row.get("drift_flag", False))
+        if feat in robust_map:
+            entry["attribution_robust"] = bool(robust_map[feat])
         rows.append(entry)
     return rows
 
 
-def build_wafer_facts(model_id: str, result: WaferExplanation) -> dict[str, Any]:
-    """Build JSON-serializable facts for hsic_bayes Gemma narration."""
-    if model_id != NARRATIVE_MODEL_ID:
-        raise ValueError(f"Narration only supported for {NARRATIVE_MODEL_ID!r}, got {model_id!r}")
+def build_wafer_facts(
+    model_id: str, result: WaferExplanation, track: str = "extrapolation"
+) -> dict[str, Any]:
+    """Build JSON-serializable RCA facts for the track's narrative model.
+
+    Facts are sensor-space (PLS back-projected where needed) and carry SPC
+    z-scores, drift flags, and attribution-robustness (HDI) so the Statistical
+    Interpreter can restate richer evidence without inventing causes.
+    """
+    expected = narrative_model_for_track(track)
+    if model_id != expected:
+        raise ValueError(
+            f"Narration for {track!r} only supported for {expected!r}, got {model_id!r}"
+        )
 
     info = model_info(model_id)
-    local_rows = _local_rows(result.local_df)
+    robust_map = _robust_map(model_id, track)
+    contributors = _contributor_rows(result.local_df, robust_map)
+    n_drifting = sum(1 for c in contributors if c.get("drifting"))
+    if result.actual_label == 1:
+        outcome = "caught_fail" if result.predicted_label == 1 else "missed_fail"
+    else:
+        outcome = "false_alarm" if result.predicted_label == 1 else "correct_pass"
 
     facts: dict[str, Any] = {
         "model_id": model_id,
         "model_name": info.display_name,
+        "track": track,
+        "feature_space": "sensor (PLS back-projected)" if is_pls_model(model_id) else "sensor",
         "wafer_id": str(result.observation_id),
         "actual": _label_text(result.actual_label),
         "predicted": _label_text(result.predicted_label),
+        "outcome": outcome,
         "fail_probability": round(result.fail_probability, 4),
         "threshold": round(result.threshold, 4),
+        "n_drifting_contributors": int(n_drifting),
         "method": result.method,
-        "local_contributors": local_rows,
+        "top_contributors": contributors,
+        "caveat": "associational, not causal; no real tool/chamber mapping exists",
     }
-
-    pipeline, _tuned = fit_holdout_pipeline(model_id)
-    feature_names = [r["feature"] for r in local_rows]
-    # z-scores rely on the sklearn scaled feature space; the Bayesian head works
-    # on a named interaction-frame design, so we report coefficient sign only.
-    z_scores: dict[str, float] = {}
-    if hasattr(pipeline, "named_steps"):
-        z_scores = _linear_z_scores(pipeline, result.observation_id, feature_names)
-    for row in local_rows:
-        feat = row["feature"]
-        if feat in z_scores:
-            row["z_score"] = round(z_scores[feat], 3)
-        coef = row.get("coefficient")
-        if coef is not None:
-            row["coefficient_sign"] = "positive" if coef > 0 else "negative"
-
+    if result.fail_probability_interval is not None:
+        lo, hi = result.fail_probability_interval
+        facts["fail_probability_credible_interval"] = [round(lo, 4), round(hi, 4)]
     return facts
 
 
@@ -222,16 +256,18 @@ def generate_narrative_via_llm(
     return str(content).strip()
 
 
-def load_narratives(path: Path | str = NARRATIVES_PATH) -> dict[str, Any]:
-    """Load frozen narratives artifact; validate model_id."""
+def load_narratives(
+    path: Path | str = NARRATIVES_PATH, expected_model_id: str | None = None
+) -> dict[str, Any]:
+    """Load frozen narratives artifact; optionally validate its ``model_id``."""
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(f"Missing narratives file: {path}")
     with path.open(encoding="utf-8") as fh:
         payload = json.load(fh)
-    if payload.get("model_id") != NARRATIVE_MODEL_ID:
+    if expected_model_id is not None and payload.get("model_id") != expected_model_id:
         raise ValueError(
-            f"Expected model_id={NARRATIVE_MODEL_ID!r} in {path}, "
+            f"Expected model_id={expected_model_id!r} in {path}, "
             f"got {payload.get('model_id')!r}"
         )
     if "narratives" not in payload:
@@ -248,12 +284,15 @@ def get_wafer_narrative(wafer_id: object, narratives_payload: dict[str, Any]) ->
 def build_narratives_artifact(
     narratives: dict[str, str],
     *,
+    model_id: str = NARRATIVE_MODEL_ID,
+    track: str = "extrapolation",
     llm_base_url: str | None = None,
     llm_model: str | None = None,
 ) -> dict[str, Any]:
     base_url, _, model = llm_config()
     return {
-        "model_id": NARRATIVE_MODEL_ID,
+        "model_id": model_id,
+        "track": track,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "llm_base_url": llm_base_url or base_url,
         "llm_model": llm_model or model,

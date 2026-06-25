@@ -2025,6 +2025,152 @@ def fig_coef_signed_bar(
     return _sized(fig, height=height, margin=dict(l=140, r=48, t=72, b=48))
 
 
+def fig_spc_distribution(
+    train_values,
+    wafer_value: float | None,
+    *,
+    sensor: str,
+    spc_z: float | None = None,
+    title: str | None = None,
+    height: int = 300,
+) -> go.Figure:
+    """SPC view: in-control (passing-train) distribution with this wafer marked.
+
+    A violin of the passing training values for one contributor sensor, plus a
+    dashed line at this wafer's value, so a reviewer can see how far the wafer
+    sits from the in-control population.
+    """
+    vals = np.asarray(train_values, dtype=float)
+    vals = vals[np.isfinite(vals)]
+    fig = go.Figure()
+    if vals.size:
+        fig.add_trace(
+            go.Violin(
+                y=vals,
+                name="Passing train",
+                line_color=C_BLUE,
+                fillcolor="rgba(125,174,163,0.25)",
+                box_visible=True,
+                meanline_visible=True,
+                points=False,
+                hovertemplate="passing train<br>%{y:.3g}<extra></extra>",
+            )
+        )
+    if wafer_value is not None and np.isfinite(wafer_value):
+        fig.add_hline(
+            y=float(wafer_value),
+            line_dash="dash",
+            line_color=C_RED,
+            annotation_text="this wafer",
+            annotation_position="right",
+        )
+    sub = ""
+    if spc_z is not None and np.isfinite(spc_z):
+        sub = f"  (SPC z = {spc_z:+.1f})"
+    fig.update_layout(
+        title=dict(text=title or f"{sensor}: in-control vs this wafer{sub}"),
+        yaxis=dict(title=sensor, gridcolor="rgba(200, 200, 200, 0.15)"),
+        showlegend=False,
+    )
+    return _sized(fig, height=height, margin=dict(l=60, r=48, t=58, b=28))
+
+
+def fig_posterior_forest(
+    df: pd.DataFrame,
+    *,
+    title: str = "Sensor posterior (mean ± 95% HDI)",
+    xaxis_title: str = "Posterior coefficient",
+    height: int = 440,
+) -> go.Figure:
+    """Forest plot: point = posterior mean, whiskers = 95% HDI, dashed zero line.
+
+    ``robust`` rows (HDI excludes 0) are drawn solid and color-coded by sign;
+    the rest are dimmed, so a reviewer sees at a glance which sensors the model
+    is confident about.
+    """
+    if df is None or df.empty:
+        return _sized(go.Figure().update_layout(title=dict(text=title)), height=height)
+    plot_df = df.sort_values("mean").reset_index(drop=True)
+    fig = go.Figure()
+    for _, r in plot_df.iterrows():
+        robust = bool(r.get("robust", False))
+        mean, lo, hi = float(r["mean"]), float(r["hdi_low"]), float(r["hdi_high"])
+        if robust:
+            color = C_GREEN if mean >= 0 else C_RED
+            bar_color = color
+        else:
+            color = "rgba(168, 182, 101, 0.40)"
+            bar_color = "rgba(150, 150, 150, 0.40)"
+        fig.add_trace(
+            go.Scatter(
+                x=[mean],
+                y=[str(r["feature"])],
+                mode="markers",
+                marker=dict(
+                    color=color,
+                    size=10 if robust else 7,
+                    symbol="diamond" if robust else "circle",
+                ),
+                error_x=dict(
+                    type="data",
+                    symmetric=False,
+                    array=[hi - mean],
+                    arrayminus=[mean - lo],
+                    color=bar_color,
+                    thickness=1.6,
+                    width=4,
+                ),
+                hovertemplate=(
+                    f"{r['feature']}<br>mean=%{{x:.4g}}<br>"
+                    f"HDI=[{lo:.3g}, {hi:.3g}]"
+                    f"{' · robust (clears 0)' if robust else ''}<extra></extra>"
+                ),
+                showlegend=False,
+            )
+        )
+    fig.add_vline(x=0.0, line_dash="dash", line_color="rgba(220, 220, 220, 0.5)")
+    fig.update_layout(
+        title=dict(text=title),
+        xaxis_title=xaxis_title,
+        yaxis_title="Sensor",
+    )
+    return _sized(fig, height=height, margin=dict(l=120, r=48, t=64, b=40))
+
+
+def fig_cross_model_consensus(
+    matrix_df: pd.DataFrame,
+    *,
+    title: str = "Cross-model driver consensus (importance rank)",
+) -> go.Figure:
+    """Heatmap of sensor x model-head importance ranks (1 = strongest driver).
+
+    Lets a reviewer see whether the elastic-net / random-forest / Bayesian heads
+    agree on the leading sensors for the chosen front-end.
+    """
+    if matrix_df is None or matrix_df.empty:
+        return _sized(go.Figure().update_layout(title=dict(text=title)), height=320)
+    z = matrix_df.to_numpy(dtype=float)
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=z,
+            x=[str(c) for c in matrix_df.columns],
+            y=[str(i) for i in matrix_df.index],
+            colorscale=COLORSCALE_LOW_GREEN_HIGH_RED,
+            colorbar=dict(title="rank"),
+            text=z,
+            texttemplate="%{text:.0f}",
+            hovertemplate="%{y} · %{x}<br>rank=%{z:.0f}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        title=dict(text=title),
+        xaxis=dict(title="Model head", side="top"),
+        yaxis_title="Sensor",
+    )
+    fig.update_yaxes(autorange="reversed")
+    return _sized(fig, height=max(320, 70 + 26 * len(matrix_df)), margin=dict(l=120, r=40, t=72, b=40))
+
+
 def fig_local_contributions(
     df: pd.DataFrame,
     *,
