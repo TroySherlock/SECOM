@@ -55,7 +55,7 @@ def main() -> None:
     st.caption(
         "How SECOM features are prepared before model training. "
         "See the Interpolation / Extrapolation pages' **Deep-dive** and **Thresholding** tabs for "
-        "PR curves and the conservative / BER-min / aggressive BER-band operating points."
+        "PR curves and the conservative / BER-min / aggressive / economic (cost-optimal) operating points."
     )
 
     artifacts: dict | None = None

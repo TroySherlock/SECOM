@@ -6,15 +6,23 @@ from __future__ import annotations
 
 import streamlit as st
 
-from secom.costs import BER_BAND_TOLERANCE, PROFILE_IDS, THRESHOLD_PROFILES
+from secom.costs import (
+    BER_BAND_TOLERANCE,
+    ESCAPE_OVERKILL_COST_RATIO,
+    PROFILE_IDS,
+    THRESHOLD_PROFILES,
+    catch_overkill_from_confusion,
+)
 from secom.dashboard import render_blue_note
 from secom.dashboard.charts import (
     C_PURPLE,
     fig_benchmark_leaderboard,
     fig_ber_threshold_sweep,
     fig_calibration,
+    fig_catch_overkill_curve,
     fig_cv_vs_holdout_validation,
     fig_delta_bar,
+    fig_expected_cost_curve,
     fig_holdout_confusion,
     fig_pr_curve_clean,
     fig_risk_coverage,
@@ -370,6 +378,10 @@ def _render_deepdive_tab(
         )
 
     st.markdown("#### Operating point (BER-min)")
+    st.caption(
+        "BER-min is the **default deploy** threshold (symmetric pass/fail cost). The fab "
+        "trade-off lives in the **Thresholding** tab, where the cost-optimal *economic* point sits."
+    )
     if ber_threshold is not None:
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Threshold", f"{ber_threshold:.4f}")
@@ -383,6 +395,16 @@ def _render_deepdive_tab(
             theme="streamlit",
             key=f"cm_bermin_{track}_{selected_id}",
         )
+        fab = catch_overkill_from_confusion(ber_cm)
+        if fab:
+            st.caption(
+                f"In fab terms: **catch {100 * fab['catch_rate']:.0f}%** of fails "
+                f"({fab['fails_caught']}/{fab['fails_total']}) for "
+                f"**{100 * fab['overkill_rate']:.0f}% overkill** "
+                f"({fab['good_flagged']}/{fab['good_total']} good wafers flagged). "
+                f"Precision is **{100 * fab['precision']:.0f}%** - low by design at this prevalence, "
+                "so read flags as risk triage, not a precise gate."
+            )
     else:
         st.caption("Re-run `python -m secom.benchmark` after tuning to populate the confusion matrix.")
 
@@ -399,38 +421,100 @@ def _render_thresholding_tab(
     profile_thresholds: dict,
     cms: dict,
 ) -> None:
-    """Thresholding tab: the BER-band cost system, sweep, table, and per-band confusion."""
-    tol = float(
-        (resolved_threshold_profile_config(payload) or {}).get(
-            "ber_band_tolerance", BER_BAND_TOLERANCE
-        )
+    """Thresholding tab: fab-economics operating points (catch vs overkill, cost-optimal)."""
+    cfg = resolved_threshold_profile_config(payload) or {}
+    tol = float(cfg.get("ber_band_tolerance", BER_BAND_TOLERANCE))
+    cost_ratio = float(cfg.get("escape_overkill_cost_ratio", ESCAPE_OVERKILL_COST_RATIO))
+
+    st.markdown(
+        "A fab does not deploy on BER. It weighs two outcomes with very different price tags: "
+        f"an **escape** (a failing wafer we pass -> ships a bad die, ~**{cost_ratio:g}x** the cost) "
+        "versus an **overkill** (a good wafer we flag -> a re-test / hold). So the numbers that "
+        "matter are **catch rate** (fraction of real fails flagged = recall/TPR) and **overkill "
+        "rate** (fraction of good wafers flagged = 1 - TNR). We ship four operating points:"
     )
     st.markdown(
-        "Operating points come from the **balanced-error-rate (BER) curve** itself, not F-beta. "
-        f"**BER-min** is the threshold with the lowest CV balanced error; the band is every "
-        f"threshold within **epsilon = {tol:g} BER points** of that minimum. Its two ends give:"
-    )
-    st.markdown(
-        "- **Conservative** (high threshold): fewer positives -> higher precision / fewer false "
-        "line stops, lower recall.\n"
-        "- **BER-min** (balanced): the symmetric pass/fail optimum; the default deploy threshold.\n"
-        "- **Aggressive** (low threshold): more positives -> higher recall (catches more fails) at "
-        "the cost of more false stops."
+        "- **Conservative** (high threshold): fewest flags -> lowest overkill, lowest catch.\n"
+        "- **BER-min** (balanced): symmetric pass/fail optimum; the default deploy threshold.\n"
+        "- **Aggressive** (low threshold): recall-leaning -> higher catch, more overkill.\n"
+        f"- **Economic** (cost-optimal): minimises expected cost at an explicit "
+        f"**escape:overkill = {cost_ratio:g}:1** ratio. Because escapes dominate, it lands "
+        "left of BER-min (higher catch, more overkill) - the point a fab would actually run."
     )
     render_blue_note(
-        "The band is chosen on the **CV** BER curve (more positives, smoother, leakage-safe), then "
-        "applied unchanged to the holdout. Because BER is symmetric, all three points stay within "
-        f"{tol:g} BER points of optimal - the band only trades a bounded amount of balanced error "
-        "for precision vs recall."
+        f"**Robustness, not a knife-edge:** conservative / BER-min / aggressive all sit within "
+        f"{tol:g} BER points of optimal, so performance is **flat across this whole threshold "
+        "range** - a plateau, not a spike. Small threshold drift does not blow up the model. "
+        "All thresholds are chosen on the leakage-safe **CV** curve and applied unchanged to the holdout."
     )
 
     if not benchmark_has_multi_profile_thresholds(payload):
         st.warning(
-            "Tuned JSONs lack the conservative/ber/aggressive `threshold_profiles`. Re-run Stage 2 "
-            "tuning (`python -m secom.cli.run_tuning`) and `python -m secom.benchmark`."
+            "Tuned JSONs lack the full `threshold_profiles` (conservative/ber/aggressive/economic). "
+            "Re-run Stage 2 tuning (`python -m secom.cli.run_tuning --threshold-only`) and "
+            "`python -m secom.benchmark`."
         )
 
-    st.markdown("#### BER vs threshold")
+    st.markdown("#### Catch rate vs overkill")
+    if ho_y is not None and len(ho_y):
+        st.plotly_chart(
+            fig_catch_overkill_curve(
+                ho_y,
+                ho_s,
+                profile_thresholds=profile_thresholds,
+                title=f"Catch vs overkill — {info.display_name}",
+            ),
+            width="stretch",
+            theme="streamlit",
+            key=f"catch_overkill_{track}_{selected_id}",
+        )
+        st.caption(
+            "The fab-vocabulary operating curve (an ROC relabelled): every point is one threshold. "
+            "Up = catch more real fails; right = flag more good wafers. The four markers are the "
+            "tuned operating points - economic sits up-and-right of BER-min (more catch, more overkill)."
+        )
+    else:
+        st.info(
+            "Per-wafer holdout scores are not in the report cache yet. Re-run "
+            "`python -m secom.benchmark` to populate the operating curves."
+        )
+
+    st.markdown("#### Operating points")
+    op_df = operating_table_df(deepdive_ho_df, selected_id)
+    if not op_df.empty:
+        st.dataframe(op_df, width="stretch", hide_index=True)
+        st.caption(
+            f"Holdout operating point per profile in fab terms: catch rate, overkill rate, precision, "
+            f"and the raw fails-caught / good-flagged counts. **Economic** is the recall-leaning "
+            f"cost-optimal point at {cost_ratio:g}:1. **Precision is low by design** here "
+            "(~7% prevalence, PR-AUC ~0.2): most flags are good wafers, so treat a flag as **risk "
+            "triage** - an enriched pool to inspect - not a precise gate. BER (right) is the "
+            "symmetric, prevalence-free summary kept for model comparison."
+        )
+
+    st.markdown("#### Expected cost vs threshold")
+    if ho_y is not None and len(ho_y):
+        economic_thr = profile_thresholds.get(THRESHOLD_PROFILES["economic"].display_name)
+        st.plotly_chart(
+            fig_expected_cost_curve(
+                ho_y,
+                ho_s,
+                cost_ratio=cost_ratio,
+                economic_threshold=economic_thr,
+                title=f"Expected cost ({cost_ratio:g}:1) — {info.display_name}",
+            ),
+            width="stretch",
+            theme="streamlit",
+            key=f"expected_cost_{track}_{selected_id}",
+        )
+        st.caption(
+            f"Expected per-wafer cost at escape:overkill = {cost_ratio:g}:1 "
+            "(overkill-units: cost_ratio x prevalence x miss-rate + (1 - prevalence) x overkill-rate). "
+            "The orange line is the **deployed economic threshold** (chosen on CV); the curve shape "
+            "is illustrative on this holdout. A shallow basin = the cost-optimal point is robust to drift."
+        )
+
+    st.markdown("#### BER vs threshold (robustness band)")
     if ho_y is not None and len(ho_y):
         st.plotly_chart(
             fig_ber_threshold_sweep(
@@ -444,26 +528,13 @@ def _render_thresholding_tab(
             key=f"ber_sweep_{track}_{selected_id}",
         )
         st.caption(
-            "BER swept across the decision threshold on this track's holdout; the green diamond is "
-            "the empirical minimum and the orange dotted lines mark the tuned conservative / BER-min "
-            "/ aggressive thresholds. A flat valley means BER is insensitive to the exact cut."
-        )
-    else:
-        st.info(
-            "Per-wafer holdout scores are not in the report cache yet. Re-run "
-            "`python -m secom.benchmark` to populate the BER sweep."
+            "BER swept across the threshold; the green diamond is the empirical minimum and the "
+            "orange dotted lines mark the four operating points (incl. economic). A **flat valley** "
+            f"means BER is insensitive to the exact cut - all points sit within ~{tol:g} BER points, "
+            "so the chosen threshold is a plateau, not a fragile knife-edge."
         )
 
-    st.markdown("#### Operating points")
-    op_df = operating_table_df(deepdive_ho_df, selected_id)
-    if not op_df.empty:
-        st.dataframe(op_df, width="stretch", hide_index=True)
-        st.caption(
-            "Holdout operating point per band threshold: threshold, balanced error rate, and the "
-            "true-positive / true-negative rates. BER is the symmetric (prevalence-free) summary."
-        )
-
-    st.markdown("#### Confusion matrix per band point")
+    st.markdown("#### Confusion matrix per operating point")
     cm_cols = st.columns(len(PROFILE_IDS))
     for col, pid in zip(cm_cols, PROFILE_IDS):
         with col:

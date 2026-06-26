@@ -4987,6 +4987,87 @@
           "true_negative_percent": 43.58974358974359
         }
       ]
+    },
+    "economic": {
+      "profile_id": "economic",
+      "objective": "cost",
+      "best_threshold": 0.0037,
+      "mean_ber_percent": 34.247423328305686,
+      "std_ber_percent": 3.2528515908259346,
+      "mean_true_positive_percent": 82.57352941176471,
+      "mean_true_negative_percent": 48.93162393162394,
+      "fold_results_at_best_threshold": [
+        {
+          "fold": 1,
+          "threshold": 0.0037,
+          "ber_percent": 36.337355455002516,
+          "true_positive_percent": 76.47058823529412,
+          "true_negative_percent": 50.85470085470085
+        },
+        {
+          "fold": 2,
+          "threshold": 0.0037,
+          "ber_percent": 37.405731523378584,
+          "true_positive_percent": 76.47058823529412,
+          "true_negative_percent": 48.717948717948715
+        },
+        {
+          "fold": 3,
+          "threshold": 0.0037,
+          "ber_percent": 32.32780291603821,
+          "true_positive_percent": 82.35294117647058,
+          "true_negative_percent": 52.991452991452995
+        },
+        {
+          "fold": 4,
+          "threshold": 0.0037,
+          "ber_percent": 35.65705128205128,
+          "true_positive_percent": 81.25,
+          "true_negative_percent": 47.43589743589743
+        },
+        {
+          "fold": 5,
+          "threshold": 0.0037,
+          "ber_percent": 33.81410256410257,
+          "true_positive_percent": 87.5,
+          "true_negative_percent": 44.871794871794876
+        },
+        {
+          "fold": 6,
+          "threshold": 0.0037,
+          "ber_percent": 35.05530417295124,
+          "true_positive_percent": 76.47058823529412,
+          "true_negative_percent": 53.41880341880342
+        },
+        {
+          "fold": 7,
+          "threshold": 0.0037,
+          "ber_percent": 25.85470085470085,
+          "true_positive_percent": 100.0,
+          "true_negative_percent": 48.29059829059829
+        },
+        {
+          "fold": 8,
+          "threshold": 0.0037,
+          "ber_percent": 35.268979386626455,
+          "true_positive_percent": 76.47058823529412,
+          "true_negative_percent": 52.991452991452995
+        },
+        {
+          "fold": 9,
+          "threshold": 0.0037,
+          "ber_percent": 33.03952991452992,
+          "true_positive_percent": 93.75,
+          "true_negative_percent": 40.17094017094017
+        },
+        {
+          "fold": 10,
+          "threshold": 0.0037,
+          "ber_percent": 37.71367521367522,
+          "true_positive_percent": 75.0,
+          "true_negative_percent": 49.572649572649574
+        }
+      ]
     }
   },
   "objective_curves": [
@@ -12990,5 +13071,6 @@
       "threshold": 0.2,
       "mean_ber_percent": 36.733754399195576
     }
-  ]
+  ],
+  "threshold_tuned_at": "2026-06-25T23:27:50.313447+00:00"
 }

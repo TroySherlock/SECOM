@@ -17,8 +17,10 @@ from secom.progress import tqdm_joblib_context
 from secom.costs import (
     BER_BAND_TOLERANCE,
     DEFAULT_PROFILE_ID,
+    ESCAPE_OVERKILL_COST_RATIO,
     PROFILE_IDS,
     THRESHOLD_PROFILES,
+    cost_optimal_threshold,
     fbeta_at_threshold,
 )
 from secom.metrics import compute_holdout_metrics, predict_with_threshold
@@ -663,10 +665,32 @@ def tune_classifier_threshold_profiles(
     ]
     if not band:
         band = [ber_min_thr]
+
+    # Fab-economics point: minimise expected cost C_escape*FN + C_overkill*FP at
+    # an explicit escape:overkill ratio. TNR% is recovered from BER% and TPR%
+    # (balanced accuracy = (TPR + TNR) / 2 = 100 - BER, all in percent), then both
+    # rates are passed as fractions. Selected on the same in-distribution CV as
+    # the BER band, so it travels unchanged to both holdouts.
+    prevalence = float(np.asarray(y).astype(int).mean())
+    econ_thresholds = list(threshold_grid)
+    econ_tprs = [mean_tpr_by_threshold[t] / 100.0 for t in econ_thresholds]
+    econ_tnrs = [
+        (2.0 * (100.0 - mean_ber_by_threshold[t]) - mean_tpr_by_threshold[t]) / 100.0
+        for t in econ_thresholds
+    ]
+    economic_thr = cost_optimal_threshold(
+        econ_thresholds,
+        econ_tprs,
+        econ_tnrs,
+        prevalence,
+        ESCAPE_OVERKILL_COST_RATIO,
+    )
+
     best_thresholds: dict[str, float] = {
         "conservative": float(max(band)),
         "ber": float(ber_min_thr),
         "aggressive": float(min(band)),
+        "economic": float(economic_thr),
     }
 
     profiles = {
@@ -676,7 +700,7 @@ def tune_classifier_threshold_profiles(
             fold_probas,
             fold_y_val,
             beta=None,
-            objective="ber",
+            objective=THRESHOLD_PROFILES[pid].objective,
         )
         for pid in PROFILE_IDS
     }
@@ -708,48 +732,39 @@ def tune_classifier_threshold_profiles(
     }
 
 
-def save_tuned_params(
-    spec: ModelSpec,
-    cv_summary: dict,
-    fold_results: pd.DataFrame,
-    aggregated: pd.DataFrame,
-    *,
-    threshold_result: dict | None = None,
-    path: Path | None = None,
-    cv_protocol: str = "repeated_stratified_5x2",
-    decay_lambda: float = 0.0,
-    decay_lambda_search: dict | None = None,
-) -> dict:
-    path = path or tuned_params_path(spec.model_id)
-    best_params = spec.build_grid_search_best_params(cv_summary)
-    summary_out = dict(cv_summary)
-    profile_map = (
-        threshold_result.get("profiles") if threshold_result is not None else None
-    )
-    default_profile = (
-        profile_map.get(DEFAULT_PROFILE_ID) if profile_map else None
-    )
-    if default_profile is None and profile_map:
-        default_profile = profile_map.get("ber")
+def _threshold_fragments(threshold_result: dict) -> dict:
+    """Build the threshold-related JSON fragments from a ``threshold_result``.
 
+    Single source of truth shared by the full save (``save_tuned_params``) and
+    the Stage-2-only refresh (``patch_threshold_profiles``). Returns the deploy
+    ``best_threshold``, the ``cv_summary`` at-threshold updates, and the payload
+    keys (``threshold_tuning`` / ``threshold_profiles`` / ``objective_curves`` /
+    ``cv_fold_results_at_threshold``).
+    """
+    profile_map = threshold_result.get("profiles")
+    default_profile = None
+    if profile_map:
+        default_profile = profile_map.get(DEFAULT_PROFILE_ID) or profile_map.get("ber")
+
+    cv_updates: dict = {}
     if default_profile is not None:
-        summary_out["mean_ber_percent_at_threshold"] = default_profile["mean_ber_percent"]
-        summary_out["std_ber_percent_at_threshold"] = default_profile["std_ber_percent"]
-        summary_out["classifier_threshold"] = default_profile["best_threshold"]
-        summary_out["mean_true_positive_percent_at_threshold"] = default_profile[
+        cv_updates["mean_ber_percent_at_threshold"] = default_profile["mean_ber_percent"]
+        cv_updates["std_ber_percent_at_threshold"] = default_profile["std_ber_percent"]
+        cv_updates["classifier_threshold"] = default_profile["best_threshold"]
+        cv_updates["mean_true_positive_percent_at_threshold"] = default_profile[
             "mean_true_positive_percent"
         ]
-        summary_out["mean_true_negative_percent_at_threshold"] = default_profile[
+        cv_updates["mean_true_negative_percent_at_threshold"] = default_profile[
             "mean_true_negative_percent"
         ]
-    elif threshold_result is not None:
-        summary_out["mean_ber_percent_at_threshold"] = threshold_result.get(
+    else:
+        cv_updates["mean_ber_percent_at_threshold"] = threshold_result.get(
             "mean_ber_percent"
         )
-        summary_out["std_ber_percent_at_threshold"] = threshold_result.get(
+        cv_updates["std_ber_percent_at_threshold"] = threshold_result.get(
             "std_ber_percent"
         )
-        summary_out["classifier_threshold"] = threshold_result["best_threshold"]
+        cv_updates["classifier_threshold"] = threshold_result["best_threshold"]
         tpr_vals = [
             r["true_positive_percent"]
             for r in threshold_result["fold_results_at_best_threshold"]
@@ -758,38 +773,24 @@ def save_tuned_params(
             r["true_negative_percent"]
             for r in threshold_result["fold_results_at_best_threshold"]
         ]
-        summary_out["mean_true_positive_percent_at_threshold"] = float(np.mean(tpr_vals))
-        summary_out["mean_true_negative_percent_at_threshold"] = float(np.mean(tnr_vals))
-    else:
-        summary_out["classifier_threshold"] = 0.5
+        cv_updates["mean_true_positive_percent_at_threshold"] = float(np.mean(tpr_vals))
+        cv_updates["mean_true_negative_percent_at_threshold"] = float(np.mean(tnr_vals))
 
     best_threshold = float(
         default_profile["best_threshold"]
         if default_profile
-        else (threshold_result["best_threshold"] if threshold_result else 0.5)
+        else threshold_result["best_threshold"]
     )
-    payload = {
-        "model_id": spec.model_id,
-        "cv_protocol": cv_protocol,
+
+    fold_at_best = (
+        default_profile["fold_results_at_best_threshold"]
+        if default_profile
+        else threshold_result["fold_results_at_best_threshold"]
+    )
+    per_thresh = threshold_result.get("per_threshold_mean_ber")
+    payload_updates: dict = {
         "classifier_threshold": best_threshold,
-        "grid_search_best_params": best_params,
-        "decay_lambda": float(decay_lambda),
-        "cv_summary": json_safe(summary_out),
-        "cv_fold_results": fold_results.to_dict(orient="records"),
-        "aggregated_top_configs": aggregated.head(10).to_dict(orient="records"),
-        "frozen_config": frozen_config(),
-        "tuned_at": datetime.now(timezone.utc).isoformat(),
-    }
-    if decay_lambda_search is not None:
-        payload["decay_lambda_search"] = json_safe(decay_lambda_search)
-    if threshold_result is not None:
-        fold_at_best = (
-            default_profile["fold_results_at_best_threshold"]
-            if default_profile
-            else threshold_result["fold_results_at_best_threshold"]
-        )
-        per_thresh = threshold_result.get("per_threshold_mean_ber")
-        payload["threshold_tuning"] = json_safe(
+        "threshold_tuning": json_safe(
             {
                 "metric": "ber_band",
                 "default_profile": DEFAULT_PROFILE_ID,
@@ -813,21 +814,120 @@ def save_tuned_params(
                 ),
                 "fold_results_at_best_threshold": fold_at_best,
             }
-        )
-        payload["cv_fold_results_at_threshold"] = fold_at_best
+        ),
+        "cv_fold_results_at_threshold": fold_at_best,
+    }
+    if profile_map:
+        payload_updates["threshold_profiles"] = json_safe(profile_map)
+        curves = threshold_result.get("objective_curves")
+        if curves is not None:
+            payload_updates["objective_curves"] = json_safe(
+                curves.to_dict(orient="records")
+            )
+    return {
+        "best_threshold": best_threshold,
+        "cv_updates": cv_updates,
+        "payload_updates": payload_updates,
+    }
 
-        if profile_map:
-            payload["threshold_profiles"] = json_safe(profile_map)
-            curves = threshold_result.get("objective_curves")
-            if curves is not None:
-                payload["objective_curves"] = json_safe(
-                    curves.to_dict(orient="records")
-                )
+
+def save_tuned_params(
+    spec: ModelSpec,
+    cv_summary: dict,
+    fold_results: pd.DataFrame,
+    aggregated: pd.DataFrame,
+    *,
+    threshold_result: dict | None = None,
+    path: Path | None = None,
+    cv_protocol: str = "repeated_stratified_5x2",
+    decay_lambda: float = 0.0,
+    decay_lambda_search: dict | None = None,
+) -> dict:
+    path = path or tuned_params_path(spec.model_id)
+    best_params = spec.build_grid_search_best_params(cv_summary)
+    summary_out = dict(cv_summary)
+
+    fragments = _threshold_fragments(threshold_result) if threshold_result else None
+    if fragments is not None:
+        summary_out.update(fragments["cv_updates"])
+        best_threshold = fragments["best_threshold"]
+    else:
+        summary_out["classifier_threshold"] = 0.5
+        best_threshold = 0.5
+
+    payload = {
+        "model_id": spec.model_id,
+        "cv_protocol": cv_protocol,
+        "classifier_threshold": best_threshold,
+        "grid_search_best_params": best_params,
+        "decay_lambda": float(decay_lambda),
+        "cv_summary": json_safe(summary_out),
+        "cv_fold_results": fold_results.to_dict(orient="records"),
+        "aggregated_top_configs": aggregated.head(10).to_dict(orient="records"),
+        "frozen_config": frozen_config(),
+        "tuned_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if decay_lambda_search is not None:
+        payload["decay_lambda_search"] = json_safe(decay_lambda_search)
+    if fragments is not None:
+        payload.update(fragments["payload_updates"])
     if "best_top_k" in cv_summary:
         payload["best_top_k"] = int(cv_summary["best_top_k"])
     if "best_n_hubs" in cv_summary:
         payload["best_n_hubs"] = int(cv_summary["best_n_hubs"])
     path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(json_safe(payload), indent=2), encoding="utf-8")
+    return payload
+
+
+def patch_threshold_profiles(
+    spec: ModelSpec,
+    X: pd.DataFrame,
+    y: pd.Series,
+    *,
+    cv=None,
+    timestamps: pd.Series | None = None,
+    decay_lambda: float = 0.0,
+    path: Path | None = None,
+) -> dict:
+    """Stage-2-only refresh of an existing tuned JSON.
+
+    Recomputes the threshold profiles from the frozen ``cv_summary`` and merges
+    them back, leaving every Stage-1 field (``grid_search_best_params``,
+    ``cv_fold_results``, ``aggregated_top_configs``, ``frozen_config``)
+    untouched. This bakes the ``economic`` profile into existing artifacts
+    without re-running the Stage-1 grid search (which would now also exercise the
+    calendar ablation grid and could move the Stage-1 best params). The
+    deterministic CV reproduces the existing conservative/ber/aggressive
+    thresholds, so the only net change is the added ``economic`` profile.
+    """
+    path = path or tuned_params_path(spec.model_id)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"No tuned JSON at {path}; run full tuning before --threshold-only."
+        )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    cv_summary = payload.get("cv_summary") or {}
+    if not cv_summary:
+        raise ValueError(f"{path} has no cv_summary; cannot refresh thresholds.")
+
+    threshold_result = tune_classifier_threshold_profiles(
+        spec,
+        X,
+        y,
+        cv_summary,
+        cv=cv,
+        timestamps=timestamps,
+        decay_lambda=decay_lambda,
+    )
+    fragments = _threshold_fragments(threshold_result)
+
+    summary_out = dict(cv_summary)
+    summary_out.update(fragments["cv_updates"])
+    payload["cv_summary"] = json_safe(summary_out)
+    payload.update(fragments["payload_updates"])
+    payload["threshold_tuned_at"] = datetime.now(timezone.utc).isoformat()
+
     path.write_text(json.dumps(json_safe(payload), indent=2), encoding="utf-8")
     return payload
 

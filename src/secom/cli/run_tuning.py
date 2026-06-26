@@ -26,6 +26,7 @@ from secom.tuning.registry import (
     ALL_MODEL_IDS,
     MODEL_SPECS,
     fit_with_progress,
+    patch_threshold_profiles,
     run_grid_search,
     save_tuned_params,
     summarize_cv_search,
@@ -68,6 +69,21 @@ def _tune_model(model_id: str, spec, X_train, y_train) -> None:
     print(f"Wrote {out_path}", flush=True)
 
 
+def _patch_thresholds(model_id: str, spec, X_train, y_train) -> None:
+    """Stage-2-only refresh: rewrite threshold profiles in the existing JSON."""
+    cv = make_repeated_stratified_cv()
+    print(f"\n=== {model_id} (threshold-only refresh) ===", flush=True)
+    out_path = tuned_params_path(model_id)
+    payload = patch_threshold_profiles(spec, X_train, y_train, cv=cv, path=out_path)
+    for pid, prof in (payload.get("threshold_profiles") or {}).items():
+        print(
+            f"  {pid}: threshold={float(prof['best_threshold']):.4f}, "
+            f"mean_ber={float(prof['mean_ber_percent']):.2f}%",
+            flush=True,
+        )
+    print(f"Patched {out_path}", flush=True)
+
+
 def _select_model_ids(model: str | None) -> list[str]:
     if model is not None:
         if model not in ALL_MODEL_IDS:
@@ -90,6 +106,16 @@ def _parse_args(argv=None) -> argparse.Namespace:
         action="store_true",
         help="Clear the joblib preprocess cache before tuning (after editing front-ends).",
     )
+    parser.add_argument(
+        "--threshold-only",
+        action="store_true",
+        help=(
+            "Skip the Stage-1 grid search; only recompute the threshold profiles "
+            "from each model's frozen cv_summary and merge them into the existing "
+            "tuned JSON. Use this to bake new profiles (e.g. economic) without "
+            "moving the Stage-1 best params."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -104,7 +130,10 @@ def main(argv=None) -> int:
     X_train = train_df[feature_cols]
     y_train = train_df[TARGET_COL].astype(int)
     for model_id in _select_model_ids(args.model):
-        _tune_model(model_id, MODEL_SPECS[model_id], X_train, y_train)
+        if args.threshold_only:
+            _patch_thresholds(model_id, MODEL_SPECS[model_id], X_train, y_train)
+        else:
+            _tune_model(model_id, MODEL_SPECS[model_id], X_train, y_train)
     return 0
 
 

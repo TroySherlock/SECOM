@@ -11,6 +11,7 @@ import pandas as pd
 from secom.costs import (
     PROFILE_IDS,
     THRESHOLD_PROFILES,
+    catch_overkill_from_confusion,
     has_multi_profile_thresholds,
     threshold_profile_config,
 )
@@ -436,11 +437,14 @@ def holdout_auc_summary_df(ho_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def operating_table_df(ho_df: pd.DataFrame, pipeline_id: str) -> pd.DataFrame:
-    """Per-threshold-profile operating point for one pipeline.
+    """Per-threshold-profile operating point for one pipeline, in fab vocabulary.
 
-    One row per profile (``conservative/ber/aggressive``) with the holdout threshold, BER%,
-    and TPR/TNR pulled from the per-profile columns already in ``holdout_df``.
-    Empty when the pipeline/columns are absent.
+    One row per profile (``conservative/ber/aggressive/economic``). Catch rate
+    (recall), overkill rate (false-alarm rate = 1 - TNR), precision, and the raw
+    fails-caught / good-flagged counts come from each profile's holdout confusion
+    matrix already stored in ``holdout_df``; BER% is kept as the secondary
+    (prevalence-free, symmetric) summary on the right. Empty when the
+    pipeline/columns are absent.
     """
     if ho_df.empty or "pipeline" not in ho_df.columns:
         return pd.DataFrame()
@@ -452,18 +456,25 @@ def operating_table_df(ho_df: pd.DataFrame, pipeline_id: str) -> pd.DataFrame:
     for pid in PROFILE_IDS:
         thr = row.get(f"{pid}_threshold")
         ber = row.get(f"{pid}_ber_percent")
-        tpr = row.get(f"{pid}_true_positive_percent")
-        tnr = row.get(f"{pid}_true_negative_percent")
         if thr is None and ber is None:
             continue
         label = THRESHOLD_PROFILES[pid].display_name if pid in THRESHOLD_PROFILES else pid
+        cm = _parse_confusion_matrix(row.get(f"{pid}_confusion_matrix"))
+        fab = catch_overkill_from_confusion(cm) if cm is not None else {}
         out.append(
             {
                 "Profile": label,
                 "Threshold": round(float(thr), 4) if thr is not None else None,
+                "Catch %": round(100 * fab["catch_rate"], 1) if fab else None,
+                "Overkill %": round(100 * fab["overkill_rate"], 1) if fab else None,
+                "Precision %": round(100 * fab["precision"], 1) if fab else None,
+                "Fails caught": (
+                    f"{fab['fails_caught']}/{fab['fails_total']}" if fab else None
+                ),
+                "Good flagged": (
+                    f"{fab['good_flagged']}/{fab['good_total']}" if fab else None
+                ),
                 "BER %": round(float(ber), 1) if ber is not None else None,
-                "TPR %": round(float(tpr), 1) if tpr is not None else None,
-                "TNR %": round(float(tnr), 1) if tnr is not None else None,
             }
         )
     return pd.DataFrame(out)

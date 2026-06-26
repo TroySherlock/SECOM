@@ -39,11 +39,13 @@
   "threshold_profile_ids": [
     "conservative",
     "ber",
-    "aggressive"
+    "aggressive",
+    "economic"
   ],
   "threshold_profile_config": {
     "ber_band_tolerance": 2.0,
-    "default_profile": "ber"
+    "default_profile": "ber",
+    "escape_overkill_cost_ratio": 20.0
   },
   "holdout_split": {
     "split_mode": "temporal",
@@ -148,12 +150,12 @@
     },
     {
       "pipeline": "pls_enet",
-      "mean_ber_percent": 34.15252639517346,
-      "std_ber_percent": 2.6844144128909417,
-      "mean_true_positive_percent": 77.72058823529412,
-      "std_true_positive_percent": 6.030308398180198,
-      "mean_true_negative_percent": 53.974358974358985,
-      "std_true_negative_percent": 3.3598006856411895,
+      "mean_ber_percent": 33.716848919054804,
+      "std_ber_percent": 2.6652425375445508,
+      "mean_true_positive_percent": 78.93382352941175,
+      "std_true_positive_percent": 6.187075105120463,
+      "mean_true_negative_percent": 53.63247863247864,
+      "std_true_negative_percent": 3.4940961236818087,
       "mean_roc_auc": 0.7166800213675213,
       "std_roc_auc": 0.040460048842734256,
       "mean_pr_auc": 0.21707160140271356,
@@ -161,12 +163,12 @@
     },
     {
       "pipeline": "pls_rf",
-      "mean_ber_percent": 36.89809577677225,
-      "std_ber_percent": 3.581672049954514,
-      "mean_true_positive_percent": 73.63970588235294,
-      "std_true_positive_percent": 10.103339854279506,
-      "mean_true_negative_percent": 52.56410256410256,
-      "std_true_negative_percent": 5.479425786264823,
+      "mean_ber_percent": 34.569193061840124,
+      "std_ber_percent": 4.515313311395386,
+      "mean_true_positive_percent": 65.22058823529412,
+      "std_true_positive_percent": 10.398889097575175,
+      "mean_true_negative_percent": 65.64102564102564,
+      "std_true_negative_percent": 2.968163308407749,
       "mean_roc_auc": 0.6957657742584213,
       "std_roc_auc": 0.05822555347924815,
       "mean_pr_auc": 0.21311064445278066,
@@ -174,12 +176,12 @@
     },
     {
       "pipeline": "hsic_rf",
-      "mean_ber_percent": 37.37776520864755,
-      "std_ber_percent": 4.561155062191315,
-      "mean_true_positive_percent": 50.07352941176471,
-      "std_true_positive_percent": 7.9513823306930815,
-      "mean_true_negative_percent": 75.17094017094017,
-      "std_true_negative_percent": 3.3728211149360066,
+      "mean_ber_percent": 37.06542232277526,
+      "std_ber_percent": 3.775420529590541,
+      "mean_true_positive_percent": 57.27941176470588,
+      "std_true_positive_percent": 7.3782652146595185,
+      "mean_true_negative_percent": 68.58974358974359,
+      "std_true_negative_percent": 1.9976061354735435,
       "mean_roc_auc": 0.687430869783811,
       "std_roc_auc": 0.027441248957646644,
       "mean_pr_auc": 0.2093851078606356,
@@ -187,12 +189,12 @@
     },
     {
       "pipeline": "rfsel_rf",
-      "mean_ber_percent": 37.693564605329314,
-      "std_ber_percent": 4.2208619495579836,
-      "mean_true_positive_percent": 67.64705882352942,
-      "std_true_positive_percent": 10.608385646306475,
-      "mean_true_negative_percent": 56.965811965811966,
-      "std_true_negative_percent": 4.063426206672585,
+      "mean_ber_percent": 35.64605329311212,
+      "std_ber_percent": 4.157914120006173,
+      "mean_true_positive_percent": 50.588235294117645,
+      "std_true_positive_percent": 8.24743065789264,
+      "mean_true_negative_percent": 78.11965811965813,
+      "std_true_negative_percent": 2.2271477300504925,
       "mean_roc_auc": 0.6892502513826043,
       "std_roc_auc": 0.048678715190936764,
       "mean_pr_auc": 0.19704048247450853,
@@ -200,12 +202,12 @@
     },
     {
       "pipeline": "rfsel_bayes",
-      "mean_ber_percent": 40.96656611362494,
-      "std_ber_percent": 5.563393300940516,
-      "mean_true_positive_percent": 35.588235294117645,
-      "std_true_positive_percent": 12.99807844462385,
-      "mean_true_negative_percent": 82.47863247863248,
-      "std_true_negative_percent": 3.397368703307998,
+      "mean_ber_percent": 39.35378959276018,
+      "std_ber_percent": 5.35220844178861,
+      "mean_true_positive_percent": 42.83088235294118,
+      "std_true_positive_percent": 11.854266182691521,
+      "mean_true_negative_percent": 78.46153846153847,
+      "std_true_negative_percent": 3.2275568527349052,
       "mean_roc_auc": 0.6307252388134741,
       "std_roc_auc": 0.07258125167070159,
       "mean_pr_auc": 0.17709702621880882,
@@ -213,12 +215,12 @@
     },
     {
       "pipeline": "rfsel_enet",
-      "mean_ber_percent": 44.24082453494218,
-      "std_ber_percent": 4.78583343906929,
-      "mean_true_positive_percent": 16.176470588235293,
-      "std_true_positive_percent": 9.523407240432809,
-      "mean_true_negative_percent": 95.34188034188034,
-      "std_true_negative_percent": 1.7666689409055045,
+      "mean_ber_percent": 37.896084715937654,
+      "std_ber_percent": 4.464175778237128,
+      "mean_true_positive_percent": 40.40441176470588,
+      "std_true_positive_percent": 7.27801902897754,
+      "mean_true_negative_percent": 83.80341880341881,
+      "std_true_negative_percent": 4.096550079146273,
       "mean_roc_auc": 0.6567559074912015,
       "std_roc_auc": 0.08735869268037838,
       "mean_pr_auc": 0.16675417066427628,
@@ -226,12 +228,12 @@
     },
     {
       "pipeline": "hsic_bayes",
-      "mean_ber_percent": 40.67998994469583,
-      "std_ber_percent": 3.794238523494596,
-      "mean_true_positive_percent": 62.05882352941177,
-      "std_true_positive_percent": 9.268498290102514,
-      "mean_true_negative_percent": 56.58119658119658,
-      "std_true_negative_percent": 7.524766131917592,
+      "mean_ber_percent": 37.74352689793867,
+      "std_ber_percent": 5.339120797445962,
+      "mean_true_positive_percent": 55.36764705882352,
+      "std_true_positive_percent": 9.66177589756716,
+      "mean_true_negative_percent": 69.14529914529915,
+      "std_true_negative_percent": 5.729684021228845,
       "mean_roc_auc": 0.6412016088486677,
       "std_roc_auc": 0.0605614285078365,
       "mean_pr_auc": 0.15655284895310861,
@@ -239,12 +241,12 @@
     },
     {
       "pipeline": "hsic_enet",
-      "mean_ber_percent": 42.164404223227756,
-      "std_ber_percent": 4.651602164742705,
-      "mean_true_positive_percent": 28.23529411764706,
-      "std_true_positive_percent": 14.548607526799879,
-      "mean_true_negative_percent": 87.43589743589743,
-      "std_true_negative_percent": 7.066675763622014,
+      "mean_ber_percent": 41.42675339366516,
+      "std_ber_percent": 4.49323689302746,
+      "mean_true_positive_percent": 35.99264705882352,
+      "std_true_positive_percent": 15.99281609106074,
+      "mean_true_negative_percent": 81.15384615384615,
+      "std_true_negative_percent": 9.269564723092413,
       "mean_roc_auc": 0.6433556435394671,
       "std_roc_auc": 0.07415776776567842,
       "mean_pr_auc": 0.14032763166827125,
@@ -298,6 +300,20 @@
           15
         ]
       ],
+      "economic_threshold": 0.0037,
+      "economic_ber_percent": 26.6593799682035,
+      "economic_true_positive_percent": 88.23529411764706,
+      "economic_true_negative_percent": 58.445945945945944,
+      "economic_confusion_matrix": [
+        [
+          173,
+          123
+        ],
+        [
+          2,
+          15
+        ]
+      ],
       "ber_percent": 31.935612082670907,
       "true_positive_percent": 70.58823529411765,
       "true_negative_percent": 65.54054054054053,
@@ -325,147 +341,9 @@
       "pipeline": "pls_rf",
       "pr_auc": 0.20173552850141457,
       "roc_auc": 0.7076709062003179,
-      "conservative_threshold": 0.09118272757585862,
-      "conservative_ber_percent": 43.30286168521462,
+      "conservative_threshold": 0.11610000000000001,
+      "conservative_ber_percent": 42.62718600953895,
       "conservative_true_positive_percent": 23.52941176470588,
-      "conservative_true_negative_percent": 89.86486486486487,
-      "conservative_confusion_matrix": [
-        [
-          266,
-          30
-        ],
-        [
-          13,
-          4
-        ]
-      ],
-      "ber_threshold": 0.008321107035678559,
-      "ber_ber_percent": 39.06001589825119,
-      "ber_true_positive_percent": 82.35294117647058,
-      "ber_true_negative_percent": 39.52702702702703,
-      "ber_confusion_matrix": [
-        [
-          117,
-          179
-        ],
-        [
-          3,
-          14
-        ]
-      ],
-      "aggressive_threshold": 0.003994998332777592,
-      "aggressive_ber_percent": 50.0,
-      "aggressive_true_positive_percent": 100.0,
-      "aggressive_true_negative_percent": 0.0,
-      "aggressive_confusion_matrix": [
-        [
-          0,
-          296
-        ],
-        [
-          0,
-          17
-        ]
-      ],
-      "ber_percent": 39.06001589825119,
-      "true_positive_percent": 82.35294117647058,
-      "true_negative_percent": 39.52702702702703,
-      "confusion_matrix": [
-        [
-          117,
-          179
-        ],
-        [
-          3,
-          14
-        ]
-      ],
-      "pr_auc_median": 0.21571393046835652,
-      "pr_auc_ci_low": 0.09978283923391947,
-      "pr_auc_ci_high": 0.4336084621648793,
-      "roc_auc_median": 0.7079689984101749,
-      "roc_auc_ci_low": 0.5667726550079492,
-      "roc_auc_ci_high": 0.8389010333863274,
-      "ber_percent_median": 38.891096979332275,
-      "ber_percent_ci_low": 30.232263513513523,
-      "ber_percent_ci_high": 49.0702007154213
-    },
-    {
-      "pipeline": "hsic_bayes",
-      "pr_auc": 0.18875313087060294,
-      "roc_auc": 0.6681240063593005,
-      "conservative_threshold": 0.12146548849616538,
-      "conservative_ber_percent": 42.696740858505564,
-      "conservative_true_positive_percent": 17.647058823529413,
-      "conservative_true_negative_percent": 96.95945945945947,
-      "conservative_confusion_matrix": [
-        [
-          287,
-          9
-        ],
-        [
-          14,
-          3
-        ]
-      ],
-      "ber_threshold": 0.059568856285428476,
-      "ber_ber_percent": 39.536963434022255,
-      "ber_true_positive_percent": 70.58823529411765,
-      "ber_true_negative_percent": 50.33783783783784,
-      "ber_confusion_matrix": [
-        [
-          149,
-          147
-        ],
-        [
-          5,
-          12
-        ]
-      ],
-      "aggressive_threshold": 0.04692330776925642,
-      "aggressive_ber_percent": 50.0,
-      "aggressive_true_positive_percent": 100.0,
-      "aggressive_true_negative_percent": 0.0,
-      "aggressive_confusion_matrix": [
-        [
-          0,
-          296
-        ],
-        [
-          0,
-          17
-        ]
-      ],
-      "ber_percent": 39.536963434022255,
-      "true_positive_percent": 70.58823529411765,
-      "true_negative_percent": 50.33783783783784,
-      "confusion_matrix": [
-        [
-          149,
-          147
-        ],
-        [
-          5,
-          12
-        ]
-      ],
-      "pr_auc_median": 0.19633957465046564,
-      "pr_auc_ci_low": 0.08220235720726554,
-      "pr_auc_ci_high": 0.3883297189281108,
-      "roc_auc_median": 0.6671303656597773,
-      "roc_auc_ci_low": 0.5462589427662956,
-      "roc_auc_ci_high": 0.7897505961844198,
-      "ber_percent_median": 39.536963434022255,
-      "ber_percent_ci_low": 29.35785969793324,
-      "ber_percent_ci_high": 50.12768282988871
-    },
-    {
-      "pipeline": "pls_enet",
-      "pr_auc": 0.18349000494385317,
-      "roc_auc": 0.7742448330683624,
-      "conservative_threshold": 0.10915271757252416,
-      "conservative_ber_percent": 36.74483306836248,
-      "conservative_true_positive_percent": 35.294117647058826,
       "conservative_true_negative_percent": 91.21621621621621,
       "conservative_confusion_matrix": [
         [
@@ -473,98 +351,43 @@
           26
         ],
         [
-          11,
-          6
+          13,
+          4
         ]
       ],
-      "ber_threshold": 0.010317772590863621,
-      "ber_ber_percent": 32.44236883942766,
-      "ber_true_positive_percent": 70.58823529411765,
-      "ber_true_negative_percent": 64.52702702702703,
+      "ber_threshold": 0.0146,
+      "ber_ber_percent": 34.70786963434023,
+      "ber_true_positive_percent": 64.70588235294117,
+      "ber_true_negative_percent": 65.87837837837837,
       "ber_confusion_matrix": [
         [
-          191,
-          105
+          195,
+          101
         ],
         [
-          5,
-          12
+          6,
+          11
         ]
       ],
-      "aggressive_threshold": 0.001,
-      "aggressive_ber_percent": 37.90739268680446,
-      "aggressive_true_positive_percent": 94.11764705882352,
-      "aggressive_true_negative_percent": 30.067567567567565,
+      "aggressive_threshold": 0.0098,
+      "aggressive_ber_percent": 36.93362480127187,
+      "aggressive_true_positive_percent": 76.47058823529412,
+      "aggressive_true_negative_percent": 49.66216216216216,
       "aggressive_confusion_matrix": [
         [
-          89,
-          207
-        ],
-        [
-          1,
-          16
-        ]
-      ],
-      "ber_percent": 32.44236883942766,
-      "true_positive_percent": 70.58823529411765,
-      "true_negative_percent": 64.52702702702703,
-      "confusion_matrix": [
-        [
-          191,
-          105
-        ],
-        [
-          5,
-          12
-        ]
-      ],
-      "pr_auc_median": 0.1980395947327075,
-      "pr_auc_ci_low": 0.11296852977503795,
-      "pr_auc_ci_high": 0.3759360582001,
-      "roc_auc_median": 0.7734499205087441,
-      "roc_auc_ci_low": 0.6577752384737678,
-      "roc_auc_ci_high": 0.871422893481717,
-      "ber_percent_median": 32.57651033386328,
-      "ber_percent_ci_low": 22.09856915739269,
-      "ber_percent_ci_high": 44.308177662957064
-    },
-    {
-      "pipeline": "rfsel_rf",
-      "pr_auc": 0.1488914615115017,
-      "roc_auc": 0.7102543720190779,
-      "conservative_threshold": 0.12213104368122707,
-      "conservative_ber_percent": 40.69952305246423,
-      "conservative_true_positive_percent": 29.411764705882355,
-      "conservative_true_negative_percent": 89.1891891891892,
-      "conservative_confusion_matrix": [
-        [
-          264,
-          32
-        ],
-        [
-          12,
-          5
-        ]
-      ],
-      "ber_threshold": 0.0399349783261087,
-      "ber_ber_percent": 34.568759936407,
-      "ber_true_positive_percent": 76.47058823529412,
-      "ber_true_negative_percent": 54.391891891891895,
-      "ber_confusion_matrix": [
-        [
-          161,
-          135
+          147,
+          149
         ],
         [
           4,
           13
         ]
       ],
-      "aggressive_threshold": 0.025625541847282426,
-      "aggressive_ber_percent": 38.82154213036566,
-      "aggressive_true_positive_percent": 88.23529411764706,
-      "aggressive_true_negative_percent": 34.12162162162162,
-      "aggressive_confusion_matrix": [
+      "economic_threshold": 0.0077,
+      "economic_ber_percent": 38.82154213036566,
+      "economic_true_positive_percent": 88.23529411764706,
+      "economic_true_negative_percent": 34.12162162162162,
+      "economic_confusion_matrix": [
         [
           101,
           195
@@ -574,135 +397,80 @@
           15
         ]
       ],
-      "ber_percent": 34.568759936407,
-      "true_positive_percent": 76.47058823529412,
-      "true_negative_percent": 54.391891891891895,
+      "ber_percent": 34.70786963434023,
+      "true_positive_percent": 64.70588235294117,
+      "true_negative_percent": 65.87837837837837,
       "confusion_matrix": [
         [
-          161,
-          135
+          195,
+          101
         ],
         [
-          4,
-          13
+          6,
+          11
         ]
       ],
-      "pr_auc_median": 0.16490670424043052,
-      "pr_auc_ci_low": 0.08258282899499764,
-      "pr_auc_ci_high": 0.348709780204405,
-      "roc_auc_median": 0.7131359300476947,
-      "roc_auc_ci_low": 0.5971184419713832,
-      "roc_auc_ci_high": 0.8155902225755166,
-      "ber_percent_median": 34.39984101748807,
-      "ber_percent_ci_low": 24.89641295707473,
-      "ber_percent_ci_high": 45.75889308426073
+      "pr_auc_median": 0.21571393046835652,
+      "pr_auc_ci_low": 0.09978283923391947,
+      "pr_auc_ci_high": 0.4336084621648793,
+      "roc_auc_median": 0.7079689984101749,
+      "roc_auc_ci_low": 0.5667726550079492,
+      "roc_auc_ci_high": 0.8389010333863274,
+      "ber_percent_median": 34.6383147853736,
+      "ber_percent_ci_low": 23.51947535771066,
+      "ber_percent_ci_high": 47.08465818759936
     },
     {
-      "pipeline": "rfsel_enet",
-      "pr_auc": 0.14475881360838705,
-      "roc_auc": 0.6806438791732909,
-      "conservative_threshold": 0.14509269756585527,
-      "conservative_ber_percent": 44.962241653418126,
-      "conservative_true_positive_percent": 11.76470588235294,
-      "conservative_true_negative_percent": 98.3108108108108,
+      "pipeline": "hsic_bayes",
+      "pr_auc": 0.18875313087060294,
+      "roc_auc": 0.6681240063593005,
+      "conservative_threshold": 0.0776,
+      "conservative_ber_percent": 41.13672496025437,
+      "conservative_true_positive_percent": 35.294117647058826,
+      "conservative_true_negative_percent": 82.43243243243244,
       "conservative_confusion_matrix": [
         [
-          291,
-          5
+          244,
+          52
         ],
         [
-          15,
-          2
+          11,
+          6
         ]
       ],
-      "ber_threshold": 0.1254588196065355,
-      "ber_ber_percent": 45.131160572337045,
-      "ber_true_positive_percent": 11.76470588235294,
-      "ber_true_negative_percent": 97.97297297297297,
+      "ber_threshold": 0.06680000000000001,
+      "ber_ber_percent": 36.128775834658185,
+      "ber_true_positive_percent": 58.82352941176471,
+      "ber_true_negative_percent": 68.91891891891892,
       "ber_confusion_matrix": [
         [
-          290,
-          6
+          204,
+          92
         ],
         [
-          15,
-          2
+          7,
+          10
         ]
       ],
-      "aggressive_threshold": 0.039602200733577855,
-      "aggressive_ber_percent": 46.11486486486487,
-      "aggressive_true_positive_percent": 100.0,
-      "aggressive_true_negative_percent": 7.77027027027027,
+      "aggressive_threshold": 0.0625,
+      "aggressive_ber_percent": 40.18282988871225,
+      "aggressive_true_positive_percent": 58.82352941176471,
+      "aggressive_true_negative_percent": 60.810810810810814,
       "aggressive_confusion_matrix": [
         [
-          23,
-          273
+          180,
+          116
         ],
         [
-          0,
-          17
+          7,
+          10
         ]
       ],
-      "ber_percent": 45.131160572337045,
-      "true_positive_percent": 11.76470588235294,
-      "true_negative_percent": 97.97297297297297,
-      "confusion_matrix": [
-        [
-          290,
-          6
-        ],
-        [
-          15,
-          2
-        ]
-      ],
-      "pr_auc_median": 0.15564011942924122,
-      "pr_auc_ci_low": 0.07941173121327284,
-      "pr_auc_ci_high": 0.3359312977485301,
-      "roc_auc_median": 0.6768680445151034,
-      "roc_auc_ci_low": 0.5453050476947536,
-      "roc_auc_ci_high": 0.804660174880763,
-      "ber_percent_median": 45.300079491255964,
-      "ber_percent_ci_low": 36.30340818759937,
-      "ber_percent_ci_high": 51.35135135135135
-    },
-    {
-      "pipeline": "hsic_enet",
-      "pr_auc": 0.1197915232726427,
-      "roc_auc": 0.696939586645469,
-      "conservative_threshold": 0.10183161053684561,
-      "conservative_ber_percent": 50.50675675675676,
-      "conservative_true_positive_percent": 0.0,
-      "conservative_true_negative_percent": 98.98648648648648,
-      "conservative_confusion_matrix": [
-        [
-          293,
-          3
-        ],
-        [
-          17,
-          0
-        ]
-      ],
-      "ber_threshold": 0.07287995998666222,
-      "ber_ber_percent": 48.57909379968204,
-      "ber_true_positive_percent": 5.88235294117647,
-      "ber_true_negative_percent": 96.95945945945947,
-      "ber_confusion_matrix": [
-        [
-          287,
-          9
-        ],
-        [
-          16,
-          1
-        ]
-      ],
-      "aggressive_threshold": 0.052913304434811605,
-      "aggressive_ber_percent": 50.0,
-      "aggressive_true_positive_percent": 100.0,
-      "aggressive_true_negative_percent": 0.0,
-      "aggressive_confusion_matrix": [
+      "economic_threshold": 0.045200000000000004,
+      "economic_ber_percent": 50.0,
+      "economic_true_positive_percent": 100.0,
+      "economic_true_negative_percent": 0.0,
+      "economic_confusion_matrix": [
         [
           0,
           296
@@ -712,17 +480,349 @@
           17
         ]
       ],
-      "ber_percent": 48.57909379968204,
-      "true_positive_percent": 5.88235294117647,
-      "true_negative_percent": 96.95945945945947,
+      "ber_percent": 36.128775834658185,
+      "true_positive_percent": 58.82352941176471,
+      "true_negative_percent": 68.91891891891892,
       "confusion_matrix": [
         [
-          287,
-          9
+          204,
+          92
         ],
         [
-          16,
-          1
+          7,
+          10
+        ]
+      ],
+      "pr_auc_median": 0.19633957465046564,
+      "pr_auc_ci_low": 0.08220235720726554,
+      "pr_auc_ci_high": 0.3883297189281108,
+      "roc_auc_median": 0.6671303656597773,
+      "roc_auc_ci_low": 0.5462589427662956,
+      "roc_auc_ci_high": 0.7897505961844198,
+      "ber_percent_median": 35.959856915739266,
+      "ber_percent_ci_low": 24.19515103338633,
+      "ber_percent_ci_high": 47.38672496025437
+    },
+    {
+      "pipeline": "pls_enet",
+      "pr_auc": 0.18349000494385317,
+      "roc_auc": 0.7742448330683624,
+      "conservative_threshold": 0.12110000000000001,
+      "conservative_ber_percent": 36.40699523052464,
+      "conservative_true_positive_percent": 35.294117647058826,
+      "conservative_true_negative_percent": 91.8918918918919,
+      "conservative_confusion_matrix": [
+        [
+          272,
+          24
+        ],
+        [
+          11,
+          6
+        ]
+      ],
+      "ber_threshold": 0.0101,
+      "ber_ber_percent": 29.67011128775835,
+      "ber_true_positive_percent": 76.47058823529412,
+      "ber_true_negative_percent": 64.1891891891892,
+      "ber_confusion_matrix": [
+        [
+          190,
+          106
+        ],
+        [
+          4,
+          13
+        ]
+      ],
+      "aggressive_threshold": 0.006500000000000001,
+      "aggressive_ber_percent": 25.64586645468998,
+      "aggressive_true_positive_percent": 88.23529411764706,
+      "aggressive_true_negative_percent": 60.47297297297297,
+      "aggressive_confusion_matrix": [
+        [
+          179,
+          117
+        ],
+        [
+          2,
+          15
+        ]
+      ],
+      "economic_threshold": 0.008,
+      "economic_ber_percent": 24.63235294117647,
+      "economic_true_positive_percent": 88.23529411764706,
+      "economic_true_negative_percent": 62.5,
+      "economic_confusion_matrix": [
+        [
+          185,
+          111
+        ],
+        [
+          2,
+          15
+        ]
+      ],
+      "ber_percent": 29.67011128775835,
+      "true_positive_percent": 76.47058823529412,
+      "true_negative_percent": 64.1891891891892,
+      "confusion_matrix": [
+        [
+          190,
+          106
+        ],
+        [
+          4,
+          13
+        ]
+      ],
+      "pr_auc_median": 0.1980395947327075,
+      "pr_auc_ci_low": 0.11296852977503795,
+      "pr_auc_ci_high": 0.3759360582001,
+      "roc_auc_median": 0.7734499205087441,
+      "roc_auc_ci_low": 0.6577752384737678,
+      "roc_auc_ci_high": 0.871422893481717,
+      "ber_percent_median": 29.839030206677265,
+      "ber_percent_ci_low": 20.001987281399046,
+      "ber_percent_ci_high": 40.35771065182829
+    },
+    {
+      "pipeline": "rfsel_rf",
+      "pr_auc": 0.1488914615115017,
+      "roc_auc": 0.7102543720190779,
+      "conservative_threshold": 0.10950000000000001,
+      "conservative_ber_percent": 38.26510333863274,
+      "conservative_true_positive_percent": 35.294117647058826,
+      "conservative_true_negative_percent": 88.17567567567568,
+      "conservative_confusion_matrix": [
+        [
+          261,
+          35
+        ],
+        [
+          11,
+          6
+        ]
+      ],
+      "ber_threshold": 0.07160000000000001,
+      "ber_ber_percent": 36.9435612082671,
+      "ber_true_positive_percent": 47.05882352941176,
+      "ber_true_negative_percent": 79.05405405405406,
+      "ber_confusion_matrix": [
+        [
+          234,
+          62
+        ],
+        [
+          9,
+          8
+        ]
+      ],
+      "aggressive_threshold": 0.0396,
+      "aggressive_ber_percent": 31.965421303656605,
+      "aggressive_true_positive_percent": 82.35294117647058,
+      "aggressive_true_negative_percent": 53.71621621621622,
+      "aggressive_confusion_matrix": [
+        [
+          159,
+          137
+        ],
+        [
+          3,
+          14
+        ]
+      ],
+      "economic_threshold": 0.025,
+      "economic_ber_percent": 40.00397456279809,
+      "economic_true_positive_percent": 88.23529411764706,
+      "economic_true_negative_percent": 31.756756756756754,
+      "economic_confusion_matrix": [
+        [
+          94,
+          202
+        ],
+        [
+          2,
+          15
+        ]
+      ],
+      "ber_percent": 36.9435612082671,
+      "true_positive_percent": 47.05882352941176,
+      "true_negative_percent": 79.05405405405406,
+      "confusion_matrix": [
+        [
+          234,
+          62
+        ],
+        [
+          9,
+          8
+        ]
+      ],
+      "pr_auc_median": 0.16490670424043052,
+      "pr_auc_ci_low": 0.08258282899499764,
+      "pr_auc_ci_high": 0.348709780204405,
+      "roc_auc_median": 0.7131359300476947,
+      "roc_auc_ci_low": 0.5971184419713832,
+      "roc_auc_ci_high": 0.8155902225755166,
+      "ber_percent_median": 37.11248012718601,
+      "ber_percent_ci_low": 25.409628378378383,
+      "ber_percent_ci_high": 49.11988275039745
+    },
+    {
+      "pipeline": "rfsel_enet",
+      "pr_auc": 0.14475881360838705,
+      "roc_auc": 0.6806438791732909,
+      "conservative_threshold": 0.0942,
+      "conservative_ber_percent": 42.1204292527822,
+      "conservative_true_positive_percent": 23.52941176470588,
+      "conservative_true_negative_percent": 92.22972972972973,
+      "conservative_confusion_matrix": [
+        [
+          273,
+          23
+        ],
+        [
+          13,
+          4
+        ]
+      ],
+      "ber_threshold": 0.0839,
+      "ber_ber_percent": 38.26510333863274,
+      "ber_true_positive_percent": 35.294117647058826,
+      "ber_true_negative_percent": 88.17567567567568,
+      "ber_confusion_matrix": [
+        [
+          261,
+          35
+        ],
+        [
+          11,
+          6
+        ]
+      ],
+      "aggressive_threshold": 0.06380000000000001,
+      "aggressive_ber_percent": 34.03219395866455,
+      "aggressive_true_positive_percent": 64.70588235294117,
+      "aggressive_true_negative_percent": 67.22972972972973,
+      "aggressive_confusion_matrix": [
+        [
+          199,
+          97
+        ],
+        [
+          6,
+          11
+        ]
+      ],
+      "economic_threshold": 0.0449,
+      "economic_ber_percent": 42.29928457869634,
+      "economic_true_positive_percent": 94.11764705882352,
+      "economic_true_negative_percent": 21.283783783783782,
+      "economic_confusion_matrix": [
+        [
+          63,
+          233
+        ],
+        [
+          1,
+          16
+        ]
+      ],
+      "ber_percent": 38.26510333863274,
+      "true_positive_percent": 35.294117647058826,
+      "true_negative_percent": 88.17567567567568,
+      "confusion_matrix": [
+        [
+          261,
+          35
+        ],
+        [
+          11,
+          6
+        ]
+      ],
+      "pr_auc_median": 0.15564011942924122,
+      "pr_auc_ci_low": 0.07941173121327284,
+      "pr_auc_ci_high": 0.3359312977485301,
+      "roc_auc_median": 0.6768680445151034,
+      "roc_auc_ci_low": 0.5453050476947536,
+      "roc_auc_ci_high": 0.804660174880763,
+      "ber_percent_median": 38.77186009538951,
+      "ber_percent_ci_low": 26.83823529411764,
+      "ber_percent_ci_high": 49.45349761526232
+    },
+    {
+      "pipeline": "hsic_enet",
+      "pr_auc": 0.1197915232726427,
+      "roc_auc": 0.696939586645469,
+      "conservative_threshold": 0.07050000000000001,
+      "conservative_ber_percent": 43.879173290938,
+      "conservative_true_positive_percent": 17.647058823529413,
+      "conservative_true_negative_percent": 94.5945945945946,
+      "conservative_confusion_matrix": [
+        [
+          280,
+          16
+        ],
+        [
+          14,
+          3
+        ]
+      ],
+      "ber_threshold": 0.0683,
+      "ber_ber_percent": 41.88195548489666,
+      "ber_true_positive_percent": 29.411764705882355,
+      "ber_true_negative_percent": 86.82432432432432,
+      "ber_confusion_matrix": [
+        [
+          257,
+          39
+        ],
+        [
+          12,
+          5
+        ]
+      ],
+      "aggressive_threshold": 0.06430000000000001,
+      "aggressive_ber_percent": 35.58227344992051,
+      "aggressive_true_positive_percent": 76.47058823529412,
+      "aggressive_true_negative_percent": 52.36486486486487,
+      "aggressive_confusion_matrix": [
+        [
+          155,
+          141
+        ],
+        [
+          4,
+          13
+        ]
+      ],
+      "economic_threshold": 0.06130000000000001,
+      "economic_ber_percent": 45.84658187599364,
+      "economic_true_positive_percent": 94.11764705882352,
+      "economic_true_negative_percent": 14.18918918918919,
+      "economic_confusion_matrix": [
+        [
+          42,
+          254
+        ],
+        [
+          1,
+          16
+        ]
+      ],
+      "ber_percent": 41.88195548489666,
+      "true_positive_percent": 29.411764705882355,
+      "true_negative_percent": 86.82432432432432,
+      "confusion_matrix": [
+        [
+          257,
+          39
+        ],
+        [
+          12,
+          5
         ]
       ],
       "pr_auc_median": 0.1299360938433331,
@@ -731,15 +831,15 @@
       "roc_auc_median": 0.6949523052464229,
       "roc_auc_ci_low": 0.5627931240063594,
       "roc_auc_ci_high": 0.8068859300476947,
-      "ber_percent_median": 48.748012718600954,
-      "ber_percent_ci_low": 42.18998410174881,
-      "ber_percent_ci_high": 52.36486486486487
+      "ber_percent_median": 42.2197933227345,
+      "ber_percent_ci_low": 30.961844197138323,
+      "ber_percent_ci_high": 51.733406200317944
     },
     {
       "pipeline": "rfsel_bayes",
       "pr_auc": 0.09788112807704787,
       "roc_auc": 0.5538553259141494,
-      "conservative_threshold": 0.13544214738246083,
+      "conservative_threshold": 0.13269999999999998,
       "conservative_ber_percent": 45.468998410174876,
       "conservative_true_positive_percent": 11.76470588235294,
       "conservative_true_negative_percent": 97.2972972972973,
@@ -753,41 +853,55 @@
           2
         ]
       ],
-      "ber_threshold": 0.0971727242414138,
-      "ber_ber_percent": 43.54133545310016,
+      "ber_threshold": 0.08510000000000001,
+      "ber_ber_percent": 44.04809220985692,
       "ber_true_positive_percent": 17.647058823529413,
-      "ber_true_negative_percent": 95.27027027027027,
+      "ber_true_negative_percent": 94.25675675675676,
       "ber_confusion_matrix": [
         [
-          282,
-          14
+          279,
+          17
         ],
         [
           14,
           3
         ]
       ],
-      "aggressive_threshold": 0.05424441480493498,
-      "aggressive_ber_percent": 48.708267090620026,
-      "aggressive_true_positive_percent": 23.52941176470588,
-      "aggressive_true_negative_percent": 79.05405405405406,
+      "aggressive_threshold": 0.043500000000000004,
+      "aggressive_ber_percent": 54.7197933227345,
+      "aggressive_true_positive_percent": 29.411764705882355,
+      "aggressive_true_negative_percent": 61.14864864864865,
       "aggressive_confusion_matrix": [
         [
-          234,
-          62
+          181,
+          115
         ],
         [
-          13,
-          4
+          12,
+          5
         ]
       ],
-      "ber_percent": 43.54133545310016,
+      "economic_threshold": 0.037200000000000004,
+      "economic_ber_percent": 42.637122416534176,
+      "economic_true_positive_percent": 94.11764705882352,
+      "economic_true_negative_percent": 20.60810810810811,
+      "economic_confusion_matrix": [
+        [
+          61,
+          235
+        ],
+        [
+          1,
+          16
+        ]
+      ],
+      "ber_percent": 44.04809220985692,
       "true_positive_percent": 17.647058823529413,
-      "true_negative_percent": 95.27027027027027,
+      "true_negative_percent": 94.25675675675676,
       "confusion_matrix": [
         [
-          282,
-          14
+          279,
+          17
         ],
         [
           14,
@@ -800,67 +914,81 @@
       "roc_auc_median": 0.550476947535771,
       "roc_auc_ci_low": 0.42286367249602547,
       "roc_auc_ci_high": 0.6850755166931638,
-      "ber_percent_median": 43.879173290938,
-      "ber_percent_ci_low": 34.04213036565977,
-      "ber_percent_ci_high": 52.02702702702703
+      "ber_percent_median": 44.38593004769476,
+      "ber_percent_ci_low": 34.54888712241654,
+      "ber_percent_ci_high": 52.36908783783784
     },
     {
       "pipeline": "hsic_rf",
       "pr_auc": 0.08318009308325161,
       "roc_auc": 0.5639904610492845,
-      "conservative_threshold": 0.08153217739246416,
-      "conservative_ber_percent": 48.27106518282989,
+      "conservative_threshold": 0.0719,
+      "conservative_ber_percent": 50.46701112877583,
       "conservative_true_positive_percent": 17.647058823529413,
-      "conservative_true_negative_percent": 85.8108108108108,
+      "conservative_true_negative_percent": 81.41891891891892,
       "conservative_confusion_matrix": [
         [
-          254,
-          42
+          241,
+          55
         ],
         [
           14,
           3
         ]
       ],
-      "ber_threshold": 0.06855385128376125,
-      "ber_ber_percent": 50.97376788553258,
-      "ber_true_positive_percent": 17.647058823529413,
-      "ber_true_negative_percent": 80.4054054054054,
+      "ber_threshold": 0.057800000000000004,
+      "ber_ber_percent": 51.57988871224165,
+      "ber_true_positive_percent": 23.52941176470588,
+      "ber_true_negative_percent": 73.3108108108108,
       "ber_confusion_matrix": [
         [
-          238,
-          58
+          217,
+          79
         ],
         [
-          14,
-          3
+          13,
+          4
         ]
       ],
-      "aggressive_threshold": 0.04126608869623208,
-      "aggressive_ber_percent": 46.33346581875993,
+      "aggressive_threshold": 0.044700000000000004,
+      "aggressive_ber_percent": 43.630763116057224,
       "aggressive_true_positive_percent": 52.94117647058824,
-      "aggressive_true_negative_percent": 54.391891891891895,
+      "aggressive_true_negative_percent": 59.797297297297305,
       "aggressive_confusion_matrix": [
         [
-          161,
-          135
+          177,
+          119
         ],
         [
           8,
           9
         ]
       ],
-      "ber_percent": 50.97376788553258,
-      "true_positive_percent": 17.647058823529413,
-      "true_negative_percent": 80.4054054054054,
-      "confusion_matrix": [
+      "economic_threshold": 0.047700000000000006,
+      "economic_ber_percent": 47.14825119236884,
+      "economic_true_positive_percent": 41.17647058823529,
+      "economic_true_negative_percent": 64.52702702702703,
+      "economic_confusion_matrix": [
         [
-          238,
-          58
+          191,
+          105
         ],
         [
-          14,
-          3
+          10,
+          7
+        ]
+      ],
+      "ber_percent": 51.57988871224165,
+      "true_positive_percent": 23.52941176470588,
+      "true_negative_percent": 73.3108108108108,
+      "confusion_matrix": [
+        [
+          217,
+          79
+        ],
+        [
+          13,
+          4
         ]
       ],
       "pr_auc_median": 0.0906499162420028,
@@ -869,9 +997,9 @@
       "roc_auc_median": 0.5626987281399047,
       "roc_auc_ci_low": 0.44096283783783785,
       "roc_auc_ci_high": 0.6931786565977742,
-      "ber_percent_median": 51.14268680445151,
-      "ber_percent_ci_low": 40.62996820349761,
-      "ber_percent_ci_high": 59.45945945945945
+      "ber_percent_median": 51.748807631160574,
+      "ber_percent_ci_low": 40.38130961844199,
+      "ber_percent_ci_high": 60.910174880763115
     }
   ],
   "holdout_random": [
@@ -879,59 +1007,73 @@
       "pipeline": "hsic_rf",
       "pr_auc": 0.3132561593107869,
       "roc_auc": 0.7918088737201365,
-      "conservative_threshold": 0.08153217739246416,
-      "conservative_ber_percent": 31.48870469689582,
-      "conservative_true_positive_percent": 52.38095238095239,
-      "conservative_true_negative_percent": 84.64163822525597,
+      "conservative_threshold": 0.0719,
+      "conservative_ber_percent": 28.091987648301643,
+      "conservative_true_positive_percent": 61.904761904761905,
+      "conservative_true_negative_percent": 81.91126279863481,
       "conservative_confusion_matrix": [
         [
-          248,
-          45
+          240,
+          53
         ],
         [
-          10,
-          11
+          8,
+          13
         ]
       ],
-      "ber_threshold": 0.06855385128376125,
-      "ber_ber_percent": 26.564277588168373,
-      "ber_true_positive_percent": 66.66666666666666,
-      "ber_true_negative_percent": 80.2047781569966,
+      "ber_threshold": 0.057800000000000004,
+      "ber_ber_percent": 24.532748252884772,
+      "ber_true_positive_percent": 76.19047619047619,
+      "ber_true_negative_percent": 74.74402730375427,
       "ber_confusion_matrix": [
         [
-          235,
-          58
+          219,
+          74
         ],
         [
-          7,
-          14
+          5,
+          16
         ]
       ],
-      "aggressive_threshold": 0.04126608869623208,
-      "aggressive_ber_percent": 29.668454412481715,
-      "aggressive_true_positive_percent": 85.71428571428571,
-      "aggressive_true_negative_percent": 54.94880546075085,
+      "aggressive_threshold": 0.044700000000000004,
+      "aggressive_ber_percent": 29.830976759304406,
+      "aggressive_true_positive_percent": 80.95238095238095,
+      "aggressive_true_negative_percent": 59.38566552901023,
       "aggressive_confusion_matrix": [
         [
-          161,
-          132
+          174,
+          119
         ],
         [
-          3,
-          18
+          4,
+          17
         ]
       ],
-      "ber_percent": 26.564277588168373,
-      "true_positive_percent": 66.66666666666666,
-      "true_negative_percent": 80.2047781569966,
-      "confusion_matrix": [
+      "economic_threshold": 0.047700000000000006,
+      "economic_ber_percent": 27.78319518933854,
+      "economic_true_positive_percent": 80.95238095238095,
+      "economic_true_negative_percent": 63.48122866894198,
+      "economic_confusion_matrix": [
         [
-          235,
-          58
+          186,
+          107
         ],
         [
-          7,
-          14
+          4,
+          17
+        ]
+      ],
+      "ber_percent": 24.532748252884772,
+      "true_positive_percent": 76.19047619047619,
+      "true_negative_percent": 74.74402730375427,
+      "confusion_matrix": [
+        [
+          219,
+          74
+        ],
+        [
+          5,
+          16
         ]
       ],
       "pr_auc_median": 0.32597269392698724,
@@ -940,67 +1082,81 @@
       "roc_auc_median": 0.7979847228993986,
       "roc_auc_ci_low": 0.6928327645051194,
       "roc_auc_ci_high": 0.8886803185437998,
-      "ber_percent_median": 26.052332195676907,
-      "ber_percent_ci_low": 16.34588818462539,
-      "ber_percent_ci_high": 37.11197789696084
+      "ber_percent_median": 24.02080286039331,
+      "ber_percent_ci_low": 15.3502356574029,
+      "ber_percent_ci_high": 33.88611246546401
     },
     {
       "pipeline": "rfsel_rf",
       "pr_auc": 0.23411089138363753,
       "roc_auc": 0.7708434909800098,
-      "conservative_threshold": 0.12213104368122707,
-      "conservative_ber_percent": 37.08759954493743,
-      "conservative_true_positive_percent": 33.33333333333333,
-      "conservative_true_negative_percent": 92.4914675767918,
+      "conservative_threshold": 0.10950000000000001,
+      "conservative_ber_percent": 33.69088249634324,
+      "conservative_true_positive_percent": 42.857142857142854,
+      "conservative_true_negative_percent": 89.76109215017065,
       "conservative_confusion_matrix": [
         [
-          271,
-          22
+          263,
+          30
         ],
         [
-          14,
-          7
+          12,
+          9
         ]
       ],
-      "ber_threshold": 0.0399349783261087,
-      "ber_ber_percent": 31.878758329270273,
-      "ber_true_positive_percent": 80.95238095238095,
-      "ber_true_negative_percent": 55.2901023890785,
+      "ber_threshold": 0.07160000000000001,
+      "ber_ber_percent": 30.643588493417838,
+      "ber_true_positive_percent": 57.14285714285714,
+      "ber_true_negative_percent": 81.56996587030717,
       "ber_confusion_matrix": [
         [
-          162,
-          131
+          239,
+          54
+        ],
+        [
+          9,
+          12
+        ]
+      ],
+      "aggressive_threshold": 0.0396,
+      "aggressive_ber_percent": 32.0494067934341,
+      "aggressive_true_positive_percent": 80.95238095238095,
+      "aggressive_true_negative_percent": 54.94880546075085,
+      "aggressive_confusion_matrix": [
+        [
+          161,
+          132
         ],
         [
           4,
           17
         ]
       ],
-      "aggressive_threshold": 0.025625541847282426,
-      "aggressive_ber_percent": 34.97480903624248,
-      "aggressive_true_positive_percent": 95.23809523809523,
-      "aggressive_true_negative_percent": 34.8122866894198,
-      "aggressive_confusion_matrix": [
+      "economic_threshold": 0.025,
+      "economic_ber_percent": 35.48675442873396,
+      "economic_true_positive_percent": 95.23809523809523,
+      "economic_true_negative_percent": 33.78839590443686,
+      "economic_confusion_matrix": [
         [
-          102,
-          191
+          99,
+          194
         ],
         [
           1,
           20
         ]
       ],
-      "ber_percent": 31.878758329270273,
-      "true_positive_percent": 80.95238095238095,
-      "true_negative_percent": 55.2901023890785,
+      "ber_percent": 30.643588493417838,
+      "true_positive_percent": 57.14285714285714,
+      "true_negative_percent": 81.56996587030717,
       "confusion_matrix": [
         [
-          162,
-          131
+          239,
+          54
         ],
         [
-          4,
-          17
+          9,
+          12
         ]
       ],
       "pr_auc_median": 0.25333707077383616,
@@ -1009,67 +1165,81 @@
       "roc_auc_median": 0.7734438485291728,
       "roc_auc_ci_low": 0.6630911750365676,
       "roc_auc_ci_high": 0.8602998537298878,
-      "ber_percent_median": 31.456200227531284,
-      "ber_percent_ci_low": 23.54136193726637,
-      "ber_percent_ci_high": 40.89509182512594
+      "ber_percent_median": 30.80611084024053,
+      "ber_percent_ci_low": 19.591865756541516,
+      "ber_percent_ci_high": 42.207053469852106
     },
     {
       "pipeline": "hsic_bayes",
       "pr_auc": 0.1464063217984411,
       "roc_auc": 0.7157484154071185,
-      "conservative_threshold": 0.12146548849616538,
-      "conservative_ber_percent": 45.58751828376402,
-      "conservative_true_positive_percent": 14.285714285714285,
-      "conservative_true_negative_percent": 94.53924914675767,
+      "conservative_threshold": 0.0776,
+      "conservative_ber_percent": 36.94132943279701,
+      "conservative_true_positive_percent": 47.61904761904761,
+      "conservative_true_negative_percent": 78.49829351535837,
       "conservative_confusion_matrix": [
         [
-          277,
-          16
+          230,
+          63
         ],
         [
-          18,
-          3
+          11,
+          10
         ]
       ],
-      "ber_threshold": 0.059568856285428476,
-      "ber_ber_percent": 31.521209166260356,
-      "ber_true_positive_percent": 71.42857142857143,
-      "ber_true_negative_percent": 65.52901023890784,
+      "ber_threshold": 0.06680000000000001,
+      "ber_ber_percent": 35.08044856167722,
+      "ber_true_positive_percent": 57.14285714285714,
+      "ber_true_negative_percent": 72.6962457337884,
       "ber_confusion_matrix": [
         [
-          192,
-          101
+          213,
+          80
         ],
         [
-          6,
-          15
+          9,
+          12
         ]
       ],
-      "aggressive_threshold": 0.04692330776925642,
-      "aggressive_ber_percent": 35.307979847229,
-      "aggressive_true_positive_percent": 90.47619047619048,
-      "aggressive_true_negative_percent": 38.907849829351534,
+      "aggressive_threshold": 0.0625,
+      "aggressive_ber_percent": 37.46952705997075,
+      "aggressive_true_positive_percent": 57.14285714285714,
+      "aggressive_true_negative_percent": 67.91808873720136,
       "aggressive_confusion_matrix": [
         [
-          114,
-          179
+          199,
+          94
+        ],
+        [
+          9,
+          12
+        ]
+      ],
+      "economic_threshold": 0.045200000000000004,
+      "economic_ber_percent": 37.69705834552251,
+      "economic_true_positive_percent": 90.47619047619048,
+      "economic_true_negative_percent": 34.129692832764505,
+      "economic_confusion_matrix": [
+        [
+          100,
+          193
         ],
         [
           2,
           19
         ]
       ],
-      "ber_percent": 31.521209166260356,
-      "true_positive_percent": 71.42857142857143,
-      "true_negative_percent": 65.52901023890784,
+      "ber_percent": 35.08044856167722,
+      "true_positive_percent": 57.14285714285714,
+      "true_negative_percent": 72.6962457337884,
       "confusion_matrix": [
         [
-          192,
-          101
+          213,
+          80
         ],
         [
-          6,
-          15
+          9,
+          12
         ]
       ],
       "pr_auc_median": 0.15879768763906676,
@@ -1078,67 +1248,81 @@
       "roc_auc_median": 0.7178612059158134,
       "roc_auc_ci_low": 0.6079554688769706,
       "roc_auc_ci_high": 0.8189622948155371,
-      "ber_percent_median": 31.18803835527385,
-      "ber_percent_ci_low": 21.985413619372675,
-      "ber_percent_ci_high": 42.06890947505282
+      "ber_percent_median": 35.08044856167722,
+      "ber_percent_ci_low": 24.195108077360647,
+      "ber_percent_ci_high": 45.46948642938404
     },
     {
       "pipeline": "hsic_enet",
       "pr_auc": 0.14562588903244425,
       "roc_auc": 0.5819925239720461,
-      "conservative_threshold": 0.10183161053684561,
-      "conservative_ber_percent": 47.78969608321144,
-      "conservative_true_positive_percent": 4.761904761904762,
-      "conservative_true_negative_percent": 99.65870307167235,
+      "conservative_threshold": 0.07050000000000001,
+      "conservative_ber_percent": 44.059808223630746,
+      "conservative_true_positive_percent": 19.047619047619047,
+      "conservative_true_negative_percent": 92.83276450511946,
       "conservative_confusion_matrix": [
         [
-          292,
-          1
+          272,
+          21
         ],
         [
-          20,
-          1
+          17,
+          4
         ]
       ],
-      "ber_threshold": 0.07287995998666222,
-      "ber_ber_percent": 44.904924427108725,
-      "ber_true_positive_percent": 14.285714285714285,
-      "ber_true_negative_percent": 95.90443686006826,
+      "ber_threshold": 0.0683,
+      "ber_ber_percent": 39.1353811149033,
+      "ber_true_positive_percent": 33.33333333333333,
+      "ber_true_negative_percent": 88.39590443686008,
       "ber_confusion_matrix": [
         [
-          281,
-          12
+          259,
+          34
         ],
         [
-          18,
-          3
+          14,
+          7
         ]
       ],
-      "aggressive_threshold": 0.052913304434811605,
-      "aggressive_ber_percent": 49.65870307167235,
-      "aggressive_true_positive_percent": 100.0,
-      "aggressive_true_negative_percent": 0.6825938566552902,
+      "aggressive_threshold": 0.06430000000000001,
+      "aggressive_ber_percent": 46.172598732325696,
+      "aggressive_true_positive_percent": 57.14285714285714,
+      "aggressive_true_negative_percent": 50.51194539249146,
       "aggressive_confusion_matrix": [
         [
-          2,
-          291
+          148,
+          145
         ],
         [
-          0,
-          21
+          9,
+          12
         ]
       ],
-      "ber_percent": 44.904924427108725,
-      "true_positive_percent": 14.285714285714285,
-      "true_negative_percent": 95.90443686006826,
-      "confusion_matrix": [
+      "economic_threshold": 0.06130000000000001,
+      "economic_ber_percent": 48.11474077685682,
+      "economic_true_positive_percent": 95.23809523809523,
+      "economic_true_negative_percent": 8.532423208191126,
+      "economic_confusion_matrix": [
         [
-          281,
-          12
+          25,
+          268
         ],
         [
-          18,
-          3
+          1,
+          20
+        ]
+      ],
+      "ber_percent": 39.1353811149033,
+      "true_positive_percent": 33.33333333333333,
+      "true_negative_percent": 88.39590443686008,
+      "confusion_matrix": [
+        [
+          259,
+          34
+        ],
+        [
+          14,
+          7
         ]
       ],
       "pr_auc_median": 0.15850963136753915,
@@ -1147,63 +1331,77 @@
       "roc_auc_median": 0.5807736063708759,
       "roc_auc_ci_low": 0.4390500568828214,
       "roc_auc_ci_high": 0.7216032829514059,
-      "ber_percent_median": 45.07557289127255,
-      "ber_percent_ci_low": 36.90882496343247,
-      "ber_percent_ci_high": 51.71075085324232
+      "ber_percent_median": 39.22070534698521,
+      "ber_percent_ci_low": 28.928977734438476,
+      "ber_percent_ci_high": 49.171136031204284
     },
     {
       "pipeline": "rfsel_bayes",
       "pr_auc": 0.138805217107301,
       "roc_auc": 0.6260360799609946,
-      "conservative_threshold": 0.13544214738246083,
-      "conservative_ber_percent": 39.98049731838128,
+      "conservative_threshold": 0.13269999999999998,
+      "conservative_ber_percent": 40.15114578254511,
       "conservative_true_positive_percent": 28.57142857142857,
-      "conservative_true_negative_percent": 91.46757679180887,
+      "conservative_true_negative_percent": 91.12627986348123,
       "conservative_confusion_matrix": [
         [
-          268,
-          25
+          267,
+          26
         ],
         [
           15,
           6
         ]
       ],
-      "ber_threshold": 0.0971727242414138,
-      "ber_ber_percent": 36.93320331545588,
+      "ber_threshold": 0.08510000000000001,
+      "ber_ber_percent": 40.00487567040468,
       "ber_true_positive_percent": 42.857142857142854,
-      "ber_true_negative_percent": 83.27645051194538,
+      "ber_true_negative_percent": 77.13310580204778,
       "ber_confusion_matrix": [
         [
-          244,
-          49
+          226,
+          67
         ],
         [
           12,
           9
         ]
       ],
-      "aggressive_threshold": 0.05424441480493498,
-      "aggressive_ber_percent": 45.65252722249309,
-      "aggressive_true_positive_percent": 52.38095238095239,
-      "aggressive_true_negative_percent": 56.31399317406144,
+      "aggressive_threshold": 0.043500000000000004,
+      "aggressive_ber_percent": 45.6769055745165,
+      "aggressive_true_positive_percent": 66.66666666666666,
+      "aggressive_true_negative_percent": 41.979522184300336,
       "aggressive_confusion_matrix": [
         [
-          165,
-          128
+          123,
+          170
         ],
         [
-          10,
-          11
+          7,
+          14
         ]
       ],
-      "ber_percent": 36.93320331545588,
+      "economic_threshold": 0.037200000000000004,
+      "economic_ber_percent": 43.149683081423696,
+      "economic_true_positive_percent": 85.71428571428571,
+      "economic_true_negative_percent": 27.986348122866893,
+      "economic_confusion_matrix": [
+        [
+          82,
+          211
+        ],
+        [
+          3,
+          18
+        ]
+      ],
+      "ber_percent": 40.00487567040468,
       "true_positive_percent": 42.857142857142854,
-      "true_negative_percent": 83.27645051194538,
+      "true_negative_percent": 77.13310580204778,
       "confusion_matrix": [
         [
-          244,
-          49
+          226,
+          67
         ],
         [
           12,
@@ -1216,67 +1414,81 @@
       "roc_auc_median": 0.6234357224118315,
       "roc_auc_ci_low": 0.4877173736388753,
       "roc_auc_ci_high": 0.7484397854705022,
-      "ber_percent_median": 36.93320331545588,
-      "ber_percent_ci_low": 26.722533723386963,
-      "ber_percent_ci_high": 47.818340646838934
+      "ber_percent_median": 40.09019990248659,
+      "ber_percent_ci_low": 29.956931578091996,
+      "ber_percent_ci_high": 50.88574679018365
     },
     {
       "pipeline": "rfsel_enet",
       "pr_auc": 0.12775204759414532,
       "roc_auc": 0.6479765967820575,
-      "conservative_threshold": 0.14509269756585527,
-      "conservative_ber_percent": 47.115228343897286,
-      "conservative_true_positive_percent": 9.523809523809524,
-      "conservative_true_negative_percent": 96.24573378839591,
+      "conservative_threshold": 0.0942,
+      "conservative_ber_percent": 41.857630424183334,
+      "conservative_true_positive_percent": 28.57142857142857,
+      "conservative_true_negative_percent": 87.71331058020478,
       "conservative_confusion_matrix": [
         [
-          282,
-          11
+          257,
+          36
         ],
         [
-          19,
-          2
+          15,
+          6
         ]
       ],
-      "ber_threshold": 0.1254588196065355,
-      "ber_ber_percent": 42.865268974483996,
-      "ber_true_positive_percent": 19.047619047619047,
-      "ber_true_negative_percent": 95.22184300341297,
+      "ber_threshold": 0.0839,
+      "ber_ber_percent": 40.671217292377705,
+      "ber_true_positive_percent": 33.33333333333333,
+      "ber_true_negative_percent": 85.32423208191126,
       "ber_confusion_matrix": [
         [
-          279,
-          14
+          250,
+          43
         ],
         [
-          17,
-          4
+          14,
+          7
         ]
       ],
-      "aggressive_threshold": 0.039602200733577855,
-      "aggressive_ber_percent": 42.12579229644076,
-      "aggressive_true_positive_percent": 85.71428571428571,
-      "aggressive_true_negative_percent": 30.034129692832767,
+      "aggressive_threshold": 0.06380000000000001,
+      "aggressive_ber_percent": 40.69559564440111,
+      "aggressive_true_positive_percent": 47.61904761904761,
+      "aggressive_true_negative_percent": 70.98976109215018,
       "aggressive_confusion_matrix": [
         [
-          88,
-          205
+          208,
+          85
         ],
         [
-          3,
-          18
+          11,
+          10
         ]
       ],
-      "ber_percent": 42.865268974483996,
-      "true_positive_percent": 19.047619047619047,
-      "true_negative_percent": 95.22184300341297,
-      "confusion_matrix": [
+      "economic_threshold": 0.0449,
+      "economic_ber_percent": 41.25629774093939,
+      "economic_true_positive_percent": 76.19047619047619,
+      "economic_true_negative_percent": 41.29692832764505,
+      "economic_confusion_matrix": [
         [
-          279,
-          14
+          121,
+          172
         ],
         [
-          17,
-          4
+          5,
+          16
+        ]
+      ],
+      "ber_percent": 40.671217292377705,
+      "true_positive_percent": 33.33333333333333,
+      "true_negative_percent": 85.32423208191126,
+      "confusion_matrix": [
+        [
+          250,
+          43
+        ],
+        [
+          14,
+          7
         ]
       ],
       "pr_auc_median": 0.13925080201633946,
@@ -1285,67 +1497,81 @@
       "roc_auc_median": 0.6486266861693482,
       "roc_auc_ci_low": 0.5223386965707785,
       "roc_auc_ci_high": 0.76160409556314,
-      "ber_percent_median": 42.865268974483996,
-      "ber_percent_ci_low": 33.507841703234206,
-      "ber_percent_ci_high": 50.17877458150496
+      "ber_percent_median": 40.84186575654153,
+      "ber_percent_ci_low": 30.290102389078502,
+      "ber_percent_ci_high": 50.20721599219892
     },
     {
       "pipeline": "pls_rf",
       "pr_auc": 0.11314853423610392,
       "roc_auc": 0.6496018202502843,
-      "conservative_threshold": 0.09118272757585862,
-      "conservative_ber_percent": 36.421257922964415,
-      "conservative_true_positive_percent": 42.857142857142854,
-      "conservative_true_negative_percent": 84.30034129692832,
+      "conservative_threshold": 0.11610000000000001,
+      "conservative_ber_percent": 39.81797497155859,
+      "conservative_true_positive_percent": 33.33333333333333,
+      "conservative_true_negative_percent": 87.03071672354949,
       "conservative_confusion_matrix": [
         [
-          247,
-          46
+          255,
+          38
         ],
         [
-          12,
-          9
+          14,
+          7
         ]
       ],
-      "ber_threshold": 0.008321107035678559,
-      "ber_ber_percent": 45.16496018202503,
-      "ber_true_positive_percent": 66.66666666666666,
-      "ber_true_negative_percent": 43.003412969283275,
+      "ber_threshold": 0.0146,
+      "ber_ber_percent": 39.52543474727774,
+      "ber_true_positive_percent": 61.904761904761905,
+      "ber_true_negative_percent": 59.044368600682596,
       "ber_confusion_matrix": [
         [
-          126,
-          167
+          173,
+          120
         ],
         [
-          7,
-          14
+          8,
+          13
         ]
       ],
-      "aggressive_threshold": 0.003994998332777592,
-      "aggressive_ber_percent": 44.87241995774419,
-      "aggressive_true_positive_percent": 95.23809523809523,
-      "aggressive_true_negative_percent": 15.017064846416384,
+      "aggressive_threshold": 0.0098,
+      "aggressive_ber_percent": 42.09328782707622,
+      "aggressive_true_positive_percent": 66.66666666666666,
+      "aggressive_true_negative_percent": 49.14675767918089,
       "aggressive_confusion_matrix": [
         [
-          44,
-          249
-        ],
-        [
-          1,
-          20
-        ]
-      ],
-      "ber_percent": 45.16496018202503,
-      "true_positive_percent": 66.66666666666666,
-      "true_negative_percent": 43.003412969283275,
-      "confusion_matrix": [
-        [
-          126,
-          167
+          144,
+          149
         ],
         [
           7,
           14
+        ]
+      ],
+      "economic_threshold": 0.0077,
+      "economic_ber_percent": 41.25629774093939,
+      "economic_true_positive_percent": 76.19047619047619,
+      "economic_true_negative_percent": 41.29692832764505,
+      "economic_confusion_matrix": [
+        [
+          121,
+          172
+        ],
+        [
+          5,
+          16
+        ]
+      ],
+      "ber_percent": 39.52543474727774,
+      "true_positive_percent": 61.904761904761905,
+      "true_negative_percent": 59.044368600682596,
+      "confusion_matrix": [
+        [
+          173,
+          120
+        ],
+        [
+          8,
+          13
         ]
       ],
       "pr_auc_median": 0.12248400623760151,
@@ -1354,9 +1580,9 @@
       "roc_auc_median": 0.6520396554526248,
       "roc_auc_ci_low": 0.5324150820737851,
       "roc_auc_ci_high": 0.7666260360799609,
-      "ber_percent_median": 44.83178937103851,
-      "ber_percent_ci_low": 35.136925077198114,
-      "ber_percent_ci_high": 54.87160734601007
+      "ber_percent_median": 39.35478628311393,
+      "ber_percent_ci_low": 28.977734438485292,
+      "ber_percent_ci_high": 49.902689744839925
     },
     {
       "pipeline": "pls_bayes",
@@ -1404,6 +1630,20 @@
           14
         ]
       ],
+      "economic_threshold": 0.0037,
+      "economic_ber_percent": 47.20461563464976,
+      "economic_true_positive_percent": 61.904761904761905,
+      "economic_true_negative_percent": 43.68600682593857,
+      "economic_confusion_matrix": [
+        [
+          128,
+          165
+        ],
+        [
+          8,
+          13
+        ]
+      ],
       "ber_percent": 46.172598732325696,
       "true_positive_percent": 57.14285714285714,
       "true_negative_percent": 50.51194539249146,
@@ -1431,55 +1671,69 @@
       "pipeline": "pls_enet",
       "pr_auc": 0.10227237355539068,
       "roc_auc": 0.5530635462376077,
-      "conservative_threshold": 0.10915271757252416,
-      "conservative_ber_percent": 44.24670892247684,
-      "conservative_true_positive_percent": 28.57142857142857,
-      "conservative_true_negative_percent": 82.93515358361775,
+      "conservative_threshold": 0.12110000000000001,
+      "conservative_ber_percent": 48.155371363562494,
+      "conservative_true_positive_percent": 19.047619047619047,
+      "conservative_true_negative_percent": 84.64163822525597,
       "conservative_confusion_matrix": [
         [
-          243,
-          50
+          248,
+          45
         ],
         [
-          15,
-          6
+          17,
+          4
         ]
       ],
-      "ber_threshold": 0.010317772590863621,
-      "ber_ber_percent": 47.70030879245897,
+      "ber_threshold": 0.0101,
+      "ber_ber_percent": 47.87095725662278,
       "ber_true_positive_percent": 52.38095238095239,
-      "ber_true_negative_percent": 52.218430034129696,
+      "ber_true_negative_percent": 51.877133105802045,
       "ber_confusion_matrix": [
         [
-          153,
-          140
+          152,
+          141
         ],
         [
           10,
           11
         ]
       ],
-      "aggressive_threshold": 0.001,
-      "aggressive_ber_percent": 45.71753616122217,
-      "aggressive_true_positive_percent": 90.47619047619048,
-      "aggressive_true_negative_percent": 18.088737201365188,
+      "aggressive_threshold": 0.006500000000000001,
+      "aggressive_ber_percent": 49.244271087274505,
+      "aggressive_true_positive_percent": 57.14285714285714,
+      "aggressive_true_negative_percent": 44.36860068259386,
       "aggressive_confusion_matrix": [
         [
-          53,
-          240
+          130,
+          163
         ],
         [
-          2,
-          19
+          9,
+          12
         ]
       ],
-      "ber_percent": 47.70030879245897,
+      "economic_threshold": 0.008,
+      "economic_ber_percent": 49.57744189826101,
+      "economic_true_positive_percent": 52.38095238095239,
+      "economic_true_negative_percent": 48.4641638225256,
+      "economic_confusion_matrix": [
+        [
+          142,
+          151
+        ],
+        [
+          10,
+          11
+        ]
+      ],
+      "ber_percent": 47.87095725662278,
       "true_positive_percent": 52.38095238095239,
-      "true_negative_percent": 52.218430034129696,
+      "true_negative_percent": 51.877133105802045,
       "confusion_matrix": [
         [
-          153,
-          140
+          152,
+          141
         ],
         [
           10,
@@ -1492,9 +1746,9 @@
       "roc_auc_median": 0.5541199414919551,
       "roc_auc_ci_low": 0.4191288802210304,
       "roc_auc_ci_high": 0.6788639687957094,
-      "ber_percent_median": 47.70030879245897,
-      "ber_percent_ci_low": 37.323256947830316,
-      "ber_percent_ci_high": 58.418657565415245
+      "ber_percent_median": 47.87095725662278,
+      "ber_percent_ci_low": 37.493905411994156,
+      "ber_percent_ci_high": 58.58930602957907
     }
   ],
   "holdout_conditional": [

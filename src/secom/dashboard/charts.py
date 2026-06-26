@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
+from secom.costs import ESCAPE_OVERKILL_COST_RATIO
 from secom.dashboard.stg import ROW_INDEX_COL, sensor_columns
 from secom.metrics import PRCurve
 
@@ -1256,6 +1257,192 @@ def fig_ber_threshold_sweep(
         title=dict(text=title),
         xaxis_title="Decision threshold (fail-class probability)",
         yaxis_title="Balanced error rate (%)",
+        xaxis=dict(gridcolor="rgba(200, 200, 200, 0.15)"),
+        yaxis=dict(gridcolor="rgba(200, 200, 200, 0.15)"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+    )
+    return _sized(fig, height=420, margin=dict(l=56, r=48, t=72, b=48))
+
+
+def _threshold_grid(y_score: np.ndarray, *, cap: int = 400) -> np.ndarray:
+    """Unique score grid (with 0/1 endpoints) for sweeping the decision threshold."""
+    grid = np.unique(np.clip(y_score, 0.0, 1.0))
+    if grid.size > cap:
+        grid = np.quantile(grid, np.linspace(0.0, 1.0, cap))
+    return np.unique(np.concatenate([[0.0], grid, [1.0]]))
+
+
+def _tpr_fpr_curve(
+    y_true: np.ndarray, y_score: np.ndarray, grid: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """TPR (catch) and FPR (overkill) as fractions at each threshold in ``grid``."""
+    pos = y_true == 1
+    neg = ~pos
+    n_pos = max(int(pos.sum()), 1)
+    n_neg = max(int(neg.sum()), 1)
+    tpr = np.empty(grid.size, dtype=float)
+    fpr = np.empty(grid.size, dtype=float)
+    for i, t in enumerate(grid):
+        pred = y_score >= t
+        tpr[i] = float(np.sum(pred & pos)) / n_pos
+        fpr[i] = float(np.sum(pred & neg)) / n_neg
+    return tpr, fpr
+
+
+def _rates_at_threshold(
+    y_true: np.ndarray, y_score: np.ndarray, thr: float
+) -> tuple[float, float]:
+    """(catch rate, overkill rate) as fractions at a single threshold."""
+    tpr, fpr = _tpr_fpr_curve(y_true, y_score, np.array([float(thr)]))
+    return float(tpr[0]), float(fpr[0])
+
+
+_PROFILE_MARKER_COLORS = (C_BLUE, C_GREEN, C_ORANGE, C_PURPLE, C_RED, C_YELLOW)
+
+
+def fig_catch_overkill_curve(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    *,
+    profile_thresholds: dict[str, float] | None = None,
+    title: str = "Catch rate vs overkill",
+) -> go.Figure:
+    """Fab-vocabulary operating curve: x = overkill rate (FPR), y = catch rate (TPR).
+
+    Same information as an ROC curve, relabelled for a fab: how many real fails
+    you catch versus how many good wafers you wrongly flag. The tuned operating
+    points (conservative / BER-min / aggressive / economic) are marked.
+    """
+    fig = go.Figure()
+    y_true = np.asarray(y_true, dtype=int)
+    y_score = np.asarray(y_score, dtype=float)
+    if y_true.size == 0 or y_score.size == 0 or len(np.unique(y_true)) < 2:
+        return _sized(
+            fig.update_layout(title=dict(text=title)),
+            height=420,
+            margin=dict(l=56, r=48, t=72, b=48),
+        )
+
+    grid = _threshold_grid(y_score)
+    tpr, fpr = _tpr_fpr_curve(y_true, y_score, grid)
+    order = np.argsort(fpr, kind="mergesort")
+    fig.add_trace(
+        go.Scatter(
+            x=100 * fpr[order],
+            y=100 * tpr[order],
+            mode="lines",
+            name="Operating curve",
+            line=dict(color=C_AQUA, width=2.5),
+            hovertemplate="overkill=%{x:.1f}%<br>catch=%{y:.1f}%<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=[0, 100],
+            y=[0, 100],
+            mode="lines",
+            name="Random",
+            line=dict(color="rgba(200, 200, 200, 0.4)", dash="dash", width=1),
+            hoverinfo="skip",
+        )
+    )
+    for idx, (label, thr) in enumerate((profile_thresholds or {}).items()):
+        if thr is None or not np.isfinite(thr):
+            continue
+        catch, overkill = _rates_at_threshold(y_true, y_score, float(thr))
+        fig.add_trace(
+            go.Scatter(
+                x=[100 * overkill],
+                y=[100 * catch],
+                mode="markers",
+                name=label,
+                marker=dict(
+                    size=13,
+                    color=_PROFILE_MARKER_COLORS[idx % len(_PROFILE_MARKER_COLORS)],
+                    symbol="circle",
+                    line=dict(color="#282828", width=1.5),
+                ),
+                hovertemplate=(
+                    f"{label}<br>overkill=%{{x:.1f}}%<br>catch=%{{y:.1f}}%<extra></extra>"
+                ),
+            )
+        )
+
+    fig.update_layout(
+        title=dict(text=title),
+        xaxis_title="Overkill rate — good wafers flagged (%)",
+        yaxis_title="Catch rate — real fails flagged (%)",
+        xaxis=dict(gridcolor="rgba(200, 200, 200, 0.15)", range=[0, 100]),
+        yaxis=dict(gridcolor="rgba(200, 200, 200, 0.15)", range=[0, 100]),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+    )
+    return _sized(fig, height=420, margin=dict(l=56, r=48, t=72, b=48))
+
+
+def fig_expected_cost_curve(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    *,
+    prevalence: float | None = None,
+    cost_ratio: float = ESCAPE_OVERKILL_COST_RATIO,
+    economic_threshold: float | None = None,
+    title: str = "Expected cost vs threshold",
+) -> go.Figure:
+    """Expected per-wafer cost across the threshold grid at an escape:overkill ratio.
+
+    Cost is in overkill-units: ``cost_ratio*prevalence*(1-TPR) + (1-prevalence)*(1-TNR)``.
+    The empirical minimum on this holdout is marked, plus the CV-selected
+    economic threshold (the deployed cost-optimal point).
+    """
+    fig = go.Figure()
+    y_true = np.asarray(y_true, dtype=int)
+    y_score = np.asarray(y_score, dtype=float)
+    if y_true.size == 0 or y_score.size == 0 or len(np.unique(y_true)) < 2:
+        return _sized(
+            fig.update_layout(title=dict(text=title)),
+            height=420,
+            margin=dict(l=56, r=48, t=72, b=48),
+        )
+
+    p = float(np.mean(y_true)) if prevalence is None else float(prevalence)
+    grid = _threshold_grid(y_score)
+    tpr, fpr = _tpr_fpr_curve(y_true, y_score, grid)
+    tnr = 1.0 - fpr
+    cost = cost_ratio * p * (1.0 - tpr) + (1.0 - p) * (1.0 - tnr)
+    fig.add_trace(
+        go.Scatter(
+            x=grid,
+            y=cost,
+            mode="lines",
+            name=f"Expected cost ({cost_ratio:g}:1)",
+            line=dict(color=C_AQUA, width=2.5),
+            hovertemplate="threshold=%{x:.3f}<br>cost=%{y:.3f}<extra></extra>",
+        )
+    )
+    imin = int(np.argmin(cost))
+    fig.add_trace(
+        go.Scatter(
+            x=[grid[imin]],
+            y=[cost[imin]],
+            mode="markers",
+            name="Cost-min (empirical)",
+            marker=dict(color=C_GREEN, size=12, symbol="diamond"),
+            hovertemplate="cost-min<br>threshold=%{x:.3f}<br>cost=%{y:.3f}<extra></extra>",
+        )
+    )
+    if economic_threshold is not None and np.isfinite(economic_threshold):
+        fig.add_vline(
+            x=float(economic_threshold),
+            line_dash="dot",
+            line_color=C_ORANGE,
+            annotation_text="Economic (CV-selected)",
+            annotation_position="top",
+        )
+
+    fig.update_layout(
+        title=dict(text=title),
+        xaxis_title="Decision threshold (fail-class probability)",
+        yaxis_title="Expected cost per wafer (overkill units)",
         xaxis=dict(gridcolor="rgba(200, 200, 200, 0.15)"),
         yaxis=dict(gridcolor="rgba(200, 200, 200, 0.15)"),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
