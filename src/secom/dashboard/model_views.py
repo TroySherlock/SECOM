@@ -17,7 +17,6 @@ from secom.dashboard import render_blue_note
 from secom.dashboard.charts import (
     C_PURPLE,
     fig_benchmark_leaderboard,
-    fig_ber_threshold_sweep,
     fig_calibration,
     fig_catch_overkill_curve,
     fig_cv_vs_holdout_validation,
@@ -494,13 +493,12 @@ def _render_thresholding_tab(
 
     st.markdown("#### Expected cost vs threshold")
     if ho_y is not None and len(ho_y):
-        economic_thr = profile_thresholds.get(THRESHOLD_PROFILES["economic"].display_name)
         st.plotly_chart(
             fig_expected_cost_curve(
                 ho_y,
                 ho_s,
                 cost_ratio=cost_ratio,
-                economic_threshold=economic_thr,
+                profile_thresholds=profile_thresholds,
                 title=f"Expected cost ({cost_ratio:g}:1) — {info.display_name}",
             ),
             width="stretch",
@@ -510,28 +508,10 @@ def _render_thresholding_tab(
         st.caption(
             f"Expected per-wafer cost at escape:overkill = {cost_ratio:g}:1 "
             "(overkill-units: cost_ratio x prevalence x miss-rate + (1 - prevalence) x overkill-rate). "
-            "The orange line is the **deployed economic threshold** (chosen on CV); the curve shape "
-            "is illustrative on this holdout. A shallow basin = the cost-optimal point is robust to drift."
-        )
-
-    st.markdown("#### BER vs threshold (robustness band)")
-    if ho_y is not None and len(ho_y):
-        st.plotly_chart(
-            fig_ber_threshold_sweep(
-                ho_y,
-                ho_s,
-                profile_thresholds=profile_thresholds,
-                title=f"BER vs threshold — {info.display_name}",
-            ),
-            width="stretch",
-            theme="streamlit",
-            key=f"ber_sweep_{track}_{selected_id}",
-        )
-        st.caption(
-            "BER swept across the threshold; the green diamond is the empirical minimum and the "
-            "orange dotted lines mark the four operating points (incl. economic). A **flat valley** "
-            f"means BER is insensitive to the exact cut - all points sit within ~{tol:g} BER points, "
-            "so the chosen threshold is a plateau, not a fragile knife-edge."
+            "**Log x-axis** (zoomed to the operating region); each **colour-coded dotted line is one "
+            "operating point** (see legend, colours match the catch-vs-overkill chart), and the green "
+            "diamond is the empirical cost minimum. A **shallow basin** = the cost-optimal point is "
+            "robust to threshold drift; the curve shape is illustrative on this holdout."
         )
 
     st.markdown("#### Confusion matrix per operating point")

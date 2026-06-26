@@ -1182,88 +1182,6 @@ def fig_pr_curve_clean(
     return _sized(fig, height=440, margin=dict(l=56, r=48, t=72, b=48))
 
 
-def _ber_curve(y_true: np.ndarray, y_score: np.ndarray, thresholds: np.ndarray) -> np.ndarray:
-    """Balanced error rate (%) at each threshold (fail = positive)."""
-    pos = y_true == 1
-    neg = ~pos
-    n_pos = max(int(pos.sum()), 1)
-    n_neg = max(int(neg.sum()), 1)
-    out = np.empty(thresholds.size, dtype=float)
-    for i, t in enumerate(thresholds):
-        pred = y_score >= t
-        tpr = float(np.sum(pred & pos)) / n_pos
-        tnr = float(np.sum(~pred & neg)) / n_neg
-        out[i] = 100.0 * (1.0 - 0.5 * (tpr + tnr))
-    return out
-
-
-def fig_ber_threshold_sweep(
-    y_true: np.ndarray,
-    y_score: np.ndarray,
-    *,
-    profile_thresholds: dict[str, float] | None = None,
-    title: str = "Balanced error rate vs threshold",
-) -> go.Figure:
-    """BER across the threshold grid with the tuned profile thresholds marked."""
-    fig = go.Figure()
-    y_true = np.asarray(y_true, dtype=int)
-    y_score = np.asarray(y_score, dtype=float)
-    if y_true.size == 0 or y_score.size == 0:
-        return _sized(
-            fig.update_layout(title=dict(text=title)),
-            height=420,
-            margin=dict(l=56, r=48, t=72, b=48),
-        )
-
-    grid = np.unique(np.clip(y_score, 0.0, 1.0))
-    if grid.size > 400:
-        grid = np.quantile(grid, np.linspace(0.0, 1.0, 400))
-    ber = _ber_curve(y_true, y_score, grid)
-    fig.add_trace(
-        go.Scatter(
-            x=grid,
-            y=ber,
-            mode="lines",
-            name="BER",
-            line=dict(color=C_AQUA, width=2.5),
-            hovertemplate="threshold=%{x:.3f}<br>BER=%{y:.1f}%<extra></extra>",
-        )
-    )
-    # Empirical minimum on this holdout.
-    imin = int(np.argmin(ber))
-    fig.add_trace(
-        go.Scatter(
-            x=[grid[imin]],
-            y=[ber[imin]],
-            mode="markers",
-            name="BER-min (empirical)",
-            marker=dict(color=C_GREEN, size=12, symbol="diamond"),
-            hovertemplate="BER-min<br>threshold=%{x:.3f}<br>BER=%{y:.1f}%<extra></extra>",
-        )
-    )
-
-    for label, thr in (profile_thresholds or {}).items():
-        if thr is None or not np.isfinite(thr):
-            continue
-        fig.add_vline(
-            x=float(thr),
-            line_dash="dot",
-            line_color=C_ORANGE,
-            annotation_text=label,
-            annotation_position="top",
-        )
-
-    fig.update_layout(
-        title=dict(text=title),
-        xaxis_title="Decision threshold (fail-class probability)",
-        yaxis_title="Balanced error rate (%)",
-        xaxis=dict(gridcolor="rgba(200, 200, 200, 0.15)"),
-        yaxis=dict(gridcolor="rgba(200, 200, 200, 0.15)"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-    )
-    return _sized(fig, height=420, margin=dict(l=56, r=48, t=72, b=48))
-
-
 def _threshold_grid(y_score: np.ndarray, *, cap: int = 400) -> np.ndarray:
     """Unique score grid (with 0/1 endpoints) for sweeping the decision threshold."""
     grid = np.unique(np.clip(y_score, 0.0, 1.0))
@@ -1385,14 +1303,16 @@ def fig_expected_cost_curve(
     *,
     prevalence: float | None = None,
     cost_ratio: float = ESCAPE_OVERKILL_COST_RATIO,
-    economic_threshold: float | None = None,
+    profile_thresholds: dict[str, float] | None = None,
     title: str = "Expected cost vs threshold",
 ) -> go.Figure:
     """Expected per-wafer cost across the threshold grid at an escape:overkill ratio.
 
     Cost is in overkill-units: ``cost_ratio*prevalence*(1-TPR) + (1-prevalence)*(1-TNR)``.
-    The empirical minimum on this holdout is marked, plus the CV-selected
-    economic threshold (the deployed cost-optimal point).
+    The empirical minimum on this holdout is marked, and each tuned operating
+    point is drawn as a colour-coded vertical line + on-curve dot (colours match
+    ``fig_catch_overkill_curve``). The x-axis is log-scaled and zoomed to the
+    operating region so the basin and the closely-spaced low thresholds read clearly.
     """
     fig = go.Figure()
     y_true = np.asarray(y_true, dtype=int)
@@ -1416,7 +1336,7 @@ def fig_expected_cost_curve(
             mode="lines",
             name=f"Expected cost ({cost_ratio:g}:1)",
             line=dict(color=C_AQUA, width=2.5),
-            hovertemplate="threshold=%{x:.3f}<br>cost=%{y:.3f}<extra></extra>",
+            hovertemplate="threshold=%{x:.4f}<br>cost=%{y:.3f}<extra></extra>",
         )
     )
     imin = int(np.argmin(cost))
@@ -1427,24 +1347,62 @@ def fig_expected_cost_curve(
             mode="markers",
             name="Cost-min (empirical)",
             marker=dict(color=C_GREEN, size=12, symbol="diamond"),
-            hovertemplate="cost-min<br>threshold=%{x:.3f}<br>cost=%{y:.3f}<extra></extra>",
+            hovertemplate="cost-min<br>threshold=%{x:.4f}<br>cost=%{y:.3f}<extra></extra>",
         )
     )
-    if economic_threshold is not None and np.isfinite(economic_threshold):
-        fig.add_vline(
-            x=float(economic_threshold),
-            line_dash="dot",
-            line_color=C_ORANGE,
-            annotation_text="Economic (CV-selected)",
-            annotation_position="top",
+
+    # Colour-coded operating points: one legend line per profile (no overlapping
+    # in-plot text) plus a matching dot on the curve so each point's cost reads off.
+    cost_lo, cost_hi = float(np.min(cost)), float(np.max(cost))
+    pad = 0.04 * (cost_hi - cost_lo or 1.0)
+    points = [float(grid[imin])]
+    for idx, (label, thr) in enumerate((profile_thresholds or {}).items()):
+        if thr is None or not np.isfinite(thr) or float(thr) <= 0.0:
+            continue
+        thr = float(thr)
+        points.append(thr)
+        color = _PROFILE_MARKER_COLORS[idx % len(_PROFILE_MARKER_COLORS)]
+        catch, overkill = _rates_at_threshold(y_true, y_score, thr)
+        cost_at = cost_ratio * p * (1.0 - catch) + (1.0 - p) * overkill
+        fig.add_trace(
+            go.Scatter(
+                x=[thr, thr],
+                y=[cost_lo - pad, cost_hi + pad],
+                mode="lines",
+                name=label,
+                line=dict(color=color, width=1.6, dash="dot"),
+                hovertemplate=f"{label}<br>threshold={thr:.4f}<extra></extra>",
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=[thr],
+                y=[cost_at],
+                mode="markers",
+                marker=dict(color=color, size=11, line=dict(color="#282828", width=1.2)),
+                showlegend=False,
+                hovertemplate=f"{label}<br>threshold={thr:.4f}<br>cost=%{{y:.3f}}<extra></extra>",
+            )
         )
 
+    # Zoom + log scale so the operating region is not squished into the left edge.
+    lo = max(1e-4, 0.5 * min(points))
+    hi = min(float(np.max(y_score)), 1.5 * max(points))
+    if not (hi > lo):
+        hi = lo * 10.0
     fig.update_layout(
         title=dict(text=title),
-        xaxis_title="Decision threshold (fail-class probability)",
+        xaxis_title="Decision threshold (log scale)",
         yaxis_title="Expected cost per wafer (overkill units)",
-        xaxis=dict(gridcolor="rgba(200, 200, 200, 0.15)"),
-        yaxis=dict(gridcolor="rgba(200, 200, 200, 0.15)"),
+        xaxis=dict(
+            type="log",
+            range=[float(np.log10(lo)), float(np.log10(hi))],
+            gridcolor="rgba(200, 200, 200, 0.15)",
+        ),
+        yaxis=dict(
+            range=[cost_lo - pad, cost_hi + pad],
+            gridcolor="rgba(200, 200, 200, 0.15)",
+        ),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
     )
     return _sized(fig, height=420, margin=dict(l=56, r=48, t=72, b=48))
