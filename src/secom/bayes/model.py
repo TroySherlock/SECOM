@@ -140,9 +140,9 @@ class BayesianElasticNetLogistic(ClassifierMixin, BaseEstimator):
 
     def _fit_advi(self, rng, X, y, weights) -> dict:
         import jax
+        import numpyro.optim as optim
         from numpyro.infer import SVI, Trace_ELBO
         from numpyro.infer.autoguide import AutoNormal
-        import numpyro.optim as optim
 
         guide = AutoNormal(self._model)
         svi = SVI(self._model, guide, optim.Adam(0.01), Trace_ELBO())

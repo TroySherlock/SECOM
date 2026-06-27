@@ -20,7 +20,6 @@ import pandas as pd
 from sklearn.mixture import BayesianGaussianMixture
 from sklearn.preprocessing import RobustScaler
 
-from secom.pipelines import RANDOM_SEED, build_gate_feature_pipeline
 from secom.hub_interactions import sensor_value_columns
 from secom.pipelines import (
     BAYES_GATE_BGM_COMPONENTS,
@@ -33,6 +32,8 @@ from secom.pipelines import (
     BAYES_GATE_Q_ALPHA,
     BAYES_GATE_SVI_STEPS,
     GATE_CORR_THRESHOLD,
+    RANDOM_SEED,
+    build_gate_feature_pipeline,
 )
 
 
@@ -79,9 +80,9 @@ class SparseBayesianFactorAnalysis:
     def fit(self, X: np.ndarray) -> "SparseBayesianFactorAnalysis":
         import jax
         import jax.numpy as jnp
+        import numpyro.optim as optim
         from numpyro.infer import SVI, Trace_ELBO
         from numpyro.infer.autoguide import AutoNormal
-        import numpyro.optim as optim
 
         mat = np.asarray(X, dtype="float64")
         n_samples, n_features = mat.shape

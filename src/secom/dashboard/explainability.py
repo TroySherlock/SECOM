@@ -22,11 +22,11 @@ from secom.pipelines import (
     split_train_test_random,
 )
 from secom.reporting import _bayes_mean_coef, scaled_matrix
+from secom.tuning.registry import build_tuned_pipeline, fit_pipeline_weighted
 from secom.utils import (
     fitted_base_classifier,
     load_tuned_params,
 )
-from secom.tuning.registry import build_tuned_pipeline, fit_pipeline_weighted
 
 LOCAL_TOP_N = 5
 GLOBAL_SENSOR_TOP_N = 15
@@ -125,15 +125,6 @@ def _deploy_threshold(tuned: dict) -> float:
     return float(profiles[DEFAULT_PROFILE_ID])
 
 
-def _local_linear(row_scaled: np.ndarray, names: np.ndarray, coefs: np.ndarray) -> pd.DataFrame:
-    contrib = np.asarray(coefs).ravel() * row_scaled
-    df = pd.DataFrame(
-        {"feature": names, "contribution": contrib, "coefficient": np.asarray(coefs).ravel()}
-    )
-    df["abs_contribution"] = np.abs(df["contribution"])
-    return df.nlargest(LOCAL_TOP_N, "abs_contribution")
-
-
 def _shap_positive_class_values(shap_output: object, n_features: int) -> np.ndarray:
     """Extract positive-class SHAP vector length n_features."""
     if isinstance(shap_output, list):
@@ -147,18 +138,6 @@ def _shap_positive_class_values(shap_output: object, n_features: int) -> np.ndar
         if arr.shape[1] >= 2 and arr.shape[0] == n_features:
             return arr[:, 1]
     return arr.reshape(-1)[:n_features]
-
-
-def _local_shap(pipeline, row_scaled: np.ndarray, names: np.ndarray) -> pd.DataFrame:
-    import shap
-
-    estimator = fitted_base_classifier(pipeline)
-    explainer = shap.TreeExplainer(estimator)
-    sv = explainer.shap_values(row_scaled.reshape(1, -1))
-    values = _shap_positive_class_values(sv, len(names))
-    df = pd.DataFrame({"feature": names, "contribution": values})
-    df["abs_contribution"] = np.abs(df["contribution"])
-    return df.nlargest(LOCAL_TOP_N, "abs_contribution")
 
 
 def _shap_contribution_vector(pipeline, row_scaled: np.ndarray, n_features: int) -> np.ndarray:
@@ -864,33 +843,6 @@ def cached_sensor_groups(track: str = DEFAULT_TRACK, n_groups: int = 8) -> dict:
         mapping[str(col)] = gid
         mapping[f"{col}_rz"] = gid
     return mapping
-
-
-def group_rollup(
-    top_df: pd.DataFrame, groups: dict, *, value_col: str = "importance"
-) -> pd.DataFrame:
-    """Roll up a sensor-space importance table by data-driven correlation group.
-
-    Returns ``[group, importance, members]`` sorted by summed importance. Groups
-    are correlation clusters, NOT real equipment.
-    """
-    if top_df is None or top_df.empty or value_col not in top_df.columns:
-        return pd.DataFrame(columns=["group", value_col, "members"])
-    work = top_df[["feature", value_col]].copy()
-    work["group"] = work["feature"].astype(str).map(lambda f: groups.get(str(f), "ungrouped"))
-    rolled = (
-        work.groupby("group")
-        .agg(
-            **{
-                value_col: (value_col, "sum"),
-                "members": ("feature", lambda s: ", ".join(str(x) for x in s)),
-            }
-        )
-        .reset_index()
-        .sort_values(value_col, ascending=False)
-        .reset_index(drop=True)
-    )
-    return rolled
 
 
 @st.cache_data(show_spinner="Computing sensor-space global importance…")

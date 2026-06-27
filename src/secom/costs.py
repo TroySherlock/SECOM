@@ -106,29 +106,6 @@ def threshold_profile_config() -> dict[str, float | str]:
     }
 
 
-def expected_cost_per_wafer(
-    tpr: float,
-    tnr: float,
-    prevalence: float,
-    cost_ratio: float = ESCAPE_OVERKILL_COST_RATIO,
-) -> float:
-    """Expected per-wafer cost in overkill-units at an operating point.
-
-    ``cost_ratio`` is C_escape / C_overkill. Expressing cost in overkill-units
-    (C_overkill = 1) gives::
-
-        E[cost] = cost_ratio * prevalence * (1 - TPR) + (1 - prevalence) * (1 - TNR)
-                =       escape term (missed fails)     +    overkill term (false stops)
-
-    where ``1 - TPR`` is the escape (miss) rate and ``1 - TNR`` is the overkill
-    (false-alarm) rate.
-    """
-    escape_rate = 1.0 - float(tpr)
-    overkill_rate = 1.0 - float(tnr)
-    p = float(prevalence)
-    return float(cost_ratio) * p * escape_rate + (1.0 - p) * overkill_rate
-
-
 def cost_optimal_threshold(
     thresholds: Sequence[float],
     tprs: Sequence[float],

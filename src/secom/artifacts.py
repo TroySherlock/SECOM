@@ -11,6 +11,7 @@ from feature_engine.selection import SmartCorrelatedSelection
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_selection import SelectFromModel
 from sklearn.pipeline import Pipeline
+
 from secom.hub_interactions import (
     HSICSelectHubBlock,
     LinearSelectT2HubBlock,
@@ -19,10 +20,10 @@ from secom.hub_interactions import (
 )
 from secom.pipelines import (
     BENCHMARK_MODEL_IDS,
-    N_SENSORS,
     CORRELATED_SELECTION_CRITERION,
     CORRELATED_SELECTION_METHOD,
     CORRELATED_SELECTION_THRESHOLD,
+    N_SENSORS,
     PIPELINE_ARTIFACTS_PATH,
     REFERENCE_MODELS,
     TEST_SIZE,

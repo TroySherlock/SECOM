@@ -14,7 +14,6 @@ from secom.dashboard.charts import (
     fig_sensor_multicollinearity,
     fig_two_track_schematic,
 )
-from secom.dashboard.pipeline import render_pipeline_flowchart
 from secom.dashboard.stg import (
     STG_RELATION,
     StgSnapshot,
@@ -24,7 +23,6 @@ from secom.dashboard.stg import (
     stg_available,
 )
 from secom.pipelines import DB_PATH, TARGET_COL, TEST_SIZE, TIMESTAMP_COL
-
 
 MAX_TABLE_ROWS = 50
 
@@ -117,7 +115,6 @@ def main() -> None:
 
     st.divider()
     st.subheader("Project pipeline")
-    render_pipeline_flowchart()
     render_blue_note(_mart_pipeline_md())
 
     st.divider()

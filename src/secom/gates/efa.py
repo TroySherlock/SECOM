@@ -12,7 +12,6 @@ from sklearn.covariance import LedoitWolf
 from sklearn.decomposition import FactorAnalysis
 from sklearn.preprocessing import RobustScaler
 
-from secom.pipelines import RANDOM_SEED, build_gate_feature_pipeline
 from secom.hub_interactions import sensor_value_columns
 from secom.pipelines import (
     EFA_GATE_CLIP,
@@ -21,6 +20,8 @@ from secom.pipelines import (
     EFA_GATE_Q_ALPHA,
     EFA_GATE_T2_ALPHA,
     GATE_CORR_THRESHOLD,
+    RANDOM_SEED,
+    build_gate_feature_pipeline,
 )
 
 
@@ -153,9 +154,6 @@ class EFAGate:
 
     def t2_q_scores(self, X: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
         return self.efa_.t2_q(self._gate_matrix(X))
-
-    def t2_scores(self, X: pd.DataFrame) -> np.ndarray:
-        return self.t2_q_scores(X)[0]
 
     def q_scores(self, X: pd.DataFrame) -> np.ndarray:
         return self.t2_q_scores(X)[1]

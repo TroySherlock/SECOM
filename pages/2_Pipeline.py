@@ -4,11 +4,6 @@ from __future__ import annotations
 import streamlit as st
 
 from secom.dashboard import render_blue_note
-from secom.dashboard.data import (
-    artifacts_available,
-    get_reference_artifacts,
-    load_pipeline_artifacts,
-)
 from secom.dashboard.charts import (
     fig_hsic_dependence_intuition,
     fig_hsic_selected_rank,
@@ -19,16 +14,19 @@ from secom.dashboard.charts import (
     fig_spearman_cluster,
     fig_spearman_cluster_example,
 )
+from secom.dashboard.data import (
+    artifacts_available,
+    get_reference_artifacts,
+    load_pipeline_artifacts,
+)
 from secom.dashboard.explainability import cached_pls_score_scatter
-from secom.dashboard.pipeline import render_preprocessing_flowchart
 from secom.pipelines import (
+    N_HUBS_GRID,
     N_REPEATS,
     N_SPLITS,
-    N_HUBS_GRID,
     TOP_K_DEFAULT,
     TOP_K_GRID,
 )
-
 
 HYPERPARAM_NOTE = (
     "`top_k` and `n_hubs` are **hyperparameters** tuned "
@@ -206,14 +204,6 @@ def main() -> None:
         "impute → cluster → scale → calibrate — but each **front-end** builds features differently. "
         "All steps are fit on training folds only (no leakage) and compared with PR AUC across "
         "repeated CV."
-    )
-
-    st.subheader("Preprocessing flow")
-    render_preprocessing_flowchart()
-    st.caption(
-        "dbt profiles sensors before sklearn. The shared spine is common to all nine pipelines; "
-        "the front-end (HSIC-Lasso / RF-selection / PLS) is the only branching step before scale "
-        "→ Platt-calibrated classifier."
     )
 
     st.divider()

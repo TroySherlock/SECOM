@@ -45,25 +45,23 @@ from sklearn.feature_selection import VarianceThreshold
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
-    balanced_accuracy_score,
     make_scorer,
     recall_score,
 )
 from sklearn.model_selection import (
     RepeatedStratifiedKFold,
-    StratifiedKFold,
     train_test_split,
 )
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import RobustScaler
 
-from secom.paths import REPO_ROOT
 from secom.bayes.model import BayesianElasticNetLogistic
 from secom.hub_interactions import (  # noqa: F401
     HSICSelectHubBlock,
     LinearSelectT2HubBlock,
     PLSFeatures,
 )
+from secom.paths import REPO_ROOT
 
 # --- Paths / data contract ---------------------------------------------------
 DB_PATH = REPO_ROOT / "data" / "secom.duckdb"
@@ -97,7 +95,6 @@ GRID_SEARCH_VERBOSE = 1
 
 MODEL_NAME = "secom_linear_elastic_net"
 
-N_MISSING_SENSORS_COL = "n_missing_sensors"
 CHAMPION_IMPUTATION_METHOD = "median"
 KNN_IMPUTE_NEIGHBORS = 5
 ELASTIC_NET_MAX_ITER = 50000
@@ -255,15 +252,6 @@ def make_repeated_stratified_cv() -> RepeatedStratifiedKFold:
     )
 
 
-def make_stratified_kfold_for_oof() -> StratifiedKFold:
-    """Partitioning CV for out-of-fold predict_proba (one score per row)."""
-    return StratifiedKFold(
-        n_splits=N_SPLITS,
-        shuffle=True,
-        random_state=RANDOM_SEED,
-    )
-
-
 def time_decay_weights(timestamps, decay_lambda: float) -> np.ndarray:
     """Exponential recency weights from timestamps (recent = heavier).
 
@@ -414,60 +402,6 @@ def feature_pipeline(
         ],
         memory=memory,
     ).set_output(transform="pandas")
-
-
-# --- Threshold profile sweep (pure, shared by both tracks) -------------------
-def threshold_profile_sweep(
-    y_true: np.ndarray | pd.Series,
-    probs: np.ndarray | pd.Series,
-    *,
-    grid: np.ndarray = THRESHOLD_GRID,
-) -> dict[str, dict]:
-    """Sweep ``grid`` to pick the BER-band thresholds from scores alone.
-
-    Returns ``{profile_id: {"best_threshold", "best_score", "objective"}}`` for
-    the conservative / ber / aggressive band, in the shape
-    ``secom.costs.resolve_threshold_profiles`` consumes. ``ber`` is the
-    BER-minimising threshold; conservative / aggressive are the high / low ends
-    of the band within ``BER_BAND_TOLERANCE`` absolute BER points of that
-    minimum. Pure in ``(y_true, probs)`` so the sklearn and Bayesian harnesses
-    share it.
-    """
-    from secom.costs import BER_BAND_TOLERANCE
-
-    y = np.asarray(y_true, dtype=int)
-    p = np.asarray(probs, dtype=float)
-    grid = np.asarray(grid, dtype=float)
-
-    ber_by_thr: dict[float, float] = {}
-    eligible: dict[float, float] = {}
-    for thr in grid:
-        preds = (p >= thr).astype(int)
-        # balanced error rate (%) = 100 * (1 - balanced accuracy)
-        ber = 100.0 * (1.0 - balanced_accuracy_score(y, preds))
-        ber_by_thr[float(thr)] = ber
-        if preds.sum() > 0:  # TPR can be > 0 only when some positives predicted
-            eligible[float(thr)] = ber
-
-    pool = eligible if eligible else ber_by_thr
-    ber_min_thr = min(pool, key=pool.get)
-    ber_min = pool[ber_min_thr]
-    band = [thr for thr, ber in pool.items() if ber <= ber_min + BER_BAND_TOLERANCE]
-    if not band:
-        band = [ber_min_thr]
-    best_thresholds = {
-        "conservative": float(max(band)),
-        "ber": float(ber_min_thr),
-        "aggressive": float(min(band)),
-    }
-    return {
-        pid: {
-            "best_threshold": thr,
-            "best_score": float(ber_by_thr[thr]),
-            "objective": "ber",
-        }
-        for pid, thr in best_thresholds.items()
-    }
 
 
 # --- Model grid: 3 front-ends x 3 classifiers, both protocols ----------------

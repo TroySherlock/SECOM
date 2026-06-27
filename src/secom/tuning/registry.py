@@ -10,10 +10,13 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 from sklearn.base import clone
-from sklearn.model_selection import FixedThresholdClassifier, GridSearchCV, ParameterGrid
+from sklearn.model_selection import (
+    FixedThresholdClassifier,
+    GridSearchCV,
+    ParameterGrid,
+)
 from sklearn.pipeline import Pipeline
 
-from secom.progress import tqdm_joblib_context
 from secom.costs import (
     BER_BAND_TOLERANCE,
     DEFAULT_PROFILE_ID,
@@ -25,27 +28,20 @@ from secom.costs import (
 )
 from secom.metrics import compute_holdout_metrics, predict_with_threshold
 from secom.pipelines import (
-    CHAMPION_IMPUTATION_METHOD,
-    CV_SCORING,
-    GRID_SEARCH_VERBOSE,
-    KNN_IMPUTE_NEIGHBORS,
-    PRIMARY_TUNING_METRIC,
-    THRESHOLD_GRID,
-    frozen_config,
-    make_repeated_stratified_cv,
-    time_decay_weights,
-)
-from secom.pipelines import (
     BAYES_C_GRID,
     BAYES_L1_RATIO_GRID,
     BAYES_N_HUBS,
     BAYES_PLS_COMPONENTS,
     BAYES_POS_WEIGHT_GRID,
     BAYES_TOP_K,
-    CALENDAR_ABLATION_GRID,
     C_GRID,
+    CALENDAR_ABLATION_GRID,
+    CHAMPION_IMPUTATION_METHOD,
     CORRELATED_SELECTION_THRESHOLD,
     CORRELATED_SELECTION_THRESHOLD_GRID,
+    CV_SCORING,
+    GRID_SEARCH_VERBOSE,
+    KNN_IMPUTE_NEIGHBORS,
     L1_RATIO_GRID,
     MODEL_CELLS,
     MODEL_IDS,
@@ -53,16 +49,21 @@ from secom.pipelines import (
     N_HUBS_GRID,
     PLS_N_COMPONENTS_DEFAULT,
     PLS_N_COMPONENTS_GRID,
+    PRIMARY_TUNING_METRIC,
     RF_MAX_DEPTH,
     RF_MAX_DEPTH_GRID,
+    THRESHOLD_GRID,
     TOP_K_DEFAULT,
     TOP_K_GRID,
     build_model_pipeline,
+    frozen_config,
+    make_repeated_stratified_cv,
+    time_decay_weights,
+)
+from secom.pipelines import (
     is_bayesian as _is_bayesian_id,
 )
-from secom.utils import json_safe, tuned_params_path
-
-from sklearn.metrics import average_precision_score
+from secom.utils import json_safe, tqdm_joblib_context, tuned_params_path
 
 # --- Unified pipeline param paths --------------------------------------------
 SELECT_TOP_K_PARAM = "preprocess__sensor_branch__front_end__top_k"
@@ -295,8 +296,6 @@ def _make_spec(model_id: str) -> ModelSpec:
 
 MODEL_SPECS: dict[str, ModelSpec] = {mid: _make_spec(mid) for mid in MODEL_IDS}
 
-# Both protocols run every cell; tuning loops (id, track).
-TRACKS = ("interpolation", "extrapolation")
 ALL_MODEL_IDS: tuple[str, ...] = tuple(MODEL_IDS)
 
 
@@ -434,7 +433,7 @@ def summarize_cv_search(
     groupby_cols = spec.groupby_cols
     best_defaults = spec.best_defaults
 
-    for param_col, friendly_col in param_renames.items():
+    for param_col in param_renames:
         if param_col not in cv_results.columns:
             cv_results[param_col] = np.nan
     cv_results = cv_results.rename(columns=param_renames)

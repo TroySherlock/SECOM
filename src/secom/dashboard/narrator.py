@@ -213,7 +213,7 @@ def generate_narrative_via_llm(
     timeout: float = LLM_TIMEOUT_SEC,
 ) -> str:
     """Call local OpenAI-compatible llama-server; raise LLMNarrativeError on failure."""
-    resolved_base, resolved_key, resolved_model = llm_config()
+    resolved_base, resolved_key, _ = llm_config()
     base_url = (base_url or resolved_base).rstrip("/")
     model = model or resolve_llm_model(base_url=base_url)
     api_key = api_key or resolved_key

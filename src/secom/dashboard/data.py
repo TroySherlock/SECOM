@@ -20,14 +20,11 @@ from secom.pipelines import (
     BENCHMARK_RESULTS_PATH,
     MODEL_CELLS,
     MODEL_IDS,
-    N_SENSORS,
     PIPELINE_ARTIFACTS_PATH,
     REFERENCE_MODELS,
     REPORT_CACHE_PATH,
 )
 from secom.utils import load_tuned_params
-
-TRACKS: tuple[str, str] = ("extrapolation", "interpolation")
 
 
 @dataclass(frozen=True)
@@ -104,12 +101,6 @@ def cv_leaderboard_df(payload: dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-HOLDOUT_VIEW_KEYS: dict[str, str] = {
-    "temporal": "holdout",
-    "random": "holdout_random",
-}
-
-
 def holdout_df(payload: dict[str, Any], key: str = "holdout") -> pd.DataFrame:
     """Holdout rows for a given benchmark key (temporal / random)."""
     rows = payload.get(key) or []
@@ -165,24 +156,6 @@ def holdout_comparison_df(payload: dict[str, Any]) -> pd.DataFrame:
     for col in out.select_dtypes(include="float").columns:
         out[col] = out[col].round(3)
     return out
-
-
-def holdout_conditional_df(
-    payload: dict[str, Any], key: str = "holdout_conditional"
-) -> pd.DataFrame:
-    """T2-gate conditional metrics + coverage per pipeline (temporal / random)."""
-    rows = payload.get(key) or []
-    if not rows:
-        return pd.DataFrame()
-    return pd.DataFrame(rows)
-
-
-def risk_coverage_df(payload: dict[str, Any], key: str = "risk_coverage") -> pd.DataFrame:
-    """Gate risk-coverage sweep: one row per (pipeline, coverage) for a given key."""
-    rows = payload.get(key) or []
-    if not rows:
-        return pd.DataFrame()
-    return pd.DataFrame(rows)
 
 
 # --- Gate reports (both gates x both tracks, persisted in `gate_reports`) ----
@@ -368,19 +341,6 @@ def holdout_delta_df(payload: dict[str, Any], metric: str) -> pd.DataFrame:
     return out
 
 
-def gate_lift_df(
-    payload: dict[str, Any], track: str, gate: str, metric: str
-) -> pd.DataFrame:
-    """Per model gate lift: conditional (kept wafers) minus global (no gate)."""
-    df = gate_conditional_df(payload, track, gate)
-    cond_col, glob_col = f"conditional_{metric}", f"global_{metric}"
-    if df.empty or cond_col not in df or glob_col not in df:
-        return pd.DataFrame()
-    out = df[["pipeline", cond_col, glob_col]].copy()
-    out["delta"] = out[cond_col] - out[glob_col]
-    return out.dropna(subset=["delta"])
-
-
 def gate_vs_gate_df(payload: dict[str, Any], track: str, metric: str) -> pd.DataFrame:
     """Per model EFA-minus-Bayes conditional metric on one track."""
     efa = gate_conditional_df(payload, track, "efa")
@@ -393,22 +353,6 @@ def gate_vs_gate_df(payload: dict[str, Any], track: str, metric: str) -> pd.Data
     out = e.merge(b, on="pipeline", how="inner")
     out["delta"] = out["efa"] - out["bayes"]
     return out.dropna(subset=["delta"])
-
-
-def process_gate_meta(payload: dict[str, Any]) -> dict[str, Any]:
-    """Process gate config (track-dependent): the interpolation EFA T²+Q or the
-    extrapolation sBFA -> BGM density + Q params, control limits, and logic."""
-    meta = payload.get("process_gate")
-    if isinstance(meta, dict) and meta:
-        return dict(meta)
-    # Backward compatibility with older benchmark JSON.
-    legacy = payload.get("t2_gate")
-    return dict(legacy) if isinstance(legacy, dict) else {}
-
-
-def t2_gate_meta(payload: dict[str, Any]) -> dict[str, Any]:
-    """Alias for :func:`process_gate_meta`."""
-    return process_gate_meta(payload)
 
 
 HOLDOUT_AUC_DISPLAY_COLS = [
@@ -593,36 +537,3 @@ def get_reference_artifacts(
         return None
     models = artifacts.get("models", {})
     return models.get(model_id)
-
-
-def _stage_int(stages: dict[str, Any], key: str, fallback: int = 0) -> int:
-    """Read stage count; support legacy raw_sensors key."""
-    if key in stages:
-        return int(stages[key])
-    if key == "mart_sensors" and "raw_sensors" in stages:
-        return int(stages["raw_sensors"])
-    return fallback
-
-
-def build_reduction_profile(artifacts: dict[str, Any]) -> dict[str, int]:
-    """Build reduction metrics from reference linear model stages."""
-    linear_model = get_reference_artifacts(artifacts, "linear") or {}
-    stages = linear_model.get("stages", {})
-
-    stg = _stage_int(stages, "stg_sensors", int(N_SENSORS))
-    mart = _stage_int(stages, "mart_sensors")
-    after_cluster = _stage_int(stages, "after_cluster")
-    auxiliary = _stage_int(stages, "auxiliary_features")
-    classifier_input = _stage_int(stages, "classifier_input")
-    dbt_dropped = _stage_int(stages, "dbt_dropped_sensors", max(0, stg - mart))
-    drop_corr = _stage_int(stages, "drop_correlated")
-
-    return {
-        "stg_sensors": stg,
-        "mart_sensors": mart,
-        "dbt_dropped_sensors": dbt_dropped,
-        "after_cluster": after_cluster,
-        "auxiliary_features": auxiliary,
-        "classifier_input": classifier_input,
-        "drop_correlated": drop_corr,
-    }
