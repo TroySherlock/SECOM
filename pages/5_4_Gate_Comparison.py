@@ -9,8 +9,8 @@ from secom.dashboard.data import DELTA_METRIC_COLS, gate_conditional_df
 from secom.dashboard.model_views import (
     GATE_LABELS,
     load_payload,
-    render_gate_lift,
     render_gate_section,
+    render_gate_vs_gate,
     render_risk_coverage,
 )
 
@@ -32,9 +32,9 @@ def _coverage_drift_table(payload: dict) -> pd.DataFrame:
         rows.append(
             {
                 "Gate": GATE_LABELS.get(gate, gate),
-                "In-distribution coverage": interp,
-                "Temporal coverage": temporal,
-                "Δ coverage (temporal − in-dist)": delta,
+                "In-distribution coverage": interp * 100 if interp is not None else None,
+                "Temporal coverage": temporal * 100 if temporal is not None else None,
+                "Δ coverage (temporal − in-dist)": delta * 100 if delta is not None else None,
             }
         )
     return pd.DataFrame(rows)
@@ -47,7 +47,7 @@ def _render_track(payload: dict, *, track: str) -> None:
         horizontal=True,
         key=f"cmp_metric_{track}",
     )
-    render_gate_lift(payload, track=track, metric=metric)
+    render_gate_vs_gate(payload, track=track, metric=metric)
 
     st.markdown("**Risk–coverage curves side by side** - Hotelling T² (left) vs sBFA → BGM (right)")
     st.caption(
@@ -68,9 +68,9 @@ def _render_track(payload: dict, *, track: str) -> None:
 def main() -> None:
     st.title("5.4 Gate comparison")
     st.caption(
-        "The two MSPC gates head-to-head on the same track: conditional lift vs no gate, the "
-        "EFA-vs-Bayes delta, and how each gate's operating coverage shifts from the in-distribution "
-        "to the temporal protocol."
+        "The two MSPC gates head-to-head on the same track: the EFA-vs-Bayes conditional delta, "
+        "the risk-coverage trade-off curves, and how each gate's operating coverage shifts from "
+        "the in-distribution to the temporal protocol."
     )
 
     try:
@@ -78,6 +78,16 @@ def main() -> None:
     except FileNotFoundError as exc:
         st.error(str(exc))
         return
+
+    render_blue_note(
+        "**How to read this page.**\n"
+        "- **Coverage-drift table** - does the gate actually fire more under drift? The "
+        "trustworthy per-wafer signal (computed over all wafers).\n"
+        "- **Risk-coverage curves** - the trade-off: conditional performance as you keep fewer, "
+        "more in-control wafers, with the operating point marked.\n"
+        "- **Gate vs gate** - which abstention rule keeps the better-scoring set (noisy at "
+        "~17-20 holdout fails; read direction, not magnitude)."
+    )
 
     st.subheader("Operating-coverage drift (in-distribution → temporal)")
     st.caption(
@@ -91,17 +101,22 @@ def main() -> None:
         width="stretch",
         hide_index=True,
         column_config={
-            "In-distribution coverage": st.column_config.NumberColumn(format="%.1%"),
-            "Temporal coverage": st.column_config.NumberColumn(format="%.1%"),
-            "Δ coverage (temporal − in-dist)": st.column_config.NumberColumn(format="%+.1%"),
+            "In-distribution coverage": st.column_config.NumberColumn(format="%.1f%%"),
+            "Temporal coverage": st.column_config.NumberColumn(format="%.1f%%"),
+            "Δ coverage (temporal − in-dist)": st.column_config.NumberColumn(format="%+.1f%%"),
         },
+    )
+    st.caption(
+        "Worked example: a gate at 95% coverage in-distribution dropping to 88% on the temporal "
+        "holdout has Δ = −7 pts ⇒ it is abstaining on ~7% more wafers under drift — evidence the "
+        "forward window has shifted out of control."
     )
 
     render_blue_note(
-        "Read **lift bars** for whether a gate helps conditional performance on the wafers it "
-        "keeps, and the **coverage-drift table** for whether it actually triggers under drift. The "
-        "EFA T² limit barely moves between protocols (most signal sits in Q), while the BGM gate's "
-        "density tightens - see 5.3 for the per-wafer drift evidence."
+        "Read the **coverage-drift table** for whether a gate actually triggers under drift (the "
+        "trustworthy per-wafer signal), and the **risk-coverage curves** for how it trades coverage "
+        "for conditional performance. The EFA T² limit barely moves between protocols (most signal "
+        "sits in Q), while the BGM gate's density tightens - see 5.3 for the per-wafer drift evidence."
     )
 
     tab_interp, tab_extrap = st.tabs(

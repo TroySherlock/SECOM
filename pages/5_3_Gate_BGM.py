@@ -18,7 +18,7 @@ from secom.dashboard.data import (
     gate_drift_stats,
     sbfa_diagnostics,
 )
-from secom.dashboard.model_views import load_payload
+from secom.dashboard.model_views import EFA_VS_SBFA_ONE_LINER, load_payload
 
 _GATE = "bayes"
 
@@ -246,6 +246,7 @@ def main() -> None:
         "rate are statistically solid - unlike the noisy conditional-AUC curve. This is the gate "
         "demonstrating, in sensor space, that the forward window has drifted out of control."
     )
+    render_blue_note(EFA_VS_SBFA_ONE_LINER)
 
     statistic = st.radio(
         "Control statistic",

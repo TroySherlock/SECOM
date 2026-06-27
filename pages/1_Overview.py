@@ -192,7 +192,7 @@ def main() -> None:
             "time), so blue/red cells show how far later wafers drift from what the models were "
             "fit on. The dashed line marks the temporal holdout (latest 20%): the extrapolation "
             "track must predict on this drifted regime, which is why selection-based models that "
-            "lock onto era-specific sensors degrade there while aggregation (sPLS) holds up. The "
+            "lock onto era-specific sensors degrade there while aggregation (PLS) holds up. The "
             "scalars above quantify the heatmap: the share of sensors whose holdout-era mean lands "
             f"beyond {drift['z_threshold']:.0f} SD of their training-era baseline."
         )

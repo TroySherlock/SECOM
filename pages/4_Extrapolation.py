@@ -50,10 +50,20 @@ def _render_drift_cost(payload: dict) -> None:
 
     comparison_df = holdout_comparison_df(payload)
     if not comparison_df.empty:
-        st.dataframe(comparison_df, width="stretch", hide_index=True)
+        st.dataframe(
+            comparison_df,
+            width="stretch",
+            hide_index=True,
+            column_config={
+                "pipeline": st.column_config.TextColumn("Model"),
+                "track": st.column_config.TextColumn("Track"),
+                "cv_pr_auc": st.column_config.NumberColumn("CV PR-AUC", format="%.3f"),
+                "holdout_pr_auc": st.column_config.NumberColumn("Holdout PR-AUC", format="%.3f"),
+            },
+        )
         st.caption(
-            "Each model under its own track. `cv_pr_auc` is the shared in-distribution 5×2 "
-            "stratified CV reference; `holdout_pr_auc` is the matching holdout (random for "
+            "Each model under its own track. **CV PR-AUC** is the shared in-distribution 5×2 "
+            "stratified CV reference; **Holdout PR-AUC** is the matching holdout (random for "
             "interpolation, temporal forward for extrapolation). The "
             "interpolation-minus-extrapolation gap is the drift penalty."
         )

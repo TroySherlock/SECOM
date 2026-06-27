@@ -48,9 +48,9 @@ class ModelInfo:
 _FRONT_END_LABEL = {
     "hsic": "HSIC-Lasso select K → T² → hub pairs",
     "rfsel": "RF-select K → T² → hub pairs",
-    "pls": "sPLS components",
+    "pls": "PLS components",
 }
-_FRONT_END_NAME = {"hsic": "HSIC", "rfsel": "RF-select", "pls": "sPLS"}
+_FRONT_END_NAME = {"hsic": "HSIC", "rfsel": "RF-select", "pls": "PLS"}
 _CLASSIFIER_LABEL = {
     "enet": "Elastic-net logistic (saga)",
     "rf": "Random forest",
@@ -75,7 +75,7 @@ def _build_model_info(model_id: str) -> ModelInfo:
         feature_path=f"raw+rz → impute → cluster → {fe_path} → scale → {_CLASSIFIER_LABEL[classifier_kind]}",
         description=(
             f"{_FRONT_END_LABEL[front_end]} front-end into a "
-            f"{_CLASSIFIER_LABEL[classifier_kind]} head; calibrated (isotonic) and "
+            f"{_CLASSIFIER_LABEL[classifier_kind]} head; calibrated (sigmoid / Platt) and "
             "run on both the random-stratified and blocked-temporal protocols."
         ),
         tuning_notebook=f"python -m secom.cli.run_tuning --model {model_id}",

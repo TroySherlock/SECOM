@@ -32,7 +32,7 @@ Optional ML artifacts for the dashboard:
 
 ```bash
 python -m secom.cli.benchmark         # CV leaderboard + holdout metrics
-python -m secom.cli.build_narratives  # frozen Gemma wafer summaries (linear_lr)
+python -m secom.cli.build_narratives  # frozen Gemma wafer summaries (hsic_rf interpolation, pls_bayes extrapolation)
 ```
 
 Launch the dashboard:
@@ -43,10 +43,9 @@ streamlit run streamlit_app.py
 
 ## Tuning
 
-- Per-model notebooks: `tuning/linear_lr.ipynb`, `topk_rf.ipynb`, `topk_knn.ipynb`, `topk_xgb.ipynb`
-- All models: `tuning/tune_all.ipynb`
-- Benchmark notebook: `tuning/benchmark_models.ipynb`
-- CLI: `python -m secom.cli.run_tuning`
+```bash
+python -m secom.cli.run_tuning
+```
 
 Frozen hyperparameters land in `data/processed/tuned/<model_id>.json`.
 
@@ -66,4 +65,3 @@ Training and the dashboard read `public.mart_secom_features` via `secom.pipeline
 | `pages/` | Streamlit multipage app |
 | `models/`, `macros/`, `seeds/` | dbt project |
 | `data/processed/` | Benchmark, tuning, and narrative JSON artifacts |
-| `tuning/` | Experiment notebooks |

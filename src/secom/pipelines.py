@@ -16,7 +16,7 @@ Every cell is a plain scikit-learn ``Pipeline`` built by ``build_model_pipeline`
         -> median impute -> SmartCorrelatedSelection cluster
         -> front-end (selection + hub interactions, or sPLS)
         -> RobustScaler (full design)
-        -> CalibratedClassifierCV(isotonic)( classifier )
+        -> CalibratedClassifierCV(sigmoid)( classifier )
 
 The Bayesian head (``BayesianElasticNetLogistic``) is a drop-in sklearn
 estimator, so it tunes/benchmarks through the exact same machinery as LR/RF.
@@ -620,7 +620,7 @@ def build_model_pipeline(
     """Build a calibrated sklearn pipeline for one (front-end, classifier) cell.
 
     raw+rz sensors -> median impute -> cluster -> front-end -> RobustScaler ->
-    CalibratedClassifierCV(isotonic)(classifier).
+    CalibratedClassifierCV(sigmoid)(classifier).
     """
     if classifier_kind not in _CLASSIFIER_BUILDERS:
         raise ValueError(

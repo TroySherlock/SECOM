@@ -6,19 +6,20 @@ import streamlit as st
 from secom.dashboard import render_blue_note
 from secom.dashboard.data import (
     artifacts_available,
-    build_reduction_profile,
     get_reference_artifacts,
     load_pipeline_artifacts,
 )
 from secom.dashboard.charts import (
-    fig_hotelling_t2_intuition,
-    fig_reduction_impact_from_stages,
-    fig_reduction_sankey,
+    fig_hsic_dependence_intuition,
+    fig_hsic_selected_rank,
+    fig_pipeline_feature_funnel,
+    fig_pls_score_scatter,
     fig_rf_topk_selection,
     fig_rf_topk_selection_example,
     fig_spearman_cluster,
     fig_spearman_cluster_example,
 )
+from secom.dashboard.explainability import cached_pls_score_scatter
 from secom.dashboard.pipeline import render_preprocessing_flowchart
 from secom.pipelines import (
     N_REPEATS,
@@ -40,14 +41,136 @@ HYPERPARAM_NOTE = (
 
 def illustrative_reduction_profile() -> dict[str, int]:
     return {
-        "stg_sensors": 591,
+        "stg_sensors": 590,
         "mart_sensors": 422,
-        "dbt_dropped_sensors": 169,
-        "after_cluster": 219,
-        "auxiliary_features": 33,
-        "classifier_input": 52,
-        "drop_correlated": 203,
+        "dbt_dropped_sensors": 168,
+        "after_impute": 844,
+        "after_cluster": 529,
+        "drop_correlated": 303,
+        "after_selection": 50,
+        "after_hub_interactions": 51,
+        "auxiliary_features": 35,
+        "after_preprocess": 86,
+        "classifier_input": 86,
     }
+
+
+def _render_rz_explainer(linear_ref: dict | None) -> None:
+    stages = (linear_ref or {}).get("stages") or {}
+    mart = int(stages.get("mart_sensors", 422))
+    after_impute = int(stages.get("after_impute", mart * 2))
+
+    st.subheader("Robust-z (rz) twin features")
+    st.caption(
+        "Why the feature count *doubles* before selection: every kept raw sensor gets a "
+        "causal rolling robust-z partner built in the dbt mart."
+    )
+
+    what, why, how = st.columns(3, gap="medium")
+    with what:
+        with st.container(border=True):
+            st.markdown("#### 🧬 What")
+            st.markdown(
+                f"Each raw sensor `c_NNN` gets a twin `c_NNN_rz`: its value re-expressed as a "
+                f"**robust z-score** (median / IQR) over a strictly-past rolling window. The mart "
+                f"carries **both** — raw absolutes *and* the local-deviation view — so "
+                f"`{mart:,}` sensors become `{after_impute:,}` columns."
+            )
+    with why:
+        with st.container(border=True):
+            st.markdown("#### 🎯 Why")
+            st.markdown(
+                "Raw levels drift across the fab's lifetime, so an absolute reading means "
+                "different things in different eras. The rz twin says *how unusual a reading is "
+                "relative to its own recent baseline* — a **drift-robust** signal that helps most "
+                "on the extrapolation track, while the raw twin keeps the absolute level."
+            )
+    with how:
+        with st.container(border=True):
+            st.markdown("#### 🛠️ How")
+            st.markdown(
+                "Computed in `mart_secom_features.sql` with a windowed median/IQR over "
+                "`rows between 50 preceding and 1 preceding` — **strictly past** rows only, so "
+                "the current wafer never sees its own or future values. **No leakage.**"
+            )
+
+    render_blue_note(
+        "The rz twins are the single **+** step in the feature-count chart below (the "
+        f"`+{after_impute - mart:,}` jump from {mart:,} → {after_impute:,}). Variance + correlation "
+        "selection then prunes whichever twin is redundant, so a sensor can survive as its raw "
+        "form, its rz form, or both."
+    )
+
+
+def _render_shared_spine(linear_ref: dict | None, cluster_example: dict | None) -> None:
+    stages = (linear_ref or {}).get("stages") or {}
+    after_impute = int(stages.get("after_impute", 844))
+    after_cluster = int(stages.get("after_cluster", 529))
+
+    st.subheader("Shared spine")
+    st.caption(
+        "Four steps every cell shares, regardless of front-end or classifier head — "
+        "all fit on training folds only (no leakage)."
+    )
+    render_blue_note(
+        "Upstream, dbt (`stg_secom` → `int_secom_*` → **`mart_secom_features`**) profiles sensors, "
+        "drops >10% missing / zero-variance columns, and adds the rz twins, cyclical calendar "
+        "features and missing-flags. Everything below runs in sklearn on that mart."
+    )
+
+    cols = st.columns(4, gap="medium")
+    cards = [
+        ("1️⃣ Impute", f"{after_impute:,} features",
+         "Per-sensor **median** fill (training-fold baseline).",
+         "Fills missing `c_*` with the per-sensor median learned on the training fold, so "
+         "sparse sensors stay usable without letting outliers skew the fill value."),
+        ("2️⃣ Cluster", f"→ {after_cluster:,} kept",
+         "`VarianceThreshold` → **Spearman** correlated drop.",
+         "Drops near-zero-variance columns, then `SmartCorrelatedSelection` collapses each "
+         "Spearman-correlated group to its single best member (highest |ρ| to the fail label). "
+         "The threshold is **CV-tuned**, so the survivor count differs per cell."),
+        ("3️⃣ Scale", "front-end output",
+         "`RobustScaler` (median / IQR).",
+         "Centres on the median and scales by the IQR so heavy-tailed sensor distributions "
+         "and outliers don't dominate the downstream classifier."),
+        ("4️⃣ Calibrate", "fail P(·)",
+         "`CalibratedClassifierCV` (**Platt / sigmoid**).",
+         "Wraps the fitted head and maps its raw scores to trustworthy fail probabilities via "
+         "cross-validated sigmoid (Platt) calibration — what the operating-point thresholds on "
+         "pages 3-4 rely on."),
+    ]
+    for col, (title, chip, action, detail) in zip(cols, cards):
+        with col:
+            with st.container(border=True):
+                st.markdown(f"#### {title}")
+                st.markdown(f"`{chip}`")
+                st.markdown(action)
+                with st.expander("Detail"):
+                    st.markdown(detail)
+
+    st.markdown("##### Spearman cluster (step 2 in action)")
+    if cluster_example:
+        st.plotly_chart(
+            fig_spearman_cluster(cluster_example),
+            width="stretch",
+            theme="streamlit",
+            key="p2_spearman_cluster",
+        )
+        members = cluster_example.get("members", [])
+        st.caption(
+            "One correlated cluster from the holdout training fit — these sensors move together "
+            f"(high Spearman ρ), so only the best member survives: {', '.join(members)}."
+        )
+    else:
+        st.plotly_chart(
+            fig_spearman_cluster_example(),
+            width="stretch",
+            theme="streamlit",
+            key="p2_spearman_cluster",
+        )
+        st.caption(
+            "Example cluster: `c_340`, `c_204`, `c_67` grouped by high Spearman ρ (illustrative)."
+        )
 
 
 def main() -> None:
@@ -89,89 +212,29 @@ def main() -> None:
     render_preprocessing_flowchart()
     st.caption(
         "dbt profiles sensors before sklearn. The shared spine is common to all nine pipelines; "
-        "the front-end (HSIC-Lasso / RF-selection / sPLS) is the only branching step before scale "
-        "→ isotonic-calibrated classifier."
+        "the front-end (HSIC-Lasso / RF-selection / PLS) is the only branching step before scale "
+        "→ Platt-calibrated classifier."
     )
 
     st.divider()
-    st.subheader("Shared spine")
-    st.caption(
-        "The four steps every cell shares, regardless of front-end or classifier head."
-    )
+    _render_rz_explainer(linear_ref)
 
-    with st.expander("Step 1: dbt preprocessing context", expanded=True):
-        render_blue_note(
-            "`stg_secom` → `int_secom_features` → `int_secom_column_metadata` → "
-            "`mart_secom_features`\n\n"
-            "Training and benchmarking read **`public.mart_secom_features`**."
-        )
-        st.markdown(
-            """
-- Cyclical time features (`month/dow/hour` sin/cos + `is_weekend`)
-- Missing indicators (`c_*__missing`) and `n_missing_sensors`
-- Profile sensors; drop high-missing (>10%) and zero-variance columns before the mart
-            """
-        )
-
-    with st.expander("Step 2: Robust median imputation"):
-        st.markdown(
-            """
-- **Action:** fill missing `c_*` with per-sensor median (training-fold baseline).
-- **Impact:** stabilizes sparse sensors without outlier skew.
-            """
-        )
-
-    with st.expander("Step 3: Variance + Spearman correlated selection"):
-        st.markdown(
-            """
-- **Action:** `VarianceThreshold` → `SmartCorrelatedSelection` (Spearman, threshold from `CORRELATED_SELECTION_THRESHOLD`; keep the feature with highest |ρ| to target per correlated group).
-- **Impact:** collapses redundant near-duplicate sensors before the front-end.
-- **Note:** the correlation threshold is **CV-tuned**, so the number of sensors surviving this step differs per cell.
-            """
-        )
-        if cluster_example:
-            st.plotly_chart(
-                fig_spearman_cluster(cluster_example),
-                width="stretch",
-                theme="streamlit",
-                key="p2_spearman_cluster",
-            )
-            members = cluster_example.get("members", [])
-            st.caption(
-                f"Correlated cluster from holdout training fit: {', '.join(members)}."
-            )
-        else:
-            st.plotly_chart(
-                fig_spearman_cluster_example(),
-                width="stretch",
-                theme="streamlit",
-                key="p2_spearman_cluster",
-            )
-            st.caption(
-                "Example cluster: `c_340`, `c_204`, `c_67` grouped by high Spearman ρ (illustrative)."
-            )
-
-    with st.expander("Step 4: Scale + calibrate"):
-        st.markdown(
-            """
-- **Action:** `RobustScaler` on the front-end output, then `CalibratedClassifierCV` (isotonic) wraps the classifier head.
-- **Impact:** median/IQR scaling resists outliers; isotonic calibration makes predicted fail probabilities trustworthy for thresholding (pages 3-4).
-            """
-        )
+    st.divider()
+    _render_shared_spine(linear_ref, cluster_example)
 
     st.divider()
     st.subheader("Three front-ends")
     render_blue_note(
         "The front-end is where the pipelines diverge. **HSIC-Lasso** and **RF-selection** both "
         "pick a top-k sensor subset, then append a **Hotelling T²** score and hub-pair "
-        "interactions; **sPLS** instead projects all clustered sensors onto a few supervised "
+        "interactions; **PLS** instead projects all clustered sensors onto a few supervised "
         "latent components (no T², no hubs).\n\n"
         "Note: this T² is an **engineered feature** inside the hsic/rfsel hub blocks — distinct "
         "from the standalone EFA → Hotelling T² monitoring **gate** on the Gates pages (5.2)."
     )
 
     fe_hsic, fe_rf, fe_pls = st.tabs(
-        ["HSIC-Lasso → T² + hubs", "RF-selection → T² + hubs", "sPLS components"]
+        ["HSIC-Lasso → T² + hubs", "RF-selection → T² + hubs", "PLS components"]
     )
 
     with fe_hsic:
@@ -191,14 +254,37 @@ def main() -> None:
             hub_sensors = hub.get("hub_sensors") or []
             if hub_sensors:
                 st.caption("Hub sensors (highest-leverage): " + ", ".join(f"`{s}`" for s in hub_sensors))
+            selected = hub.get("selected_features") or []
+            if selected:
+                st.plotly_chart(
+                    fig_hsic_selected_rank(selected, top_k=20),
+                    width="stretch",
+                    theme="streamlit",
+                    key="p2_hsic_rank",
+                )
+                st.caption(
+                    "The actual sensors HSIC kept for `hsic_enet`, in the order it picked them "
+                    "(earlier = stronger nonlinear dependence with the fail label). HSIC stores "
+                    "only this order, not the kernel magnitudes, so bar height is selection rank. "
+                    "Note how several **rz** twins are selected — the drift-robust view often "
+                    "carries the signal."
+                )
         else:
             st.info("HSIC front-end artifact not available; run `python -m secom.cli.benchmark`.")
-        st.latex(r"T^2 = (\mathbf{x}-\boldsymbol{\mu})^\top \Sigma^{-1}(\mathbf{x}-\boldsymbol{\mu})")
+        st.markdown(
+            "**Why a kernel method?** HSIC measures *statistical dependence*, not just linear "
+            "correlation, so it catches sensors whose relationship to fail is nonlinear (e.g. risk "
+            "rising at both extremes) — exactly the links a Pearson/Spearman filter would miss."
+        )
         st.plotly_chart(
-            fig_hotelling_t2_intuition(),
+            fig_hsic_dependence_intuition(),
             width="stretch",
             theme="streamlit",
-            key="p2_hotelling_intuition",
+            key="p2_hsic_intuition",
+        )
+        st.caption(
+            "The appended **Hotelling T²** here is just one engineered summary feature inside the "
+            "hub block — distinct from the standalone monitoring **gate** on the Gates pages (5.2)."
         )
 
     with fe_rf:
@@ -227,8 +313,8 @@ def main() -> None:
     with fe_pls:
         st.markdown(
             """
-- **Mechanism:** sparse PLS (sPLS) projects **all** clustered sensors onto a small set of supervised latent components that maximise covariance with the fail label. No top-k selection, no Hotelling T², no hub interactions.
-- **Why it matters:** aggregation across many weak sensors is more drift-robust than locking onto a handful of era-specific channels — which is why sPLS tends to hold up better on the extrapolation track.
+- **Mechanism:** **PLS** (`PLSRegression`, `scale=True`) projects **all** clustered sensors onto a small set of *supervised* latent components — directions chosen to maximise covariance with the fail label. No top-k selection, no Hotelling T², no hub interactions.
+- **Why it matters:** aggregating many weak sensors is more drift-robust than locking onto a handful of era-specific channels — which is why PLS tends to hold up better on the extrapolation track.
 - **Used by:** `pls_enet`, `pls_rf`, `pls_bayes`.
             """
         )
@@ -244,46 +330,60 @@ def main() -> None:
             c2.metric("Latent components", f"{n_components:,}")
             c3.metric("Classifier input (+aux)", f"{classifier_input:,}")
             st.caption(
-                "sPLS compresses the clustered sensor block into a handful of latent components; "
+                "PLS compresses the clustered sensor block into a handful of latent components; "
                 "the classifier input adds the shared auxiliary features (calendar, missing flags, "
                 "`n_missing_sensors`)."
             )
         else:
-            st.info("sPLS front-end artifact not available; run `python -m secom.cli.benchmark`.")
+            st.info("PLS front-end artifact not available; run `python -m secom.cli.benchmark`.")
+
+        render_blue_note(
+            "**What is a latent component?** Instead of picking individual sensors, PLS builds a "
+            "few new axes — each a weighted blend of *all* clustered sensors — chosen so that "
+            "moving along the axis tracks the fail label as closely as possible. A 'component' is "
+            "one such blended axis; a handful of them summarise hundreds of correlated sensors "
+            "into the directions that matter for failure."
+        )
+        try:
+            t1, t2, y_scatter = cached_pls_score_scatter(track="interpolation")
+            st.plotly_chart(
+                fig_pls_score_scatter(t1, t2, y_scatter),
+                width="stretch",
+                theme="streamlit",
+                key="p2_pls_scatter",
+            )
+            st.caption(
+                "Live fit of `pls_enet` on the **in-distribution train split**: each point is a "
+                "wafer placed by its first two PLS components. Because the components are built to "
+                "track the fail label, the fail wafers (red) separate from the pass cloud even in "
+                "2-D — that supervised separation is what the classifier head then thresholds."
+            )
+        except Exception as exc:  # pragma: no cover - defensive UI fallback
+            st.info(f"PLS latent-score scatter unavailable ({type(exc).__name__}).")
 
     st.divider()
-    st.subheader("Feature reduction funnel")
-    profile = (
-        build_reduction_profile(artifacts) if artifacts else illustrative_reduction_profile()
-    )
+    st.subheader("Feature count through the pipeline")
+    stages = (linear_ref or {}).get("stages") if linear_ref else None
+    stages = stages or illustrative_reduction_profile()
 
-    classifier_input = profile["classifier_input"]
+    st.plotly_chart(
+        fig_pipeline_feature_funnel(stages),
+        width="stretch",
+        theme="streamlit",
+        key="p2_feature_funnel",
+    )
     st.caption(
-        f"Reference model `rfsel_enet`. The Sankey (left) is the dbt sensor drop, where counts "
-        f"conserve: {profile['stg_sensors']:,} staged columns split into {profile['mart_sensors']:,} "
-        f"kept and {profile['dbt_dropped_sensors']:,} dropped. The bar (right) is the downstream "
-        f"feature snapshot ending in {classifier_input:,} classifier inputs; counts there change "
-        "units (each sensor carries a raw + robust-z variant, and hub/T² plus auxiliary features "
-        "are added), so it is a snapshot rather than a conserved flow. The funnel is reference-"
-        "model specific because the correlation threshold is CV-tuned per cell. (The dbt stage "
-        "counts 591 raw sensor columns; the cleaned `stg_secom` view exposes 590.)"
+        f"Reference model `rfsel_enet`, one conserved chain (every step is a signed delta, so the "
+        f"flow balances end to end). Read it left to right: {stages['stg_sensors']:,} staged sensor "
+        f"columns lose {stages['stg_sensors'] - stages['mart_sensors']:,} high-missing / zero-variance "
+        f"columns at the dbt mart, then the count **doubles** to {stages.get('after_impute', 0):,} when "
+        "every kept sensor gains a **robust-z (rz) twin** (see the rz section above — this is the one "
+        "increase). Variance + Spearman selection then collapses correlated sensors to "
+        f"{stages['after_cluster']:,}, the front-end keeps the top-k and appends Hotelling T² / hubs, "
+        f"and the shared auxiliary features (calendar + missing flags) are added to reach "
+        f"{stages.get('classifier_input', 0):,} classifier inputs. The chain is reference-model "
+        "specific because the correlation threshold is CV-tuned per cell."
     )
-
-    sankey_col, bar_col = st.columns(2, gap="large")
-    with sankey_col:
-        st.plotly_chart(
-            fig_reduction_sankey(profile),
-            width="stretch",
-            theme="streamlit",
-            key="p2_reduction_sankey",
-        )
-    with bar_col:
-        st.plotly_chart(
-            fig_reduction_impact_from_stages(profile),
-            width="stretch",
-            theme="streamlit",
-            key="p2_reduction_impact",
-        )
 
     render_blue_note(HYPERPARAM_NOTE)
 

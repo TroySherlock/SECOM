@@ -21,10 +21,11 @@ from secom.dashboard.charts import (
 from secom.dashboard.data import (
     efa_factor_diagnostics,
     factor_drift_ranking,
+    gate_config,
     gate_diagnostics,
     gate_drift_stats,
 )
-from secom.dashboard.model_views import load_payload
+from secom.dashboard.model_views import EFA_VS_SBFA_ONE_LINER, load_payload
 
 _GATE = "efa"
 
@@ -120,10 +121,13 @@ def _render_control_chart(payload: dict, *, stat_key: str, limit_key: str, limit
         "is the cumulative rate). A rolling rate climbing above its baseline into the latest era is "
         "the gate's drift / retraining trigger - exactly how a fab uses MSPC."
     )
+    cfg = gate_config(payload, "extrapolation", _GATE)
+    t2_a = cfg.get("t2_alpha", 0.03)
+    q_a = cfg.get("q_alpha", 0.005)
     st.warning(
-        "Limits are passing-train quantiles (α = T² 0.03 / Q 0.005), so a ~3% / ~0.5% in-control "
-        "false-alarm rate is expected **by construction** - read the trend and the excess over that "
-        "baseline, not the raw out-of-control count."
+        f"Limits are passing-train quantiles (α = T² {t2_a:g} / Q {q_a:g}), so a "
+        f"~{t2_a:.1%} / ~{q_a:.1%} in-control false-alarm rate is expected **by construction** - "
+        "read the trend and the excess over that baseline, not the raw out-of-control count."
     )
 
 
@@ -253,6 +257,7 @@ def main() -> None:
         "out-of-control rate are statistically solid - the trustworthy evidence the forward window "
         "has drifted out of control."
     )
+    render_blue_note(EFA_VS_SBFA_ONE_LINER)
 
     statistic = st.radio(
         "Control statistic",

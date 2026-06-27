@@ -73,7 +73,7 @@ class WaferExplanation:
     local_df: pd.DataFrame
     method: str
     # Best-effort posterior P(fail) credible interval for Bayesian heads, taken
-    # from the base estimator's posterior logits *before* isotonic calibration
+    # from the base estimator's posterior logits *before* sigmoid calibration
     # (the calibrated point estimate may fall outside it). None for other heads.
     fail_probability_interval: tuple[float, float] | None = None
     fail_probability_uncalibrated: float | None = None
@@ -192,6 +192,27 @@ def _pls_loadings(pipeline) -> tuple[np.ndarray, list[str]]:
     return loadings, sensors
 
 
+@st.cache_data(show_spinner="Projecting PLS components…")
+def cached_pls_score_scatter(
+    track: str = "interpolation",
+    model_id: str = "pls_enet",
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Training-split latent scores (component 1 vs 2) for a PLS front-end.
+
+    Uses the cached live fit so page 2 can show the supervised projection that PLS
+    builds. Reuses ``PLSRegression.x_scores_`` (the training scores fit inside the
+    pipeline), aligned to the train labels. If the model has a single component,
+    the second axis is returned as zeros.
+    """
+    pipeline, _ = fit_holdout_pipeline(model_id, track)
+    front = _fitted_pls(pipeline)
+    scores = np.asarray(front.pls_.x_scores_, dtype=float)
+    t1 = scores[:, 0]
+    t2 = scores[:, 1] if scores.shape[1] > 1 else np.zeros_like(t1)
+    y = load_holdout_split(track).y_train.to_numpy().astype(int)
+    return t1, t2, y
+
+
 def _component_index(name: str) -> int | None:
     s = str(name)
     if not s.startswith("pls_"):
@@ -279,7 +300,7 @@ def _bayes_fail_interval(
 ) -> tuple[tuple[float, float] | None, float | None]:
     """Posterior P(fail) credible interval from the base Bayesian estimator.
 
-    Uses the uncalibrated posterior logits (pre-isotonic), so this is a spread
+    Uses the uncalibrated posterior logits (pre-sigmoid), so this is a spread
     around the *uncalibrated* mean, not the calibrated point estimate.
     """
     est = fitted_base_classifier(pipeline)

@@ -32,7 +32,7 @@ flowchart LR
   cluster["Variance + Spearman cluster"]
   hsic["HSIC-Lasso top-k + T2 + hubs"]
   rfsel["RF top-k + T2 + hubs"]
-  pls["sPLS components"]
+  pls["PLS components"]
   scale["RobustScaler"]
   clf["Isotonic-calibrated classifier"]
 

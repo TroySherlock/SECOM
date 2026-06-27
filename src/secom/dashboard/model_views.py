@@ -32,7 +32,6 @@ from secom.dashboard.data import (
     cv_leaderboard_df,
     gate_conditional_df,
     gate_config,
-    gate_lift_df,
     gate_risk_coverage_df,
     gate_vs_gate_df,
     holdout_auc_summary_df,
@@ -52,6 +51,13 @@ GATE_LABELS = {
     "bayes": "sBFA → BGM density",
 }
 GATE_FLAGGED = {"efa": "t2", "bayes": "density"}
+
+# One-line contrast shared by the 5.2 (EFA) and 5.3 (sBFA) gate pages.
+EFA_VS_SBFA_ONE_LINER = (
+    "**EFA vs sBFA in one line:** 5.2 is **frequentist** with **dense** factor loadings and a "
+    "Hotelling T² limit; 5.3 is **Bayesian** with **sparse** (Laplace) loadings and a BGM density "
+    "limit. Same Q/SPE residual, two different ways to model the in-control factor space."
+)
 
 # label -> (mean_col, std_col, chart_title)
 _CV_METRIC_SPECS_STRATIFIED: dict[str, tuple[str, str, str]] = {
@@ -214,6 +220,20 @@ def render_model_deepdive(payload: dict, *, track: str) -> None:
     model_ids = list_model_ids(payload)
     tuned = payload.get("tuned_hyperparameters") or {}
 
+    with st.expander("Metric glossary", expanded=False):
+        st.markdown(
+            "- **PR-AUC** - area under the precision-recall curve; the headline ranking metric "
+            "because it ignores the easy true-negatives that dominate this imbalanced "
+            "(~6.7% fail) problem.\n"
+            "- **BER** - balanced error rate = 1 − (TPR + TNR) / 2; treats a missed fail and a "
+            "false alarm as equally costly (a model-comparison metric, *not* the deploy objective).\n"
+            "- **Catch rate (TPR / recall)** - fraction of real fails the model flags.\n"
+            "- **Overkill rate (FPR)** - fraction of good wafers wrongly flagged (= 1 − TNR); a "
+            "scrapped/re-tested good wafer. Cheap relative to an escape, but it costs throughput.\n"
+            "- **Precision** - of everything flagged Fail, how many truly fail; low by design at "
+            "~6.7% prevalence, so treat the model as risk *triage*, not a precise gate."
+        )
+
     st.subheader("Pipeline architecture & tuning")
     selected_id = st.selectbox(
         "Select pipeline",
@@ -367,7 +387,7 @@ def _render_deepdive_tab(
         st.caption(
             f"Reliability curve on {source}; quantile bins of predicted fail probability vs the "
             "observed fail fraction. On the diagonal = well-calibrated. Axes are zoomed to the "
-            "predicted-probability range (imbalanced + isotonic-calibrated -> most probabilities "
+            "predicted-probability range (imbalanced + sigmoid-calibrated -> most probabilities "
             "are small); the faint histogram shows where that mass sits. Brier (lower = better) is in the title."
         )
     else:
@@ -530,68 +550,40 @@ def _render_thresholding_tab(
                 st.caption(f"{THRESHOLD_PROFILES[pid].display_name}: n/a")
 
 
-def render_gate_lift(payload: dict, *, track: str, metric: str) -> None:
-    """Diverging delta bars: each gate's conditional-minus-global lift, plus EFA-vs-Bayes."""
+def render_gate_vs_gate(payload: dict, *, track: str, metric: str) -> None:
+    """Diverging delta bars for the EFA-vs-Bayes conditional gap (which abstention rule wins).
+
+    The old per-gate "lift vs no gate" bars were dropped: at ~17-20 holdout fails
+    they sat inside huge CIs and duplicated the risk-coverage curves. Whether a gate
+    actually fires under drift is read from the coverage-drift table instead.
+    """
     metric_col = DELTA_METRIC_COLS[metric]
-    efa_lift = gate_lift_df(payload, track, "efa", metric_col)
-    bayes_lift = gate_lift_df(payload, track, "bayes", metric_col)
     vs_df = gate_vs_gate_df(payload, track, metric_col)
 
-    if efa_lift.empty and bayes_lift.empty:
+    if vs_df.empty:
         st.info(
             "No gate conditional metrics for this track in benchmark JSON. Re-run "
             "`python -m secom.cli.benchmark`."
         )
         return
 
-    st.markdown("**Gate lift vs no gate** — conditional (kept wafers) minus global (all wafers)")
-    left, right = st.columns(2)
-    with left:
-        st.plotly_chart(
-            fig_delta_bar(
-                efa_lift,
-                title=f"EFA → T²+Q gate lift ({metric})",
-                value_label=f"conditional − global {metric}",
-                positive_is_good=True,
-            ),
-            width="stretch",
-            theme="streamlit",
-            key=f"gate_lift_efa_{track}",
-        )
-    with right:
-        st.plotly_chart(
-            fig_delta_bar(
-                bayes_lift,
-                title=f"sBFA → BGM+Q gate lift ({metric})",
-                value_label=f"conditional − global {metric}",
-                positive_is_good=True,
-            ),
-            width="stretch",
-            theme="streamlit",
-            key=f"gate_lift_bayes_{track}",
-        )
-    st.caption(
-        "Positive (green) = abstaining lifts conditional performance on the kept wafers. "
-        "Bars sit inside wide CIs at ~17-20 fails; treat direction, not magnitude, as the signal."
+    st.markdown("**Gate vs gate** — EFA minus Bayes conditional metric")
+    st.plotly_chart(
+        fig_delta_bar(
+            vs_df,
+            title=f"EFA − Bayes conditional {metric}",
+            value_label=f"EFA − Bayes {metric}",
+            positive_is_good=True,
+        ),
+        width="stretch",
+        theme="streamlit",
+        key=f"gate_vs_gate_{track}",
     )
-
-    if not vs_df.empty:
-        st.markdown("**Gate vs gate** — EFA minus Bayes conditional metric")
-        st.plotly_chart(
-            fig_delta_bar(
-                vs_df,
-                title=f"EFA − Bayes conditional {metric}",
-                value_label=f"EFA − Bayes {metric}",
-                positive_is_good=True,
-            ),
-            width="stretch",
-            theme="streamlit",
-            key=f"gate_vs_gate_{track}",
-        )
-        st.caption(
-            "Green = the EFA (T²) gate keeps a better-scoring set than the Bayes (BGM) gate on "
-            "that model; red favours Bayes. This is which abstention rule wins, not whether either helps."
-        )
+    st.caption(
+        "Green = the EFA (T²) gate keeps a better-scoring set than the Bayes (BGM) gate on "
+        "that model; red favours Bayes. This is which abstention rule wins, not whether either "
+        "helps — for that, read the risk-coverage curves and the coverage-drift table."
+    )
 
 
 def render_risk_coverage(payload: dict, *, track: str, gate: str, metric: str) -> None:
