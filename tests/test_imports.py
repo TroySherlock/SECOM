@@ -31,7 +31,7 @@ MODULES = [
     "secom.dashboard.data",
     "secom.dashboard.stg",
     "secom.dashboard.pr_curves",
-    "secom.dashboard.model_views",
+    "secom.dashboard.components",
     "secom.dashboard.narrator",
     "secom.dashboard.glossary",
     "secom.dashboard.explainability",

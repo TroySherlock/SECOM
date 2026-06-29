@@ -16,6 +16,7 @@ from secom.dashboard.charts import (
     fig_gate_statistic_distributions,
     fig_pca_component_space,
 )
+from secom.dashboard.components import PCA_VS_SBFA_ONE_LINER, load_payload
 from secom.dashboard.data import (
     factor_drift_ranking,
     gate_config,
@@ -23,7 +24,6 @@ from secom.dashboard.data import (
     gate_drift_stats,
     pca_component_diagnostics,
 )
-from secom.dashboard.model_views import PCA_VS_SBFA_ONE_LINER, load_payload
 
 _GATE = "pca"
 

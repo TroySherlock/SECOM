@@ -751,3 +751,41 @@ def get_reference_artifacts(
         return None
     models = artifacts.get("models", {})
     return models.get(model_id)
+
+
+@dataclass
+class PipelineContext:
+    """Loaded pipeline artifacts and the slices the Pipeline pages render."""
+
+    available: bool
+    artifact_caption: str
+    linear_ref: dict[str, Any] | None
+    topk_ref: dict[str, Any] | None
+    cluster_example: dict[str, Any] | None
+    models: dict[str, Any]
+
+
+def load_pipeline_context() -> PipelineContext:
+    """Load pipeline artifacts and slice out what the Pipeline pages need.
+
+    Streamlit-free: when ``available`` is False the caller decides how to
+    surface it (the renderers fall back to illustrative values).
+    """
+    artifacts: dict[str, Any] | None = None
+    artifact_caption = ""
+    available = artifacts_available()
+    if available:
+        artifacts = load_pipeline_artifacts()
+        generated = artifacts.get("generated_at", "")[:19].replace("T", " ")
+        artifact_caption = (
+            f"From holdout training fit (`secom_pipeline_artifacts.json`, {generated} UTC)."
+        )
+    shared = (artifacts or {}).get("shared", {})
+    return PipelineContext(
+        available=available,
+        artifact_caption=artifact_caption,
+        linear_ref=get_reference_artifacts(artifacts, "linear") if artifacts else None,
+        topk_ref=get_reference_artifacts(artifacts, "topk") if artifacts else None,
+        cluster_example=shared.get("spearman_cluster_example"),
+        models=(artifacts or {}).get("models", {}),
+    )

@@ -15,6 +15,7 @@ from secom.dashboard.charts import (
     fig_sbfa_loadings_heatmap,
     fig_sensor_noise_spectrum,
 )
+from secom.dashboard.components import PCA_VS_SBFA_ONE_LINER, load_payload
 from secom.dashboard.data import (
     factor_drift_ranking,
     gate_contrast,
@@ -23,7 +24,6 @@ from secom.dashboard.data import (
     sbfa_diagnostics,
     sensor_noise_df,
 )
-from secom.dashboard.model_views import PCA_VS_SBFA_ONE_LINER, load_payload
 
 _GATE = "bayes"
 _EMPTY = "No frozen gate-contrast artifacts in benchmark JSON. Re-run `python -m secom.benchmark`."

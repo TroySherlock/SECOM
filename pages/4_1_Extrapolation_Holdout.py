@@ -5,12 +5,12 @@ import streamlit as st
 
 from secom.dashboard import render_blue_note
 from secom.dashboard.charts import fig_delta_bar
+from secom.dashboard.components import load_payload, render_holdout_validation
 from secom.dashboard.data import (
     DELTA_METRIC_COLS,
     holdout_comparison_df,
     holdout_delta_df,
 )
-from secom.dashboard.model_views import load_payload, render_holdout_validation
 
 
 def _render_drift_cost(payload: dict) -> None:

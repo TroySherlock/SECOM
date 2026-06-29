@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from secom.dashboard.model_views import load_payload, render_model_deepdive
+from secom.dashboard.components import load_payload, render_model_deepdive
 
 
 def main() -> None:

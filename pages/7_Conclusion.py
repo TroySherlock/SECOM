@@ -5,8 +5,8 @@ import pandas as pd
 import streamlit as st
 
 from secom.dashboard import render_verdict
+from secom.dashboard.components import load_payload
 from secom.dashboard.data import holdout_delta_df
-from secom.dashboard.model_views import load_payload
 
 
 def _champion_row(d: pd.DataFrame, pipeline: str) -> dict:

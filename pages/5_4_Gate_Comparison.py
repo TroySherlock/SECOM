@@ -22,6 +22,11 @@ from secom.dashboard.charts import (
     fig_gate_disagreement_scatter,
     fig_wafer_drift_spikes,
 )
+from secom.dashboard.components import (
+    GATE_LABELS,
+    load_payload,
+    render_risk_coverage,
+)
 from secom.dashboard.data import (
     DELTA_METRIC_COLS,
     bgm_ooc_wafers,
@@ -31,11 +36,6 @@ from secom.dashboard.data import (
     gate_disagreement_summary,
 )
 from secom.dashboard.explainability import wafer_drift_spikes
-from secom.dashboard.model_views import (
-    GATE_LABELS,
-    load_payload,
-    render_risk_coverage,
-)
 
 _EMPTY = "No frozen gate-contrast artifacts in benchmark JSON. Re-run `python -m secom.benchmark`."
 

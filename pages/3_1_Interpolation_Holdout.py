@@ -4,7 +4,7 @@ from __future__ import annotations
 import streamlit as st
 
 from secom.dashboard import render_blue_note
-from secom.dashboard.model_views import (
+from secom.dashboard.components import (
     load_payload,
     render_cv_leaderboard,
     render_holdout_validation,
