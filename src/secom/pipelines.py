@@ -20,7 +20,7 @@ Every cell is a plain scikit-learn ``Pipeline`` built by ``build_model_pipeline`
 
 The Bayesian head (``BayesianElasticNetLogistic``) is a drop-in sklearn
 estimator, so it tunes/benchmarks through the exact same machinery as LR/RF.
-Two standalone risk-coverage gates (``EFAGate``, ``BayesGate``) live in
+Two standalone risk-coverage gates (``PCAGate``, ``BayesGate``) live in
 :mod:`secom.gates`; classifiers no longer ingest gate features.
 
 Foundation modules (``cv``, ``gates``, ``bayes``) import from here directly.
@@ -97,7 +97,7 @@ MODEL_NAME = "secom_linear_elastic_net"
 
 CHAMPION_IMPUTATION_METHOD = "median"
 KNN_IMPUTE_NEIGHBORS = 5
-ELASTIC_NET_MAX_ITER = 50000
+ELASTIC_NET_MAX_ITER = 100000
 
 # Base RF hyperparameters (the shared classifier builder + hub selector use these).
 RF_N_ESTIMATORS = 1000
@@ -113,7 +113,7 @@ CV_N_JOBS = -1
 ESTIMATOR_N_JOBS = 1
 
 PRIMARY_TUNING_METRIC = "pr_auc"
-THRESHOLD_GRID = np.linspace(0.0001, 0.2, num=2000)
+THRESHOLD_GRID = np.linspace(0.0001, 0.2, num=3000)
 
 CLASSIFIER_CALIBRATION_METHOD = "sigmoid"
 CLASSIFIER_CALIBRATION_CV = 5
@@ -444,31 +444,26 @@ REFERENCE_MODELS = {"linear": "rfsel_enet", "topk": "rfsel_rf"}
 # Selection front-ends (HSIC / RF) screen K sensors then expand the top n_hubs
 # into pairwise interaction features; sPLS aggregates into K latent components.
 TOP_K_DEFAULT = 35
-TOP_K_GRID = [30, 35, 50]
+TOP_K_GRID = [25, 30, 35, 50, 60]
 N_HUBS_DEFAULT = 5
 N_HUBS_GRID = [0, 5, 10]
 PLS_N_COMPONENTS_DEFAULT = 25 
-PLS_N_COMPONENTS_GRID = [25, 30, 35]
-
-# Ablation knob: keep ("passthrough") or drop ("drop") the calendar/time-feature
-# branch of the preprocess ColumnTransformer. Default (passthrough) preserves the
-# existing frozen pipelines; "drop" lets a re-tune test parsimony without them.
-CALENDAR_ABLATION_GRID = ("passthrough", "drop")
+PLS_N_COMPONENTS_GRID = [20, 25, 30, 35]
 
 # --- Classifier head grids ---------------------------------------------------
 # Elastic-net LR (saga) slope prior.
-C_GRID = [0.0075, 0.01, 0.1]
-L1_RATIO_GRID = [0.3, 0.5]
+C_GRID = [0.01, 0.05, 0.1]
+L1_RATIO_GRID = [0.2, 0.3, 0.5]
 # RF classifier depth.
-RF_MAX_DEPTH_GRID = [3, 5, 8]
+RF_MAX_DEPTH_GRID = [5, 8, 10, 12]
 
 # Bayesian elastic-net head: kept deliberately tiny (each grid point is a full
 # ADVI fit x calibration folds x CV folds x 2 protocols).
-BAYES_C_GRID = [0.0075, 0.01, 0.1]
-BAYES_L1_RATIO_GRID = [0.3, 0.5]
+BAYES_C_GRID = [0.01, 0.05, 0.1]
+BAYES_L1_RATIO_GRID = [0.2, 0.3, 0.5]
 BAYES_POS_WEIGHT_GRID = [15.0]
-BAYES_TOP_K = 35
-BAYES_N_HUBS = 5
+BAYES_TOP_K = 50
+BAYES_N_HUBS = 10
 BAYES_PLS_COMPONENTS = 25
 BAYES_SVI_STEPS = 1000
 # Each calibration fold is a full ADVI refit -> use fewer folds than LR/RF.
@@ -481,12 +476,12 @@ BAYES_CALIB_CV = 3
 DECAY_LAMBDA_GRID = [0.0]
 
 # --- Standalone gates (risk-coverage tools, not pipeline steps) --------------
-# EFA gate: Regularized EFA -> Hotelling T2 + Q (SPE).
-EFA_GATE_N_FACTORS = 10
-EFA_GATE_T2_ALPHA = 0.03
-EFA_GATE_Q_ALPHA = 0.005
-EFA_GATE_LOGIC = "or"
-EFA_GATE_CLIP = 5.0
+# PCA gate (fab-standard baseline): PCA-MSPC -> Hotelling T2 + Q (SPE).
+PCA_GATE_N_COMPONENTS = 10
+PCA_GATE_T2_ALPHA = 0.03
+PCA_GATE_Q_ALPHA = 0.005
+PCA_GATE_LOGIC = "or"
+PCA_GATE_CLIP = 5.0
 
 # Bayes gate: sparse Bayesian factor analysis -> BGM density + Q (SPE).
 BAYES_GATE_N_FACTORS = 8
@@ -599,7 +594,6 @@ def pipelines_frozen_config_fragment() -> dict:
         "n_hubs_grid": [int(k) for k in N_HUBS_GRID],
         "pls_n_components_default": int(PLS_N_COMPONENTS_DEFAULT),
         "pls_n_components_grid": [int(k) for k in PLS_N_COMPONENTS_GRID],
-        "calendar_ablation_grid": [str(v) for v in CALENDAR_ABLATION_GRID],
         "c_grid": [float(c) for c in C_GRID],
         "l1_ratio_grid": [float(r) for r in L1_RATIO_GRID],
         "rf_max_depth_grid": [int(d) for d in RF_MAX_DEPTH_GRID],
@@ -612,10 +606,10 @@ def pipelines_frozen_config_fragment() -> dict:
         "bayes_svi_steps": int(BAYES_SVI_STEPS),
         "bayes_calib_cv": int(BAYES_CALIB_CV),
         "decay_lambda_sweep_grid": [float(x) for x in DECAY_LAMBDA_GRID],
-        "efa_gate_n_factors": int(EFA_GATE_N_FACTORS),
-        "efa_gate_t2_alpha": float(EFA_GATE_T2_ALPHA),
-        "efa_gate_q_alpha": float(EFA_GATE_Q_ALPHA),
-        "efa_gate_logic": str(EFA_GATE_LOGIC),
+        "pca_gate_n_components": int(PCA_GATE_N_COMPONENTS),
+        "pca_gate_t2_alpha": float(PCA_GATE_T2_ALPHA),
+        "pca_gate_q_alpha": float(PCA_GATE_Q_ALPHA),
+        "pca_gate_logic": str(PCA_GATE_LOGIC),
         "bayes_gate_n_factors": int(BAYES_GATE_N_FACTORS),
         "bayes_gate_bgm_components": int(BAYES_GATE_BGM_COMPONENTS),
         "bayes_gate_loading_scale": float(BAYES_GATE_LOADING_SCALE),

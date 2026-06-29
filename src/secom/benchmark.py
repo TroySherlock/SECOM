@@ -38,7 +38,7 @@ from secom.costs import (
     resolve_threshold_profiles,
     threshold_profile_config,
 )
-from secom.gates import BayesGate, EFAGate
+from secom.gates import BayesGate, PCAGate
 from secom.metrics import (
     compute_holdout_metrics,
     predict_with_threshold,
@@ -53,6 +53,7 @@ from secom.pipelines import (
     CV_SCORING,
     HOLDOUT_BOOTSTRAP_CI,
     HOLDOUT_BOOTSTRAP_N,
+    ID_COL,
     MODEL_IDS,
     PIPELINE_ARTIFACTS_PATH,
     RANDOM_SEED,
@@ -194,7 +195,7 @@ def gate_conditional_report(
 ) -> pd.DataFrame:
     """Conditional metrics on the gate's in-control wafers + coverage.
 
-    Works for either standalone gate (``EFAGate`` / ``BayesGate``): the gate
+    Works for either standalone gate (``PCAGate`` / ``BayesGate``): the gate
     abstains under its configured ``logic``; per-statistic flag counts come from
     ``gate.flag_breakdown``.
     """
@@ -584,6 +585,7 @@ def _bayes_gate_diagnostics(
     X_test: pd.DataFrame,
     timestamps: pd.Series | None,
     *,
+    observation_ids: pd.Series | None = None,
     include_sbfa: bool = False,
 ) -> dict:
     """Per-wafer BGM control statistics for the gate-monitor charts (Tier 1/2).
@@ -607,6 +609,10 @@ def _bayes_gate_diagnostics(
     }
     if timestamps is not None:
         holdout["ts"] = [str(t) for t in pd.Series(timestamps).to_numpy()]
+    if observation_ids is not None:
+        holdout["observation_id"] = [
+            int(i) for i in pd.Series(observation_ids).to_numpy()
+        ]
     result = {
         "reference": {
             "density": bayes_gate.ref_density_,
@@ -636,23 +642,25 @@ def _bayes_gate_diagnostics(
     return result
 
 
-def _efa_gate_diagnostics(
-    efa_gate: EFAGate,
+def _pca_gate_diagnostics(
+    pca_gate: PCAGate,
     y_test: pd.Series,
     X_test: pd.DataFrame,
     timestamps: pd.Series | None,
     *,
-    include_factor: bool = False,
+    observation_ids: pd.Series | None = None,
+    include_components: bool = False,
 ) -> dict:
     """Per-wafer Hotelling T2 / Q control statistics for the 5.2 gate-monitor charts.
 
     Mirrors ``_bayes_gate_diagnostics``: reference is the passing-train T2/Q the
     gate stored at fit; the holdout block carries per-wafer T2/Q/flags (+ temporal
-    timestamps). When ``include_factor`` is set (temporal track) a ``factor`` block
-    freezes the EFA factor scores, dense loadings and score-Gaussian for the
-    factor-space (Hotelling ellipse) and loadings root-cause visuals.
+    timestamps). When ``include_components`` is set (temporal track) a
+    ``components`` block freezes the PCA component scores, loadings and
+    score-Gaussian for the component-space (Hotelling ellipse) and loadings
+    root-cause visuals.
     """
-    diag = efa_gate.diagnostics(X_test)
+    diag = pca_gate.diagnostics(X_test)
     holdout = {
         "t2": diag["t2"],
         "q": diag["q"],
@@ -663,27 +671,31 @@ def _efa_gate_diagnostics(
     }
     if timestamps is not None:
         holdout["ts"] = [str(t) for t in pd.Series(timestamps).to_numpy()]
+    if observation_ids is not None:
+        holdout["observation_id"] = [
+            int(i) for i in pd.Series(observation_ids).to_numpy()
+        ]
     result = {
         "reference": {
-            "t2": efa_gate.efa_.t2_ref_,
-            "q": efa_gate.efa_.q_ref_,
+            "t2": pca_gate.pca_.t2_ref_,
+            "q": pca_gate.pca_.q_ref_,
         },
         "holdout": holdout,
         "limits": {
-            "t2_ucl": float(efa_gate.t2_ucl_),
-            "q_ucl": float(efa_gate.q_ucl_),
+            "t2_ucl": float(pca_gate.t2_ucl_),
+            "q_ucl": float(pca_gate.q_ucl_),
         },
     }
-    if include_factor:
-        score_mean, score_cov = efa_gate.score_gaussian()
-        result["factor"] = {
-            "loadings": efa_gate.loadings(),
-            "feature_names": list(efa_gate.feature_names_),
+    if include_components:
+        score_mean, score_cov = pca_gate.score_gaussian()
+        result["components"] = {
+            "loadings": pca_gate.loadings(),
+            "feature_names": list(pca_gate.feature_names_),
             "score_mean": score_mean,
             "score_cov": score_cov,
-            "t2_alpha": float(efa_gate.t2_alpha),
-            "reference_scores": efa_gate.ref_scores_,
-            "holdout_scores": efa_gate.factor_scores(X_test),
+            "t2_alpha": float(pca_gate.t2_alpha),
+            "reference_scores": pca_gate.ref_scores_,
+            "holdout_scores": pca_gate.factor_scores(X_test),
             "y_true": np.asarray(y_test).astype(int),
             "flagged": diag["ooc"],
         }
@@ -694,30 +706,36 @@ def _protocol_gate_reports(
     scores: dict[str, np.ndarray],
     y_test: pd.Series,
     X_test: pd.DataFrame,
-    efa_gate: EFAGate,
+    pca_gate: PCAGate,
     bayes_gate: BayesGate,
     *,
     timestamps: pd.Series | None = None,
+    observation_ids: pd.Series | None = None,
     include_sbfa: bool = False,
 ) -> dict:
     """Conditional + risk-coverage for BOTH standalone gates on one protocol.
 
-    Both blocks also carry frozen per-wafer ``diagnostics`` (EFA T2/Q and BGM
+    Both blocks also carry frozen per-wafer ``diagnostics`` (PCA T2/Q and BGM
     drift monitors); ``timestamps`` (temporal track only) enables the control
-    charts and ``include_sbfa`` freezes the Tier-2 EFA/sBFA latent + loadings
+    charts and ``include_sbfa`` freezes the Tier-2 PCA/sBFA latent + loadings
     artifacts.
     """
     return {
-        "efa": {
-            "config": efa_gate.config(),
+        "pca": {
+            "config": pca_gate.config(),
             "conditional": gate_conditional_report(
-                scores, y_test, efa_gate, X_test
+                scores, y_test, pca_gate, X_test
             ).to_dict(orient="records"),
             "risk_coverage": gate_risk_coverage(
-                scores, y_test, efa_gate, X_test
+                scores, y_test, pca_gate, X_test
             ).to_dict(orient="records"),
-            "diagnostics": _efa_gate_diagnostics(
-                efa_gate, y_test, X_test, timestamps, include_factor=include_sbfa
+            "diagnostics": _pca_gate_diagnostics(
+                pca_gate,
+                y_test,
+                X_test,
+                timestamps,
+                observation_ids=observation_ids,
+                include_components=include_sbfa,
             ),
         },
         "bayes": {
@@ -729,8 +747,59 @@ def _protocol_gate_reports(
                 scores, y_test, bayes_gate, X_test
             ).to_dict(orient="records"),
             "diagnostics": _bayes_gate_diagnostics(
-                bayes_gate, y_test, X_test, timestamps, include_sbfa=include_sbfa
+                bayes_gate,
+                y_test,
+                X_test,
+                timestamps,
+                observation_ids=observation_ids,
+                include_sbfa=include_sbfa,
             ),
+        },
+    }
+
+
+def _gate_contrast_diagnostics(
+    pca_gate: PCAGate,
+    bayes_gate: BayesGate,
+    X_ref: pd.DataFrame,
+) -> dict:
+    """Frozen PCA-vs-sBFA justification artifacts on the passing-train reference.
+
+    Drives page 5.4 (gate comparison): per-wafer Hotelling T2 vs BGM
+    log-density (the disagreement quadrant), the BGM mixture weights
+    (multimodality of the in-control region), the per-sensor sBFA noise variance
+    ``psi`` (heteroscedasticity), and one representative wafer's per-sensor
+    residuals under both gates (the equal-weight vs noise-weight contribution
+    example). All on the in-control passing-train wafers both gates were fit on,
+    so the evidence is independent of the scarce fail count.
+    """
+    t2, _ = pca_gate.t2_q_scores(X_ref)
+    density = bayes_gate.density_scores(X_ref)
+    psi = np.asarray(bayes_gate.noise_variance(), dtype="float64")
+    feature_names = list(bayes_gate.feature_names_)
+    weights = np.asarray(bayes_gate.bgm_params()["weights"], dtype="float64")
+
+    # Representative wafer = largest sBFA Q (the most residual structure), so its
+    # per-sensor contribution profile is the most informative; deterministic.
+    sbfa_resid_all = bayes_gate.residual_matrix(X_ref)
+    pca_resid_all = pca_gate.residual_matrix(X_ref)
+    sbfa_q = np.einsum("ij,ij->i", sbfa_resid_all, sbfa_resid_all)
+    idx = int(np.argmax(sbfa_q)) if sbfa_q.size else 0
+
+    return {
+        "reference": {
+            "pca_t2": t2,
+            "bgm_density": density,
+            "pca_t2_ucl": float(pca_gate.t2_ucl_),
+            "bgm_density_lcl": float(bayes_gate.density_lcl_),
+        },
+        "bgm_weights": weights,
+        "psi": psi,
+        "feature_names": feature_names,
+        "example_wafer": {
+            "label": f"reference #{idx}",
+            "pca_resid": pca_resid_all[idx],
+            "sbfa_resid": sbfa_resid_all[idx],
         },
     }
 
@@ -807,7 +876,7 @@ def main(argv=None) -> None:
     stratified CV (data/processed/tuned/) and scored on two holdouts:
     interpolation = stratified CV + random holdout; extrapolation = a forward
     temporal holdout of those same params (unweighted), plus a diagnostic
-    time-decay sweep. Both standalone gates (EFA, Bayes) are scored on each
+    time-decay sweep. Both standalone gates (PCA, Bayes) are scored on each
     protocol's holdout. A --model subset merges into the existing JSON."""
     args = _parse_args(argv)
     if args.clear_pipeline_cache:
@@ -848,13 +917,18 @@ def main(argv=None) -> None:
     holdout_random = run_holdout_benchmark(scores_random, yr_test, tuned)
 
     print("\nStandalone gates on the random holdout:")
-    efa_gate_random = _fit_gate(EFAGate, Xr_train, yr_train)
+    pca_gate_random = _fit_gate(PCAGate, Xr_train, yr_train)
     bayes_gate_random = _fit_gate(BayesGate, Xr_train, yr_train)
     gate_random = _protocol_gate_reports(
-        scores_random, yr_test, Xr_test, efa_gate_random, bayes_gate_random
+        scores_random,
+        yr_test,
+        Xr_test,
+        pca_gate_random,
+        bayes_gate_random,
+        observation_ids=rand_test_df[ID_COL],
     )
-    holdout_conditional_random = pd.DataFrame(gate_random["efa"]["conditional"])
-    risk_coverage_random = pd.DataFrame(gate_random["efa"]["risk_coverage"])
+    holdout_conditional_random = pd.DataFrame(gate_random["pca"]["conditional"])
+    risk_coverage_random = pd.DataFrame(gate_random["pca"]["risk_coverage"])
 
     # --- Extrapolation protocol: temporal split -----------------------------
     train_df, test_df = split_train_test(df)
@@ -877,19 +951,26 @@ def main(argv=None) -> None:
     holdout = run_holdout_benchmark(scores_temporal, y_test, tuned)
 
     print("\nStandalone gates on the temporal holdout:")
-    efa_gate_temporal = _fit_gate(EFAGate, X_train, y_train)
+    pca_gate_temporal = _fit_gate(PCAGate, X_train, y_train)
     bayes_gate_temporal = _fit_gate(BayesGate, X_train, y_train)
     gate_temporal = _protocol_gate_reports(
         scores_temporal,
         y_test,
         X_test,
-        efa_gate_temporal,
+        pca_gate_temporal,
         bayes_gate_temporal,
         timestamps=test_df[TIMESTAMP_COL],
+        observation_ids=test_df[ID_COL],
         include_sbfa=True,
     )
     holdout_conditional = pd.DataFrame(gate_temporal["bayes"]["conditional"])
     risk_coverage = pd.DataFrame(gate_temporal["bayes"]["risk_coverage"])
+
+    # PCA-vs-sBFA justification artifacts (page 5.4), on the in-control passing
+    # temporal-train wafers both gates were fit on.
+    gate_temporal["contrast"] = _gate_contrast_diagnostics(
+        pca_gate_temporal, bayes_gate_temporal, X_train[y_train == 0]
+    )
 
     gate_reports = {"random": gate_random, "temporal": gate_temporal}
 
@@ -945,7 +1026,7 @@ def main(argv=None) -> None:
         holdout_split=split_meta,
         holdout_split_random=split_meta_random,
         process_gate=bayes_gate_temporal.config(),
-        interp_process_gate=efa_gate_random.config(),
+        interp_process_gate=pca_gate_random.config(),
         merge=merge,
     )
     if artifacts is not None:

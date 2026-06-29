@@ -47,16 +47,17 @@ from secom.dashboard.pr_curves import load_model_scores, load_pr_curves
 
 # Gate identity per (track, gate) -> display label + flagged-count column stem.
 GATE_LABELS = {
-    "efa": "Regularized EFA → Hotelling T²",
+    "pca": "PCA → Hotelling T²",
     "bayes": "sBFA → BGM density",
 }
-GATE_FLAGGED = {"efa": "t2", "bayes": "density"}
+GATE_FLAGGED = {"pca": "t2", "bayes": "density"}
 
-# One-line contrast shared by the 5.2 (EFA) and 5.3 (sBFA) gate pages.
-EFA_VS_SBFA_ONE_LINER = (
-    "**EFA vs sBFA in one line:** 5.2 is **frequentist** with **dense** factor loadings and a "
-    "Hotelling T² limit; 5.3 is **Bayesian** with **sparse** (Laplace) loadings and a BGM density "
-    "limit. Same Q/SPE residual, two different ways to model the in-control factor space."
+# One-line contrast shared by the 5.2 (PCA) and 5.3 (sBFA) gate pages.
+PCA_VS_SBFA_ONE_LINER = (
+    "**PCA vs sBFA in one line:** 5.2 is the **fab-standard baseline** — **frequentist** PCA with "
+    "**dense** component loadings and a Hotelling T² limit; 5.3 is the **custom** gate — **Bayesian** "
+    "with **sparse** (Laplace) loadings and a BGM density limit. Same Q/SPE residual, two different "
+    "ways to model the in-control latent space."
 )
 
 # label -> (mean_col, std_col, chart_title)
@@ -551,7 +552,7 @@ def _render_thresholding_tab(
 
 
 def render_gate_vs_gate(payload: dict, *, track: str, metric: str) -> None:
-    """Diverging delta bars for the EFA-vs-Bayes conditional gap (which abstention rule wins).
+    """Diverging delta bars for the PCA-vs-Bayes conditional gap (which abstention rule wins).
 
     The old per-gate "lift vs no gate" bars were dropped: at ~17-20 holdout fails
     they sat inside huge CIs and duplicated the risk-coverage curves. Whether a gate
@@ -567,12 +568,12 @@ def render_gate_vs_gate(payload: dict, *, track: str, metric: str) -> None:
         )
         return
 
-    st.markdown("**Gate vs gate** — EFA minus Bayes conditional metric")
+    st.markdown("**Gate vs gate** — PCA (baseline) minus Bayes (custom) conditional metric")
     st.plotly_chart(
         fig_delta_bar(
             vs_df,
-            title=f"EFA − Bayes conditional {metric}",
-            value_label=f"EFA − Bayes {metric}",
+            title=f"PCA − Bayes conditional {metric}",
+            value_label=f"PCA − Bayes {metric}",
             positive_is_good=True,
         ),
         width="stretch",
@@ -580,9 +581,10 @@ def render_gate_vs_gate(payload: dict, *, track: str, metric: str) -> None:
         key=f"gate_vs_gate_{track}",
     )
     st.caption(
-        "Green = the EFA (T²) gate keeps a better-scoring set than the Bayes (BGM) gate on "
-        "that model; red favours Bayes. This is which abstention rule wins, not whether either "
-        "helps — for that, read the risk-coverage curves and the coverage-drift table."
+        "Green = the standard PCA (T²) baseline keeps a better-scoring set than the custom Bayes "
+        "(BGM) gate on that model; red favours the custom Bayes gate. This is which abstention rule "
+        "wins, not whether either helps — for that, read the risk-coverage curves and the "
+        "coverage-drift table."
     )
 
 

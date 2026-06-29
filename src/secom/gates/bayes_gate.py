@@ -1,11 +1,11 @@
 """Bayesian gate: sBFA -> BayesianGaussianMixture density + Q (SPE).
 
-The EFA gate (``secom.gates.efa.EFAGate``) uses a Regularized EFA -> Hotelling T2
-+ Q monitor. ``BayesGate`` is its Bayesian analogue: a *sparse Bayesian factor
-analysis* (NumPyro, ADVI) replaces the frequentist EFA, a
+The PCA gate (``secom.gates.pca.PCAGate``) is the standard PCA-MSPC -> Hotelling
+T2 + Q monitor (fab baseline). ``BayesGate`` is the custom analogue: a *sparse
+Bayesian factor analysis* (NumPyro, ADVI) replaces PCA, a
 ``BayesianGaussianMixture`` density on the factor scores replaces the Hotelling
 T2 density, and the same Q / SPE reconstruction statistic flags structural
-breaks the factor model cannot explain. No Hotelling T2 and no Isolation Forest.
+breaks the factor model cannot explain.
 
 The gate scores wafers in the RAW post-cluster sensor space (impute ->
 SmartCorrelatedSelection), not the rolling-Z space, so it stays orthogonal to the
@@ -286,6 +286,22 @@ class BayesGate:
     def loadings(self) -> np.ndarray:
         """Member-0 sparse loadings ``W_`` (n_features, n_factors)."""
         return self.members_[0][0].W_
+
+    def residual_matrix(self, X: pd.DataFrame) -> np.ndarray:
+        """Member-0 per-sensor reconstruction residual in the scaled gate space.
+
+        ``std - W (Wᵀ x)`` projection residual; per-column squares divided by the
+        per-sensor noise variance ``psi`` give the noise-weighted (sBFA-style)
+        contribution, so a quiet sensor's genuine deviation is not drowned out by
+        an intrinsically noisy one.
+        """
+        std = self._gate_matrix(X)
+        sbfa = self.members_[0][0]
+        return std - sbfa.reconstruct(sbfa.transform(std))
+
+    def noise_variance(self) -> np.ndarray:
+        """Member-0 per-sensor sBFA noise variance ``psi_`` (aligned to feature_names_)."""
+        return self.members_[0][0].psi_
 
     def bgm_params(self) -> dict[str, np.ndarray]:
         """Member-0 BGM component means/covariances/weights (the learned envelope)."""

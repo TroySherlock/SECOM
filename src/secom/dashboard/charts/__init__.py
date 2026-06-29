@@ -42,6 +42,7 @@ from secom.dashboard.charts.eda import (
     fig_sensor_histogram,
     fig_sensor_multicollinearity,
     fig_two_track_schematic,
+    fig_wafer_drift_spikes,
 )
 from secom.dashboard.charts.explain import (
     fig_local_contributions,
@@ -50,12 +51,16 @@ from secom.dashboard.charts.explain import (
     fig_top_features_bar,
 )
 from secom.dashboard.charts.gates import (
-    fig_efa_factor_space,
+    fig_bgm_mode_weights,
+    fig_contribution_comparison,
     fig_factor_drift,
     fig_gate_control_chart,
+    fig_gate_disagreement_scatter,
     fig_gate_statistic_distributions,
+    fig_pca_component_space,
     fig_sbfa_factor_space,
     fig_sbfa_loadings_heatmap,
+    fig_sensor_noise_spectrum,
 )
 from secom.dashboard.charts.pipeline import (
     fig_hsic_dependence_intuition,
@@ -93,6 +98,7 @@ __all__ = [
     "fig_sensor_histogram",
     "fig_sensor_multicollinearity",
     "fig_two_track_schematic",
+    "fig_wafer_drift_spikes",
     # pipeline
     "fig_hsic_dependence_intuition",
     "fig_hsic_selected_rank",
@@ -113,12 +119,16 @@ __all__ = [
     "fig_pr_curve_clean",
     "fig_risk_coverage",
     # gates
-    "fig_efa_factor_space",
+    "fig_bgm_mode_weights",
+    "fig_contribution_comparison",
     "fig_factor_drift",
     "fig_gate_control_chart",
+    "fig_gate_disagreement_scatter",
     "fig_gate_statistic_distributions",
+    "fig_pca_component_space",
     "fig_sbfa_factor_space",
     "fig_sbfa_loadings_heatmap",
+    "fig_sensor_noise_spectrum",
     # explain
     "fig_local_contributions",
     "fig_posterior_forest",

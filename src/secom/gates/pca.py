@@ -1,60 +1,60 @@
-"""Regularized-EFA gate: Hotelling T2 + Q (SPE) risk-coverage tool.
+"""PCA-MSPC gate: Hotelling T2 + Q (SPE) risk-coverage tool (fab-standard baseline).
 
-``EFAGate`` is a standalone abstention/risk-coverage report (no longer bound to a
-protocol): fit on passing training wafers so the statistics measure deviation
-from in-control behaviour, then flag out-of-control holdout wafers.
+``PCAGate`` is the industry-standard multivariate-SPC monitor: PCA on the
+in-control (passing) training wafers, then Hotelling T2 (in-model excursion) and
+Q / SPE (out-of-model residual) flag out-of-control holdout wafers. It is the
+baseline against which the custom ``BayesGate`` (sBFA -> BGM) is compared; both
+share identical preprocessing so the only difference is the latent model.
 """
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from sklearn.covariance import LedoitWolf
-from sklearn.decomposition import FactorAnalysis
+from sklearn.decomposition import PCA
 from sklearn.preprocessing import RobustScaler
 
 from secom.hub_interactions import sensor_value_columns
 from secom.pipelines import (
-    EFA_GATE_CLIP,
-    EFA_GATE_LOGIC,
-    EFA_GATE_N_FACTORS,
-    EFA_GATE_Q_ALPHA,
-    EFA_GATE_T2_ALPHA,
     GATE_CORR_THRESHOLD,
+    PCA_GATE_CLIP,
+    PCA_GATE_LOGIC,
+    PCA_GATE_N_COMPONENTS,
+    PCA_GATE_Q_ALPHA,
+    PCA_GATE_T2_ALPHA,
     RANDOM_SEED,
     build_gate_feature_pipeline,
 )
 
 
-class RegularizedEFA:
-    """Regularized Exploratory Factor Analysis monitor (non-Bayesian).
+class PCAMonitor:
+    """Standard PCA-MSPC monitor (fab baseline).
 
-    Fits sklearn ``FactorAnalysis`` on an in-control reference matrix. Hotelling
-    T2 is the squared Mahalanobis distance of the factor scores using a
-    Ledoit-Wolf-shrunk score covariance; Q (SPE) is the squared residual the
-    factors do not reconstruct.
+    Fits sklearn ``PCA`` on an in-control reference matrix. Hotelling T2 is the
+    eigenvalue-scaled sum of squared scores (sum_k t_k^2 / lambda_k); Q (SPE) is
+    the squared residual the retained components do not reconstruct.
     """
 
-    def __init__(self, n_factors: int = EFA_GATE_N_FACTORS, random_state: int = RANDOM_SEED):
-        self.n_factors = int(n_factors)
+    def __init__(
+        self, n_components: int = PCA_GATE_N_COMPONENTS, random_state: int = RANDOM_SEED
+    ):
+        self.n_components = int(n_components)
         self.random_state = int(random_state)
 
-    def fit(self, ref: np.ndarray) -> "RegularizedEFA":
+    def fit(self, ref: np.ndarray) -> "PCAMonitor":
         ref = np.asarray(ref, dtype="float64")
         n_samples, n_features = ref.shape
         if n_samples == 0 or n_features == 0:
-            raise ValueError("RegularizedEFA requires a non-empty reference matrix")
-        k = max(1, min(self.n_factors, n_features, n_samples - 1))
-        self.n_factors_ = int(k)
-        self.fa_ = FactorAnalysis(n_components=self.n_factors_, random_state=self.random_state)
-        self.fa_.fit(ref)
+            raise ValueError("PCAMonitor requires a non-empty reference matrix")
+        k = max(1, min(self.n_components, n_features, n_samples - 1))
+        self.n_components_ = int(k)
+        self.pca_ = PCA(n_components=self.n_components_, random_state=self.random_state)
+        self.pca_.fit(ref)
+        # Guard against zero/near-zero eigenvalues in the T2 scaling.
+        self.explained_variance_ = np.clip(
+            np.asarray(self.pca_.explained_variance_, dtype="float64"), 1e-12, None
+        )
 
-        scores = self.fa_.transform(ref)
-        self.score_mean_ = scores.mean(axis=0)
-        centered = scores - self.score_mean_
-        lw = LedoitWolf().fit(centered)
-        self.score_precision_ = lw.get_precision()
-        self.shrinkage_ = float(lw.shrinkage_)
-
+        scores = self.pca_.transform(ref)
         self.t2_ref_ = self._t2_from_scores(scores)
         self.q_ref_ = self._q_from_matrix(ref, scores)
         self.n_reference_ = int(n_samples)
@@ -62,36 +62,35 @@ class RegularizedEFA:
         return self
 
     def _t2_from_scores(self, scores: np.ndarray) -> np.ndarray:
-        centered = scores - self.score_mean_
-        return np.einsum("ij,jk,ik->i", centered, self.score_precision_, centered)
+        return np.einsum("ij,ij->i", scores, scores / self.explained_variance_)
 
     def _q_from_matrix(self, mat: np.ndarray, scores: np.ndarray) -> np.ndarray:
-        recon = scores @ self.fa_.components_ + self.fa_.mean_
+        recon = scores @ self.pca_.components_ + self.pca_.mean_
         resid = mat - recon
         return np.einsum("ij,ij->i", resid, resid)
 
     def t2_q(self, X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        if not hasattr(self, "fa_"):
-            raise RuntimeError("RegularizedEFA must be fit before scoring")
+        if not hasattr(self, "pca_"):
+            raise RuntimeError("PCAMonitor must be fit before scoring")
         mat = np.asarray(X, dtype="float64")
-        scores = self.fa_.transform(mat)
+        scores = self.pca_.transform(mat)
         return self._t2_from_scores(scores), self._q_from_matrix(mat, scores)
 
 
-class EFAGate:
-    """Regularized EFA -> Hotelling T2 + Q (SPE) abstention / risk-coverage gate."""
+class PCAGate:
+    """Standard PCA -> Hotelling T2 + Q (SPE) abstention / risk-coverage gate."""
 
     def __init__(
         self,
         *,
-        n_factors: int = EFA_GATE_N_FACTORS,
-        t2_alpha: float = EFA_GATE_T2_ALPHA,
-        q_alpha: float = EFA_GATE_Q_ALPHA,
+        n_components: int = PCA_GATE_N_COMPONENTS,
+        t2_alpha: float = PCA_GATE_T2_ALPHA,
+        q_alpha: float = PCA_GATE_Q_ALPHA,
         gate_corr_threshold: float = GATE_CORR_THRESHOLD,
-        logic: str = EFA_GATE_LOGIC,
-        clip: float = EFA_GATE_CLIP,
+        logic: str = PCA_GATE_LOGIC,
+        clip: float = PCA_GATE_CLIP,
     ):
-        self.n_factors = int(n_factors)
+        self.n_components = int(n_components)
         self.t2_alpha = float(t2_alpha)
         self.q_alpha = float(q_alpha)
         self.gate_corr_threshold = float(gate_corr_threshold)
@@ -101,10 +100,10 @@ class EFAGate:
             raise ValueError(f"gate logic must be 'or' or 'and', got {logic!r}")
         self.logic = logic_norm
 
-    def fit(self, X_train: pd.DataFrame, y_train: pd.Series) -> "EFAGate":
+    def fit(self, X_train: pd.DataFrame, y_train: pd.Series) -> "PCAGate":
         sensor_cols = sensor_value_columns(X_train.columns)
         if not sensor_cols:
-            raise ValueError("No sensor columns found for EFAGate")
+            raise ValueError("No sensor columns found for PCAGate")
         self.sensor_cols_ = sensor_cols
 
         self.feature_pipe_ = build_gate_feature_pipeline(self.gate_corr_threshold)
@@ -121,19 +120,19 @@ class EFAGate:
         passing = y_arr == 0
         ref = self._scale_clip(post)[passing]
         if ref.shape[0] == 0 or ref.shape[1] == 0:
-            raise ValueError("EFAGate requires passing wafers and nonzero features")
+            raise ValueError("PCAGate requires passing wafers and nonzero features")
 
-        self.efa_ = RegularizedEFA(n_factors=self.n_factors).fit(ref)
-        self.t2_ucl_ = float(np.quantile(self.efa_.t2_ref_, 1.0 - self.t2_alpha))
-        self.q_ucl_ = float(np.quantile(self.efa_.q_ref_, 1.0 - self.q_alpha))
+        self.pca_ = PCAMonitor(n_components=self.n_components).fit(ref)
+        self.t2_ucl_ = float(np.quantile(self.pca_.t2_ref_, 1.0 - self.t2_alpha))
+        self.q_ucl_ = float(np.quantile(self.pca_.q_ref_, 1.0 - self.q_alpha))
 
-        # Reference factor scores for the EFA factor-space / loadings drift visuals
-        # (mirrors BayesGate.ref_scores_; frequentist single fit, no seed ensemble).
-        self.ref_scores_ = self.efa_.fa_.transform(ref)
+        # Reference component scores for the PCA component-space / loadings drift
+        # visuals (mirrors BayesGate.ref_scores_; single deterministic fit).
+        self.ref_scores_ = self.pca_.pca_.transform(ref)
 
         self.n_reference_ = int(ref.shape[0])
         self.n_features_ = int(ref.shape[1])
-        self.n_factors_ = int(self.efa_.n_factors_)
+        self.n_components_ = int(self.pca_.n_components_)
         return self
 
     def _post_cluster(self, X_sensors: pd.DataFrame) -> np.ndarray:
@@ -153,7 +152,7 @@ class EFAGate:
         return self._scale_clip(post)
 
     def t2_q_scores(self, X: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
-        return self.efa_.t2_q(self._gate_matrix(X))
+        return self.pca_.t2_q(self._gate_matrix(X))
 
     def q_scores(self, X: pd.DataFrame) -> np.ndarray:
         return self.t2_q_scores(X)[1]
@@ -178,16 +177,34 @@ class EFAGate:
         }
 
     def factor_scores(self, X: pd.DataFrame) -> np.ndarray:
-        """EFA latent factor scores (n, n_factors) for the geometry views."""
-        return self.efa_.fa_.transform(self._gate_matrix(X))
+        """PCA component scores (n, n_components) for the geometry views."""
+        return self.pca_.pca_.transform(self._gate_matrix(X))
+
+    def residual_matrix(self, X: pd.DataFrame) -> np.ndarray:
+        """Per-sensor reconstruction residual in the scaled gate space (n, n_features).
+
+        ``mat - (scores @ components_ + mean_)`` - the part the retained PCA
+        components cannot rebuild. Squared row-sums give Q/SPE; per-column squares
+        give the equal-weight (PCA-style) contribution of each sensor.
+        """
+        mat = self._gate_matrix(X)
+        scores = self.pca_.pca_.transform(mat)
+        recon = scores @ self.pca_.pca_.components_ + self.pca_.pca_.mean_
+        return mat - recon
 
     def loadings(self) -> np.ndarray:
-        """Dense regularized EFA loadings ``Wᵀ`` (n_features, n_factors)."""
-        return self.efa_.fa_.components_.T
+        """PCA loadings ``Pᵀ`` (n_features, n_components)."""
+        return self.pca_.pca_.components_.T
 
     def score_gaussian(self) -> tuple[np.ndarray, np.ndarray]:
-        """Factor-score Gaussian (mean, covariance) for the Hotelling control ellipse."""
-        return self.efa_.score_mean_, np.linalg.inv(self.efa_.score_precision_)
+        """Component-score Gaussian (mean, covariance) for the Hotelling control ellipse.
+
+        PCA scores are mean-centred and uncorrelated, so the mean is zero and the
+        covariance is diagonal with the retained eigenvalues.
+        """
+        mean = np.zeros(self.pca_.n_components_, dtype="float64")
+        cov = np.diag(self.pca_.explained_variance_)
+        return mean, cov
 
     def flag_masks(self, X: pd.DataFrame) -> dict[str, np.ndarray]:
         t2, q = self.t2_q_scores(X)
@@ -214,8 +231,8 @@ class EFAGate:
         two is the OR-logic severity, independent of the alpha operating point.
         """
         t2, q = self.t2_q_scores(X)
-        ref_t2 = self.efa_.t2_ref_
-        ref_q = self.efa_.q_ref_
+        ref_t2 = self.pca_.t2_ref_
+        ref_q = self.pca_.q_ref_
         anomaly_t2 = np.array([float(np.mean(ref_t2 <= v)) for v in t2], dtype="float64")
         anomaly_q = np.array([float(np.mean(ref_q <= v)) for v in q], dtype="float64")
         return np.maximum(anomaly_t2, anomaly_q)
@@ -236,9 +253,9 @@ class EFAGate:
     def config(self) -> dict:
         return {
             "logic": self.logic,
-            "feature_stage": "post_cluster_efa_scaled",
-            "method": "regularized_efa_t2_q",
-            "n_factors": getattr(self, "n_factors_", self.n_factors),
+            "feature_stage": "post_cluster_pca_scaled",
+            "method": "pca_t2_q",
+            "n_components": getattr(self, "n_components_", self.n_components),
             "t2_alpha": self.t2_alpha,
             "q_alpha": self.q_alpha,
             "gate_corr_threshold": self.gate_corr_threshold,
@@ -247,5 +264,4 @@ class EFAGate:
             "q_ucl": getattr(self, "q_ucl_", None),
             "n_features": getattr(self, "n_features_", None),
             "n_reference_wafers": getattr(self, "n_reference_", None),
-            "shrinkage": getattr(getattr(self, "efa_", None), "shrinkage_", None),
         }

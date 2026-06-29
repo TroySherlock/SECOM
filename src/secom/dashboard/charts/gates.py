@@ -320,7 +320,7 @@ def _add_factor_points(fig: go.Figure, hold: np.ndarray, y_true, flagged, dx: in
         )
 
 
-def fig_efa_factor_space(
+def fig_pca_component_space(
     reference_scores: np.ndarray,
     holdout_scores: np.ndarray,
     y_true: np.ndarray,
@@ -331,14 +331,15 @@ def fig_efa_factor_space(
     score_cov: np.ndarray | None = None,
     t2_alpha: float = 0.03,
     factor_labels: tuple[str, str] | None = None,
-    title: str = "EFA latent factor space",
+    title: str = "PCA component space",
 ) -> go.Figure:
-    """2-D scatter of two EFA factors with the Hotelling T² control ellipse overlaid.
+    """2-D scatter of two PCA components with the Hotelling T² control ellipse overlaid.
 
-    The frequentist analogue of ``fig_sbfa_factor_space``: faint reference points =
-    passing-train envelope, holdout points colored Pass / Fail / Flagged, and a
-    single bivariate χ² (Hotelling) control ellipse at ``t2_alpha`` for the two
-    plotted factors. Drift = the holdout cloud sliding outside the control region.
+    The fab-standard baseline analogue of ``fig_sbfa_factor_space``: faint
+    reference points = passing-train envelope, holdout points colored Pass / Fail /
+    Flagged, and a single bivariate χ² (Hotelling) control ellipse at ``t2_alpha``
+    for the two plotted components. Drift = the holdout cloud sliding outside the
+    control region.
     """
     from scipy.stats import chi2
 
@@ -382,7 +383,7 @@ def fig_efa_factor_space(
     )
     _add_factor_points(fig, hold, y_true, flagged, dx, dy)
 
-    xlab, ylab = factor_labels or (f"Factor {dx + 1}", f"Factor {dy + 1}")
+    xlab, ylab = factor_labels or (f"Component {dx + 1}", f"Component {dy + 1}")
     fig.update_layout(
         title=dict(text=title),
         xaxis=dict(title=xlab, gridcolor="rgba(200, 200, 200, 0.15)", zeroline=False),
@@ -474,3 +475,205 @@ def fig_sbfa_loadings_heatmap(
         yaxis=dict(title=""),
     )
     return _sized(fig, height=max(420, 60 + 22 * len(sensors)), margin=dict(l=140, r=48, t=72, b=48))
+
+
+def fig_gate_disagreement_scatter(
+    pca_t2: np.ndarray,
+    bgm_density: np.ndarray,
+    *,
+    t2_ucl: float,
+    density_lcl: float,
+    title: str = "Where the gates disagree (passing wafers)",
+) -> go.Figure:
+    """Per passing-wafer Hotelling T2 (x) vs BGM log-density (y), split by quadrant.
+
+    The control limits draw four quadrants. The money quadrant is high-T2 /
+    high-density: healthy wafers PCA flags out-of-control (above its single
+    Hotelling ellipse) but the multimodal BGM keeps in-control. Each point is one
+    in-control passing wafer; colour encodes which gate(s) would abstain.
+    """
+    fig = go.Figure()
+    t2 = np.asarray(pca_t2, dtype=float)
+    dens = np.asarray(bgm_density, dtype=float)
+    if t2.size == 0 or dens.size == 0 or t2.size != dens.size:
+        return _sized(fig.update_layout(title=dict(text=title)), height=520, margin=dict(l=64, r=48, t=72, b=56))
+
+    pca_ooc = t2 > t2_ucl
+    bgm_ooc = dens < density_lcl
+    pca_only = pca_ooc & ~bgm_ooc
+    bgm_only = ~pca_ooc & bgm_ooc
+    both = pca_ooc & bgm_ooc
+    neither = ~pca_ooc & ~bgm_ooc
+
+    groups = [
+        (neither, "Both in-control", C_BLUE, 5),
+        (both, "Both flag OOC", C_RED, 7),
+        (bgm_only, "BGM only", C_ORANGE, 7),
+        (pca_only, "PCA flags, BGM clears", C_GREEN, 9),
+    ]
+    for mask, name, color, size in groups:
+        if not mask.any():
+            continue
+        n = int(mask.sum())
+        fig.add_trace(
+            go.Scatter(
+                x=t2[mask],
+                y=dens[mask],
+                mode="markers",
+                name=f"{name} (n={n})",
+                marker=dict(color=color, size=size, line=dict(width=0)),
+                hovertemplate="T²=%{x:.2f}<br>log-density=%{y:.2f}<extra></extra>",
+            )
+        )
+    fig.add_vline(x=float(t2_ucl), line=dict(color=C_YELLOW, width=1.5, dash="dash"))
+    fig.add_hline(y=float(density_lcl), line=dict(color=C_YELLOW, width=1.5, dash="dash"))
+    fig.update_layout(
+        title=dict(text=title),
+        xaxis=dict(title="PCA Hotelling T² (→ PCA abstains right of line)", gridcolor="rgba(200,200,200,0.15)"),
+        yaxis=dict(title="BGM log-density (→ BGM abstains below line)", gridcolor="rgba(200,200,200,0.15)"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+    )
+    return _sized(fig, height=520, margin=dict(l=64, r=48, t=84, b=56))
+
+
+def fig_bgm_mode_weights(
+    weights: np.ndarray,
+    *,
+    active_threshold: float = 0.05,
+    title: str = "BGM in-control modes (mixture weights)",
+) -> go.Figure:
+    """Bar of BGM mixture weights; bars above the active threshold are real modes.
+
+    More than one active component is direct evidence the in-control region is
+    multimodal - a structure a single PCA Hotelling ellipse cannot represent.
+    """
+    fig = go.Figure()
+    w = np.asarray(weights, dtype=float).ravel()
+    if w.size == 0:
+        return _sized(fig.update_layout(title=dict(text=title)), height=360, margin=dict(l=56, r=48, t=64, b=48))
+    order = np.argsort(w)[::-1]
+    w = w[order]
+    labels = [f"Mode {i + 1}" for i in range(w.size)]
+    colors = [C_GREEN if v >= active_threshold else "rgba(125, 174, 163, 0.3)" for v in w]
+    fig.add_trace(
+        go.Bar(
+            x=labels,
+            y=w,
+            marker_color=colors,
+            hovertemplate="%{x}<br>weight=%{y:.3f}<extra></extra>",
+        )
+    )
+    fig.add_hline(
+        y=float(active_threshold),
+        line=dict(color=C_YELLOW, width=1.5, dash="dash"),
+        annotation_text=f"active ≥ {active_threshold:g}",
+        annotation_position="top right",
+    )
+    fig.update_layout(
+        title=dict(text=title),
+        xaxis=dict(title=""),
+        yaxis=dict(title="mixture weight", gridcolor="rgba(200,200,200,0.15)"),
+    )
+    return _sized(fig, height=360, margin=dict(l=56, r=48, t=64, b=48))
+
+
+def fig_sensor_noise_spectrum(
+    psi: np.ndarray,
+    feature_names: list[str],
+    *,
+    max_sensors: int = 30,
+    title: str = "Per-sensor sBFA noise variance Ψ (log scale)",
+) -> go.Figure:
+    """Sorted per-sensor noise variance Ψ on a log axis - the heteroscedasticity.
+
+    A wide spread (noisiest / quietest spanning 1-2 orders of magnitude) is why
+    equal-weight PCA contributions are misleading: noisy sensors dominate the
+    residual purely because they are noisy, not because they drifted.
+    """
+    fig = go.Figure()
+    p = np.asarray(psi, dtype=float).ravel()
+    if p.size == 0 or not feature_names or len(feature_names) != p.size:
+        return _sized(fig.update_layout(title=dict(text=title)), height=420, margin=dict(l=140, r=48, t=64, b=48))
+    order = np.argsort(p)[::-1][:max_sensors]
+    order = order[np.argsort(p[order])]  # ascending so noisiest on top
+    vals = p[order]
+    sensors = [str(feature_names[i]) for i in order]
+    spread = float(p.max() / p[p > 0].min()) if np.any(p > 0) else 1.0
+    fig.add_trace(
+        go.Bar(
+            x=vals,
+            y=sensors,
+            orientation="h",
+            marker_color=C_ORANGE,
+            hovertemplate="%{y}<br>Ψ=%{x:.3g}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        title=dict(text=f"{title} — spread ≈ {spread:.0f}×"),
+        xaxis=dict(title="noise variance Ψ", type="log", gridcolor="rgba(200,200,200,0.15)"),
+        yaxis=dict(title=""),
+    )
+    return _sized(fig, height=max(360, 60 + 22 * len(sensors)), margin=dict(l=140, r=48, t=64, b=48))
+
+
+def fig_contribution_comparison(
+    pca_resid: np.ndarray,
+    sbfa_resid: np.ndarray,
+    psi: np.ndarray,
+    feature_names: list[str],
+    *,
+    top_k: int = 10,
+    title: str = "Per-sensor contribution: equal-weight (PCA) vs noise-weighted (sBFA)",
+) -> go.Figure:
+    """Paired top-K sensor bars contrasting the two contribution weightings.
+
+    Equal-weight (PCA) contribution is ``resid²``; noise-weighted (sBFA) is
+    ``resid² / Ψ``. Both normalised to their own max so the *ranking* is the
+    story: an intrinsically noisy sensor can top the PCA ranking yet fall under
+    noise-weighting, while a quiet sensor's genuine deviation rises.
+    """
+    fig = go.Figure()
+    rp = np.asarray(pca_resid, dtype=float).ravel()
+    rs = np.asarray(sbfa_resid, dtype=float).ravel()
+    ps = np.asarray(psi, dtype=float).ravel()
+    if rp.size == 0 or rs.size != rp.size or ps.size != rp.size or len(feature_names) != rp.size:
+        return _sized(fig.update_layout(title=dict(text=title)), height=440, margin=dict(l=140, r=48, t=72, b=48))
+
+    pca_contrib = rp**2
+    sbfa_contrib = rs**2 / np.clip(ps, 1e-12, None)
+    pca_norm = pca_contrib / (pca_contrib.max() or 1.0)
+    sbfa_norm = sbfa_contrib / (sbfa_contrib.max() or 1.0)
+
+    # Union of each weighting's top-K, ordered by the noise-weighted contribution.
+    top_pca = set(np.argsort(pca_norm)[::-1][:top_k].tolist())
+    top_sbfa = set(np.argsort(sbfa_norm)[::-1][:top_k].tolist())
+    keep = sorted(top_pca | top_sbfa, key=lambda i: sbfa_norm[i])
+    sensors = [str(feature_names[i]) for i in keep]
+    fig.add_trace(
+        go.Bar(
+            y=sensors,
+            x=[pca_norm[i] for i in keep],
+            orientation="h",
+            name="Equal-weight (PCA)",
+            marker_color=C_BLUE,
+            hovertemplate="%{y}<br>PCA contrib=%{x:.2f}<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Bar(
+            y=sensors,
+            x=[sbfa_norm[i] for i in keep],
+            orientation="h",
+            name="Noise-weighted (sBFA)",
+            marker_color=C_GREEN,
+            hovertemplate="%{y}<br>sBFA contrib=%{x:.2f}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        title=dict(text=title),
+        barmode="group",
+        xaxis=dict(title="normalised contribution (each to its own max)", gridcolor="rgba(200,200,200,0.15)"),
+        yaxis=dict(title=""),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+    )
+    return _sized(fig, height=max(420, 80 + 26 * len(sensors)), margin=dict(l=140, r=48, t=84, b=48))

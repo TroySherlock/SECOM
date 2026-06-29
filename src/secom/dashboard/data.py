@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
@@ -94,6 +95,21 @@ def load_benchmark_results(path: Path | str = BENCHMARK_RESULTS_PATH) -> dict[st
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+@lru_cache(maxsize=1)
+def cached_benchmark_results() -> dict[str, Any]:
+    """Process-cached benchmark JSON for the offline narrative batch build.
+
+    The narrator enriches every wafer with gate facts; reading the (large)
+    benchmark JSON once per wafer would be wasteful. Cached read-only; callers
+    must not mutate the returned dict. Returns ``{}`` when the file is absent so
+    the narrative build degrades to drivers-only facts.
+    """
+    try:
+        return load_benchmark_results()
+    except FileNotFoundError:
+        return {}
+
+
 def cv_leaderboard_df(payload: dict[str, Any]) -> pd.DataFrame:
     rows = payload.get("leaderboard") or []
     if not rows:
@@ -172,7 +188,7 @@ def _gate_block(payload: dict[str, Any], track: str, gate: str) -> dict[str, Any
 
 
 def gate_conditional_df(payload: dict[str, Any], track: str, gate: str) -> pd.DataFrame:
-    """Conditional + coverage rows for one gate on one track (efa | bayes)."""
+    """Conditional + coverage rows for one gate on one track (pca | bayes)."""
     rows = _gate_block(payload, track, gate).get("conditional") or []
     return pd.DataFrame(rows) if rows else pd.DataFrame()
 
@@ -195,9 +211,128 @@ def gate_diagnostics(
 
     Returns the ``{reference, holdout, limits}`` block persisted by the benchmark
     (BGM density/Q over reference + holdout wafers, control limits, and temporal
-    timestamps). Empty dict when absent (older benchmark JSON / EFA gate).
+    timestamps). Empty dict when absent (older benchmark JSON / PCA gate).
     """
     return dict(_gate_block(payload, track, gate).get("diagnostics") or {})
+
+
+# PCA / BGM gate -> (holdout flag key, plain-English label) for the wafer-level
+# OOC corroboration facts. ``ooc`` is the gate's overall verdict for the wafer.
+_GATE_TRIP_SPECS: dict[str, list[tuple[str, str]]] = {
+    "pca": [
+        ("t2_ooc", "Hotelling T2 above limit"),
+        ("q_ooc", "Q/SPE above limit"),
+    ],
+    "bayes": [
+        ("density_ooc", "BGM density below limit"),
+        ("q_ooc", "Q/SPE above limit"),
+    ],
+}
+
+
+def wafer_gate_facts(
+    payload: dict[str, Any], track: str, observation_id: object
+) -> dict[str, Any]:
+    """Per-wafer PCA + BGM process-gate corroboration for one wafer.
+
+    For each standalone gate, looks up this wafer's frozen control statistics by
+    ``observation_id`` (written by the benchmark) and reports whether the gate
+    independently flagged it out-of-control and which control statistic tripped.
+    Returns ``{}`` when ids are absent (benchmark not yet re-run) or the wafer is
+    not in the holdout, so callers degrade gracefully to drivers-only facts.
+    """
+    if observation_id is None:
+        return {}
+    try:
+        target_id = int(observation_id)
+    except (TypeError, ValueError):
+        return {}
+    out: dict[str, Any] = {}
+    for gate, specs in _GATE_TRIP_SPECS.items():
+        holdout = gate_diagnostics(payload, track, gate).get("holdout") or {}
+        ids = holdout.get("observation_id")
+        if not ids:
+            continue
+        try:
+            idx = list(ids).index(target_id)
+        except ValueError:
+            continue
+
+        def _flag(key: str) -> bool:
+            arr = holdout.get(key) or []
+            return bool(arr[idx]) if idx < len(arr) else False
+
+        tripped = [label for key, label in specs if _flag(key)]
+        out[gate] = {
+            "out_of_control": _flag("ooc"),
+            "tripped": tripped,
+        }
+    return out
+
+
+def bgm_ooc_wafers(
+    payload: dict[str, Any], track: str = "extrapolation"
+) -> pd.DataFrame:
+    """Passing (in-control) holdout wafers the BGM gate flagged out-of-control.
+
+    From the frozen BGM holdout block, keep wafers with ``ooc`` true and
+    ``y_true == 0`` - wafers that passed inspection (good yield) yet trip the
+    density/Q gate, the cleanest "process drift, not yield" examples. Columns:
+    ``observation_id``, ``ts``, ``density``, ``density_ooc``, ``q_ooc``; sorted by
+    lowest density first (most out-of-control). Empty when ids/diagnostics absent.
+    """
+    holdout = gate_diagnostics(payload, track, "bayes").get("holdout") or {}
+    ids = holdout.get("observation_id")
+    if not ids:
+        return pd.DataFrame()
+    n = len(ids)
+
+    def _col(key: str, fill: Any = None) -> list[Any]:
+        arr = list(holdout.get(key) or [])
+        return arr + [fill] * (n - len(arr)) if len(arr) < n else arr[:n]
+
+    df = pd.DataFrame(
+        {
+            "observation_id": [int(i) for i in ids],
+            "ts": _col("ts", ""),
+            "density": _col("density", float("nan")),
+            "density_ooc": _col("density_ooc", False),
+            "q_ooc": _col("q_ooc", False),
+            "y_true": _col("y_true", 0),
+            "ooc": _col("ooc", False),
+        }
+    )
+    keep = df[(df["ooc"].astype(bool)) & (df["y_true"].astype(int) == 0)].copy()
+    if keep.empty:
+        return pd.DataFrame()
+    return (
+        keep.drop(columns=["y_true", "ooc"])
+        .sort_values("density", ascending=True, na_position="last")
+        .reset_index(drop=True)
+    )
+
+
+def bgm_ooc_map(payload: dict[str, Any], track: str = "extrapolation") -> dict[int, bool]:
+    """Per-wafer BGM-gate out-of-control verdict for every holdout wafer.
+
+    Maps ``observation_id -> ooc`` from the frozen BGM holdout block, covering
+    both passing and failing wafers (unlike :func:`bgm_ooc_wafers`, which keeps
+    only passing OOC wafers). Returns ``{}`` when ids/diagnostics are absent
+    (older benchmark JSON, or a track with no frozen gate diagnostics) so callers
+    can degrade gracefully to a gate-free picker.
+    """
+    holdout = gate_diagnostics(payload, track, "bayes").get("holdout") or {}
+    ids = holdout.get("observation_id")
+    ooc = holdout.get("ooc")
+    if not ids or ooc is None:
+        return {}
+    out: dict[int, bool] = {}
+    for i, flag in zip(ids, ooc):
+        try:
+            out[int(i)] = bool(flag)
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 def gate_drift_stats(
@@ -271,15 +406,93 @@ def sbfa_diagnostics(
     return dict(gate_diagnostics(payload, track, gate).get("sbfa") or {})
 
 
-def efa_factor_diagnostics(
+def pca_component_diagnostics(
     payload: dict[str, Any], track: str = "extrapolation"
 ) -> dict[str, Any]:
-    """Frozen EFA factor artifacts (dense loadings, score Gaussian, factor scores).
+    """Frozen PCA component artifacts (loadings, score Gaussian, component scores).
 
-    Returns the ``factor`` sub-block of the EFA gate diagnostics (5.2 factor-space
-    / root-cause visuals). Empty dict when absent (random track / older JSON).
+    Returns the ``components`` sub-block of the PCA gate diagnostics (5.2
+    component-space / root-cause visuals). Empty dict when absent (random track /
+    older JSON).
     """
-    return dict(gate_diagnostics(payload, track, "efa").get("factor") or {})
+    return dict(gate_diagnostics(payload, track, "pca").get("components") or {})
+
+
+def gate_contrast(payload: dict[str, Any], track: str = "extrapolation") -> dict[str, Any]:
+    """Frozen PCA-vs-sBFA justification artifacts (page 5.4).
+
+    Returns the ``contrast`` sub-block of the temporal gate reports (per-wafer T2
+    vs BGM density, BGM mode weights, per-sensor Ψ, and one example wafer's
+    residuals). Empty dict when absent (older JSON / benchmark not re-run).
+    """
+    proto = _TRACK_TO_PROTOCOL.get(track, track)
+    reports = payload.get("gate_reports") or {}
+    return dict(((reports.get(proto) or {}).get("contrast")) or {})
+
+
+def gate_disagreement_summary(contrast: dict[str, Any]) -> dict[str, int]:
+    """Quadrant counts of passing wafers by which gate(s) would abstain.
+
+    Compares per-wafer PCA Hotelling T2 against its UCL and BGM log-density
+    against its LCL. The ``pca_only`` count is the headline: healthy wafers PCA
+    flags out-of-control that the multimodal BGM keeps in-control.
+    """
+    import numpy as np
+
+    ref = contrast.get("reference") or {}
+    t2 = np.asarray(ref.get("pca_t2", []), dtype=float)
+    dens = np.asarray(ref.get("bgm_density", []), dtype=float)
+    if t2.size == 0 or dens.size != t2.size:
+        return {}
+    pca_ooc = t2 > float(ref.get("pca_t2_ucl", np.inf))
+    bgm_ooc = dens < float(ref.get("bgm_density_lcl", -np.inf))
+    return {
+        "n_total": int(t2.size),
+        "pca_only": int((pca_ooc & ~bgm_ooc).sum()),
+        "bgm_only": int((~pca_ooc & bgm_ooc).sum()),
+        "both": int((pca_ooc & bgm_ooc).sum()),
+        "neither": int((~pca_ooc & ~bgm_ooc).sum()),
+    }
+
+
+def sensor_noise_df(contrast: dict[str, Any]) -> pd.DataFrame:
+    """Per-sensor sBFA noise variance Ψ, descending (heteroscedasticity spectrum)."""
+    import numpy as np
+
+    psi = np.asarray(contrast.get("psi", []), dtype=float)
+    names = list(contrast.get("feature_names", []))
+    if psi.size == 0 or len(names) != psi.size:
+        return pd.DataFrame()
+    out = pd.DataFrame({"sensor": names, "psi": psi})
+    return out.sort_values("psi", ascending=False).reset_index(drop=True)
+
+
+def contribution_compare_df(contrast: dict[str, Any]) -> pd.DataFrame:
+    """Per-sensor equal-weight (PCA) vs noise-weighted (sBFA) contribution.
+
+    For the frozen example wafer: equal-weight = ``resid²``; noise-weighted =
+    ``resid² / Ψ``. Each column is normalised to its own max so the comparison is
+    about *rank*, not absolute scale. Sorted by the noise-weighted contribution.
+    """
+    import numpy as np
+
+    ex = contrast.get("example_wafer") or {}
+    rp = np.asarray(ex.get("pca_resid", []), dtype=float)
+    rs = np.asarray(ex.get("sbfa_resid", []), dtype=float)
+    psi = np.asarray(contrast.get("psi", []), dtype=float)
+    names = list(contrast.get("feature_names", []))
+    if rp.size == 0 or rs.size != rp.size or psi.size != rp.size or len(names) != rp.size:
+        return pd.DataFrame()
+    pca_contrib = rp**2
+    sbfa_contrib = rs**2 / np.clip(psi, 1e-12, None)
+    out = pd.DataFrame(
+        {
+            "sensor": names,
+            "pca_contribution": pca_contrib / (pca_contrib.max() or 1.0),
+            "sbfa_contribution": sbfa_contrib / (sbfa_contrib.max() or 1.0),
+        }
+    )
+    return out.sort_values("sbfa_contribution", ascending=False).reset_index(drop=True)
 
 
 def factor_drift_ranking(sbfa: dict[str, Any]) -> pd.DataFrame:
@@ -342,16 +555,16 @@ def holdout_delta_df(payload: dict[str, Any], metric: str) -> pd.DataFrame:
 
 
 def gate_vs_gate_df(payload: dict[str, Any], track: str, metric: str) -> pd.DataFrame:
-    """Per model EFA-minus-Bayes conditional metric on one track."""
-    efa = gate_conditional_df(payload, track, "efa")
+    """Per model PCA-minus-Bayes conditional metric on one track."""
+    pca = gate_conditional_df(payload, track, "pca")
     bayes = gate_conditional_df(payload, track, "bayes")
     col = f"conditional_{metric}"
-    if efa.empty or bayes.empty or col not in efa or col not in bayes:
+    if pca.empty or bayes.empty or col not in pca or col not in bayes:
         return pd.DataFrame()
-    e = efa[["pipeline", col]].rename(columns={col: "efa"})
+    e = pca[["pipeline", col]].rename(columns={col: "pca"})
     b = bayes[["pipeline", col]].rename(columns={col: "bayes"})
     out = e.merge(b, on="pipeline", how="inner")
-    out["delta"] = out["efa"] - out["bayes"]
+    out["delta"] = out["pca"] - out["bayes"]
     return out.dropna(subset=["delta"])
 
 
@@ -503,6 +716,42 @@ def load_pipeline_artifacts(path: Path | None = None) -> dict[str, Any]:
             "Run: python -m secom.benchmark"
         )
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+@lru_cache(maxsize=None)
+def champion_model_context(model_id: str) -> dict[str, Any]:
+    """Front-end + selection context for one model, from frozen pipeline artifacts.
+
+    PLS cells report the latent-component count and clustered-sensor input; the
+    selection (HSIC / RF-select) cells report how many sensors survived selection
+    and the highest-leverage hub sensors. Cached per ``model_id`` (only a couple
+    of champions are queried per batch). Returns ``{}`` when artifacts are absent
+    so the narrator stays optional/empty-safe.
+    """
+    try:
+        artifacts = load_pipeline_artifacts()
+    except FileNotFoundError:
+        return {}
+    model = (artifacts.get("models") or {}).get(model_id) or {}
+    if not model:
+        return {}
+    front_end = MODEL_CELLS.get(model_id, ("", ""))[0]
+    stages = model.get("stages") or {}
+    ctx: dict[str, Any] = {"front_end": _FRONT_END_NAME.get(front_end, front_end)}
+    if front_end == "pls":
+        aux = int(stages.get("auxiliary_features", 0))
+        classifier_input = int(stages.get("classifier_input", 0))
+        ctx["n_components"] = max(0, classifier_input - aux)
+        ctx["n_clustered"] = int(stages.get("after_cluster", 0))
+    else:
+        hub = model.get("hub_interactions") or {}
+        ctx["n_selected"] = int(
+            stages.get("after_selection", hub.get("n_hubs_selected", 0))
+        )
+        hub_sensors = hub.get("hub_sensors") or []
+        if hub_sensors:
+            ctx["hub_sensors"] = [str(s) for s in hub_sensors[:5]]
+    return ctx
 
 
 def load_report_cache(path: Path | None = None) -> dict[str, Any]:

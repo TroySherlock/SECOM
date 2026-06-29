@@ -120,9 +120,21 @@ def fit_holdout_pipeline(model_id: str, track: str = DEFAULT_TRACK):
     return pipeline, tuned
 
 
-def _deploy_threshold(tuned: dict) -> float:
+# Per-track deploy operating point: the temporal/extrapolation champion ships at
+# the cost-optimal (escape-heavy) economic threshold; the random/interpolation
+# champion ships at the symmetric BER-balanced threshold.
+_DEPLOY_PROFILE_BY_TRACK = {"extrapolation": "economic", "interpolation": "ber"}
+
+
+def deploy_profile_id(track: str) -> str:
+    """Threshold-profile id deployed for ``track`` (fallback: the BER default)."""
+    return _DEPLOY_PROFILE_BY_TRACK.get(track, DEFAULT_PROFILE_ID)
+
+
+def _deploy_threshold(tuned: dict, track: str) -> float:
     profiles = resolve_threshold_profiles(tuned)
-    return float(profiles[DEFAULT_PROFILE_ID])
+    pid = deploy_profile_id(track)
+    return float(profiles.get(pid, profiles[DEFAULT_PROFILE_ID]))
 
 
 def _shap_positive_class_values(shap_output: object, n_features: int) -> np.ndarray:
@@ -368,7 +380,7 @@ def wafer_explanation(
     y_true = int(row[TARGET_COL])
 
     fail_proba = float(pipeline.predict_proba(X_row)[0, 1])
-    threshold = _deploy_threshold(tuned)
+    threshold = _deploy_threshold(tuned, track)
     y_pred = int(predict_with_threshold(np.array([fail_proba]), threshold)[0])
 
     kind = model_info(model_id).explainability
@@ -460,7 +472,7 @@ def cached_holdout_outcomes(model_id: str, track: str = DEFAULT_TRACK) -> pd.Dat
     pipeline, tuned = fit_holdout_pipeline(model_id, track)
     split = load_holdout_split(track)
     proba = np.asarray(pipeline.predict_proba(split.X_test)[:, 1], dtype=float)
-    threshold = _deploy_threshold(tuned)
+    threshold = _deploy_threshold(tuned, track)
     pred = np.asarray(predict_with_threshold(proba, threshold), dtype=int)
     actual = split.test_df[TARGET_COL].astype(int).to_numpy()
     ids = split.test_df[ID_COL].to_numpy()
@@ -804,6 +816,61 @@ def cached_era_drift(z_threshold: float = 2.0) -> dict:
         "shift": {str(k): float(v) for k, v in shift.items()},
         "z_threshold": float(z_threshold),
     }
+
+
+@st.cache_data(show_spinner=False)
+def wafer_drift_spikes(
+    observation_id: int, track: str = DEFAULT_TRACK, top_n: int = 15
+) -> pd.DataFrame:
+    """One holdout wafer's robust SPC z across the globally known-drifting sensors.
+
+    Picks the era-drift set (sensors whose training->holdout mean shift cleared the
+    global threshold in :func:`cached_era_drift`), then for ``observation_id``
+    computes the robust z of each sensor's raw value against the in-control
+    (passing-train) distribution. Returns DataFrame[``sensor``, ``robust_z``,
+    ``drift_shift``] sorted by ``|robust_z|`` desc, capped at ``top_n``. Empty when
+    the wafer is not in the holdout or no sensor drifted globally.
+    """
+    drift = cached_era_drift()
+    shift_map = drift["shift"]
+    z_threshold = float(drift["z_threshold"])
+    drifting = [s for s, v in shift_map.items() if abs(float(v)) > z_threshold]
+    if not drifting:
+        return pd.DataFrame()
+
+    split = load_holdout_split(track)
+    test_df = split.test_df
+    try:
+        target_id = int(observation_id)
+    except (TypeError, ValueError):
+        return pd.DataFrame()
+    mask = test_df[ID_COL] == target_id
+    if not bool(mask.any()):
+        return pd.DataFrame()
+    row = test_df.loc[mask].iloc[0]
+
+    train_df = split.train_df
+    pass_mask = train_df[TARGET_COL].astype(int) == 0
+    rows = []
+    for sensor in drifting:
+        if sensor not in train_df.columns:
+            continue
+        rz = _robust_z(row.get(sensor, np.nan), train_df.loc[pass_mask, sensor])
+        if not np.isfinite(rz):
+            continue
+        rows.append(
+            {"sensor": sensor, "robust_z": float(rz), "drift_shift": float(shift_map[sensor])}
+        )
+    if not rows:
+        return pd.DataFrame()
+    out = pd.DataFrame(rows)
+    out["_abs"] = out["robust_z"].abs()
+    return (
+        out.sort_values("_abs", ascending=False)
+        .drop(columns="_abs")
+        .head(top_n)
+        .reset_index(drop=True)
+    )
 
 
 @st.cache_data(show_spinner="Clustering sensors into data-driven groups…")

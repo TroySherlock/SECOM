@@ -35,7 +35,6 @@ from secom.pipelines import (
     BAYES_POS_WEIGHT_GRID,
     BAYES_TOP_K,
     C_GRID,
-    CALENDAR_ABLATION_GRID,
     CHAMPION_IMPUTATION_METHOD,
     CORRELATED_SELECTION_THRESHOLD,
     CORRELATED_SELECTION_THRESHOLD_GRID,
@@ -76,8 +75,6 @@ CLF_C_PARAM = "classifier__estimator__C"
 CLF_L1_PARAM = "classifier__estimator__l1_ratio"
 CLF_MAX_DEPTH_PARAM = "classifier__estimator__max_depth"
 CLF_POS_WEIGHT_PARAM = "classifier__estimator__pos_weight"
-# Ablation: toggle the calendar/time-feature passthrough branch on/off.
-CALENDAR_PARAM = "preprocess__calendar"
 
 
 def _sample_weight_kwargs(timestamps, train_idx, decay_lambda: float) -> dict:
@@ -243,49 +240,31 @@ _HEAD_FRAGMENTS = {
 }
 
 
-# --- Ablation grid fragment --------------------------------------------------
-def _calendar_ablation_fragment() -> dict:
-    """Grid toggle for the calendar/time-feature passthrough branch (all cells).
-
-    Default selection is ``passthrough`` so frozen pipelines (which never stored
-    this key) are unaffected; a re-tune can pick ``drop`` if time features hurt.
-    """
-    return {
-        "grid": {CALENDAR_PARAM: list(CALENDAR_ABLATION_GRID)},
-        "renames": {f"param_{CALENDAR_PARAM}": "calendar"},
-        "groupby": ["calendar"],
-        "defaults": {"calendar": "passthrough"},
-        "best": lambda cv: {CALENDAR_PARAM: str(cv.get("best_calendar", "passthrough"))},
-    }
-
-
 def _make_spec(model_id: str) -> ModelSpec:
     front_end, classifier_kind = MODEL_CELLS[model_id]
     bayes = classifier_kind == "bayes"
     fe = _front_end_fragment(front_end, bayes=bayes)
     head = _HEAD_FRAGMENTS[classifier_kind]()
-    cal = _calendar_ablation_fragment()
 
     def build_pipeline() -> Pipeline:
         return build_model_pipeline(front_end, classifier_kind)
 
     def make_param_grid() -> dict:
-        return {**fe["grid"], **head["grid"], **cal["grid"]}
+        return {**fe["grid"], **head["grid"]}
 
     def best_params(cv_summary: dict) -> dict:
         return {
             **fe["best"](cv_summary),
             **head["best"](cv_summary),
-            **cal["best"](cv_summary),
         }
 
     return ModelSpec(
         model_id=model_id,
         build_pipeline=build_pipeline,
         make_param_grid=make_param_grid,
-        param_renames={**fe["renames"], **head["renames"], **cal["renames"]},
-        groupby_cols=[*fe["groupby"], *head["groupby"], *cal["groupby"]],
-        best_defaults={**fe["defaults"], **head["defaults"], **cal["defaults"]},
+        param_renames={**fe["renames"], **head["renames"]},
+        groupby_cols=[*fe["groupby"], *head["groupby"]],
+        best_defaults={**fe["defaults"], **head["defaults"]},
         build_grid_search_best_params=best_params,
         n_jobs=1 if bayes else -1,
         # HSIC folds can go singular and Bayesian ADVI can blow up; nan keeps one

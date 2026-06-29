@@ -12,14 +12,21 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from secom.costs import THRESHOLD_PROFILES
 from secom.dashboard import render_blue_note
 from secom.dashboard.charts import (
     fig_local_contributions,
     fig_posterior_forest,
     fig_spc_distribution,
     fig_top_features_bar,
+    fig_wafer_drift_spikes,
 )
-from secom.dashboard.data import model_info
+from secom.dashboard.data import (
+    bgm_ooc_map,
+    cached_benchmark_results,
+    model_info,
+    wafer_gate_facts,
+)
 from secom.dashboard.explainability import (
     OUTCOME_EMOJI,
     OUTCOME_LABELS,
@@ -30,11 +37,14 @@ from secom.dashboard.explainability import (
     cached_pls_sensor_robust_map,
     cached_wafer_explanation,
     champion_for_track,
+    deploy_profile_id,
     is_pls_model,
     key_findings,
     load_holdout_split,
+    wafer_drift_spikes,
     wafer_sensor_posterior,
 )
+from secom.dashboard.glossary import reference_definitions_for_facts
 from secom.dashboard.narrator import (
     build_wafer_facts,
     get_wafer_narrative,
@@ -54,6 +64,11 @@ _OUTCOME_FILTERS = {
     "🟠 False alarms": "false_alarm",
     "🟢 Caught fails": "caught_fail",
     "⚪ Correct pass": "correct_pass",
+}
+_GATE_FILTERS = {
+    "All": None,
+    "🚧 Gate-OOC only": "ooc",
+    "In-control only": "in_control",
 }
 _SPC_PLOTS = 3
 
@@ -95,7 +110,7 @@ def _track_word(track: str) -> str:
 
 
 # --- controls ----------------------------------------------------------------
-def _render_controls() -> tuple[str, str, object]:
+def _render_controls(payload: dict) -> tuple[str, str, object]:
     c1, c2 = st.columns([2, 3])
     with c1:
         track_label = st.radio(
@@ -107,11 +122,19 @@ def _render_controls() -> tuple[str, str, object]:
     track = _TRACK_LABELS[track_label]
     champion = champion_for_track(track)
     info = model_info(champion)
+    profile = THRESHOLD_PROFILES[deploy_profile_id(track)]
     with c1:
         st.markdown(f"**Champion for this track:** `{champion}` — {info.display_name}")
+        st.caption(
+            f"**Deploy threshold: {profile.display_name}.** The temporal/extrapolation "
+            "champion ships at the cost-optimal *economic* point (escapes priced far "
+            "above overkill, so it leans to recall); the random/interpolation champion "
+            "ships at the symmetric *BER-balanced* point."
+        )
 
     outcomes = cached_holdout_outcomes(champion, track)
     outcome_map = dict(zip(outcomes["observation_id"], outcomes["outcome"]))
+    ooc_map = bgm_ooc_map(payload, track)
 
     with c2:
         f1, f2 = st.columns([2, 3])
@@ -122,13 +145,36 @@ def _render_controls() -> tuple[str, str, object]:
                 key="p6_outcome_filter",
                 help="Filter the wafer picker by model verdict. Errors are listed first.",
             )
+            gate_filt = None
+            if ooc_map:
+                gate_label = st.radio(
+                    "Process gate",
+                    options=list(_GATE_FILTERS),
+                    key="p6_gate_filter",
+                    help="Filter by the BGM gate's verdict — independent of the model's "
+                    "verdict above. Gate-OOC wafers sit on a drifted process.",
+                )
+                gate_filt = _GATE_FILTERS[gate_label]
+            chrono = st.toggle(
+                "Chronological (by wafer ID)",
+                key="p6_chrono",
+                help="Off = errors-first triage order. On = ascending wafer ID "
+                "(time order across the holdout).",
+            )
         filt = _OUTCOME_FILTERS[filt_label]
         sel = outcomes if filt is None else outcomes.loc[outcomes["outcome"] == filt]
+        if gate_filt == "ooc":
+            sel = sel.loc[sel["observation_id"].map(lambda w: ooc_map.get(int(w), False))]
+        elif gate_filt == "in_control":
+            sel = sel.loc[sel["observation_id"].map(lambda w: not ooc_map.get(int(w), False))]
+        if chrono:
+            sel = sel.sort_values("observation_id", ascending=True)
         wafer_options = sel["observation_id"].tolist()
 
         def _fmt(wid: object) -> str:
             oc = outcome_map.get(wid, "")
-            return f"{OUTCOME_EMOJI.get(oc, '')} {OUTCOME_LABELS.get(oc, '')} · {wid}"
+            mark = " · 🚧 gate-OOC" if ooc_map.get(int(wid), False) else ""
+            return f"{OUTCOME_EMOJI.get(oc, '')} {OUTCOME_LABELS.get(oc, '')} · {wid}{mark}"
 
         with f2:
             if not wafer_options:
@@ -139,12 +185,18 @@ def _render_controls() -> tuple[str, str, object]:
                     "Wafer (holdout)",
                     wafer_options,
                     format_func=_fmt,
-                    key=f"p6_wafer_{track}_{filt}",
+                    key=f"p6_wafer_{track}_{filt}_{gate_filt}_{chrono}",
                 )
-        st.caption(
+        legend = (
             "Picker legend: 🔴 missed fail · 🟠 false alarm · 🟢 caught fail · "
-            "⚪ correct pass. Errors are sorted to the top."
+            "⚪ correct pass"
         )
+        legend += (
+            " · 🚧 gate-OOC (BGM flagged the process). Errors are sorted to the top."
+            if ooc_map
+            else ". Errors are sorted to the top."
+        )
+        st.caption(legend)
     return champion, track, wafer_id
 
 
@@ -168,13 +220,32 @@ def _annotate_robust(local_df: pd.DataFrame, model_id: str, track: str) -> pd.Da
     return out
 
 
-def _render_key_findings(kf: dict, track: str) -> None:
+_GATE_NAMES = {"bayes": "BGM density gate", "pca": "PCA Hotelling T2 gate"}
+
+
+def _ooc_gate_labels(gate_facts: dict) -> list[str]:
+    """Plain-English '<gate> (<tripped stats>)' for gates that flagged the wafer."""
+    labels: list[str] = []
+    for gate, facts in (gate_facts or {}).items():
+        if not facts.get("out_of_control"):
+            continue
+        name = _GATE_NAMES.get(gate, gate)
+        trips = ", ".join(facts.get("tripped") or []) or "out of control"
+        labels.append(f"{name} ({trips})")
+    return labels
+
+
+def _render_key_findings(kf: dict, track: str, gate_facts: dict) -> None:
     st.subheader("Key findings")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Actual", kf["actual"], border=True)
     m2.metric("Predicted (deploy threshold)", kf["predicted"], border=True)
     m3.metric("P(fail)", f"{100 * kf['p_fail']:.1f}%", border=True)
     m4.metric("Threshold", f"{kf['threshold']:.4f}", border=True)
+    st.caption(
+        f"Verdict uses the **{THRESHOLD_PROFILES[deploy_profile_id(track)].display_name}** "
+        "deploy threshold for this track."
+    )
 
     verdict = (
         f"Verdict: P(fail) {100 * kf['p_fail']:.1f}% vs threshold "
@@ -187,6 +258,17 @@ def _render_key_findings(kf: dict, track: str) -> None:
         st.warning(verdict, icon="🟠")
     else:
         st.success(verdict, icon="✅")
+
+    ooc_labels = _ooc_gate_labels(gate_facts)
+    if ooc_labels:
+        st.warning(
+            "**Process gate OOC:** "
+            + "; ".join(ooc_labels)
+            + ". This wafer sits on a drifted process, so the classifier is "
+            "extrapolating — the standalone gate would abstain here and route it "
+            "to manual review.",
+            icon="🚧",
+        )
 
     bullets: list[str] = []
     if "top_driver" in kf:
@@ -212,7 +294,12 @@ def _render_key_findings(kf: dict, track: str) -> None:
 
 # --- tab 1: wafer RCA --------------------------------------------------------
 def _render_wafer_detail(
-    model_id: str, track: str, wafer_id: object, result, local_df: pd.DataFrame
+    model_id: str,
+    track: str,
+    wafer_id: object,
+    result,
+    local_df: pd.DataFrame,
+    gate_facts: dict,
 ) -> None:
     if result.fail_probability_interval is not None:
         lo, hi = result.fail_probability_interval
@@ -224,11 +311,22 @@ def _render_wafer_detail(
         )
     st.caption(result.method)
 
+    ooc_labels = _ooc_gate_labels(gate_facts)
+    if ooc_labels:
+        st.caption(
+            "Process gate: "
+            + " and ".join(ooc_labels)
+            + " — the attribution below is for a wafer the gate considers off-process."
+        )
+
     render_blue_note(
         "Local contributors in **sensor space**. `spc_z` = robust z vs the in-control "
-        "(passing) training distribution; `drift_flag` = the sensor's mean shifted "
-        "past the era-drift threshold. Positive contribution pushes toward Fail. "
-        "Non-sensor context features (calendar, missing-data flags) are excluded."
+        "(passing) training distribution; `drift_flag` = this top driver is *also* a "
+        "sensor whose mean shifted past the era-drift threshold train->holdout. It is "
+        "often False: a wafer's strongest prediction drivers are usually not the "
+        "globally drifted sensors — for the wafer's actual process drift see the "
+        "panel below. Positive contribution pushes toward Fail. Non-sensor context "
+        "features (calendar, missing-data flags) are excluded."
     )
     st.plotly_chart(
         fig_local_contributions(
@@ -247,9 +345,39 @@ def _render_wafer_detail(
 
     _render_spc_plots(local_df, track, wafer_id)
     _render_drift_linkage(local_df)
+    _render_wafer_drift_panel(track, wafer_id)
 
     if track == "extrapolation" and is_pls_model(model_id):
         _render_wafer_forest(model_id, track, wafer_id)
+
+
+def _render_wafer_drift_panel(track: str, wafer_id: object) -> None:
+    st.markdown("**Process drift on this wafer — globally drifting sensors**")
+    spikes = wafer_drift_spikes(int(wafer_id), track)
+    if spikes.empty:
+        st.caption(
+            "None of the globally drifting sensors have a usable reading on this "
+            "wafer, so there is no direct drift to show here."
+        )
+        return
+    st.caption(
+        "This wafer's robust SPC z across the sensors that drifted train->holdout — "
+        "independent of whether they drove the prediction above. Bars past ±2σ (red) "
+        "are the in-control excursion the density gate keys on; the gate fires on the "
+        "*joint* density across these correlated, drifted sensors, so a wafer can be "
+        "off-process even when no single sensor screams. Hover for each sensor's "
+        "global train->holdout shift."
+    )
+    st.plotly_chart(
+        fig_wafer_drift_spikes(
+            spikes["sensor"].astype(str).tolist(),
+            spikes["robust_z"].to_numpy(),
+            spikes["drift_shift"].to_numpy(),
+        ),
+        width="stretch",
+        theme="streamlit",
+        key="p6_wafer_drift_spikes",
+    )
 
 
 def _render_wafer_forest(model_id: str, track: str, wafer_id: object) -> None:
@@ -321,7 +449,11 @@ def _render_spc_plots(local_df: pd.DataFrame, track: str, wafer_id: object) -> N
 def _render_drift_linkage(local_df: pd.DataFrame) -> None:
     drifting = local_df.loc[local_df.get("drift_flag", False) == True]  # noqa: E712
     if drifting.empty:
-        st.caption("Drift linkage: none of the top contributors are flagged as drifting.")
+        st.caption(
+            "Drift linkage: none of the top prediction-drivers are among the globally "
+            "drifting sensors — the wafer's process drift (if any) is shown directly "
+            "in the panel below."
+        )
         return
     names = ", ".join(str(f) for f in drifting["feature"])
     st.caption(
@@ -447,15 +579,22 @@ def _render_narrative(model_id: str, track: str, wafer_id: object) -> None:
                 if result is None:
                     st.info("Wafer not in this holdout split.")
                 else:
-                    st.json(build_wafer_facts(model_id, result, track))
+                    facts = build_wafer_facts(model_id, result, track)
+                    st.json(facts)
+                    definitions = reference_definitions_for_facts(facts)
+                    if definitions:
+                        st.markdown("**Method notes** (plain-English grounding)")
+                        for definition in definitions:
+                            st.caption(definition)
             except Exception as exc:  # noqa: BLE001
                 st.exception(exc)
 
 
 def main() -> None:
     _render_header()
+    payload = cached_benchmark_results()
     try:
-        model_id, track, wafer_id = _render_controls()
+        model_id, track, wafer_id = _render_controls(payload)
     except FileNotFoundError as exc:
         st.error(f"{exc}\n\nRun tuning and `python -m secom.benchmark` first.")
         return
@@ -476,15 +615,16 @@ def main() -> None:
         st.warning("Wafer not found in this holdout split.")
         return
 
+    gate_facts = wafer_gate_facts(payload, track, wafer_id)
     local_df = _annotate_robust(result.local_df, model_id, track)
     kf = key_findings(result, local_df, track)
-    _render_key_findings(kf, track)
+    _render_key_findings(kf, track, gate_facts)
 
     tab_wafer, tab_global, tab_llm = st.tabs(
         ["Wafer RCA", "Global drivers", "Plain-English RCA"]
     )
     with tab_wafer:
-        _render_wafer_detail(model_id, track, wafer_id, result, local_df)
+        _render_wafer_detail(model_id, track, wafer_id, result, local_df, gate_facts)
     with tab_global:
         _render_global(model_id, track)
     with tab_llm:

@@ -22,13 +22,19 @@ from typing import Any
 
 import pandas as pd
 
-from secom.dashboard.data import model_info
+from secom.dashboard.data import (
+    cached_benchmark_results,
+    champion_model_context,
+    model_info,
+    wafer_gate_facts,
+)
 from secom.dashboard.explainability import (
     WaferExplanation,
     cached_bayes_hdis,
     cached_pls_sensor_robust_map,
     is_pls_model,
 )
+from secom.dashboard.glossary import GLOSSARY_VERSION, reference_definitions_for_facts
 from secom.pipelines import INTERP_NARRATIVES_PATH, NARRATIVES_PATH
 
 # The narrative model is track-dependent: the random/in-distribution track uses
@@ -43,22 +49,35 @@ NARRATIVE_PATH_BY_TRACK = {
 }
 # Back-compat default (temporal champion).
 NARRATIVE_MODEL_ID = NARRATIVE_MODEL_BY_TRACK["extrapolation"]
-PROMPT_VERSION = "statistical-interpreter-v3-rca"
+PROMPT_VERSION = "statistical-interpreter-v5-pca-gate"
+# Bumped whenever the shape of build_wafer_facts changes (provenance for frozen
+# narratives). v2 adds the process_gates + model_context blocks; v3 renames the
+# EFA gate key to the PCA (fab-standard) gate.
+FACTS_SCHEMA_VERSION = "v3-pca-gate"
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8080/v1"
 DEFAULT_MODEL = "gemma"
 LLM_TIMEOUT_SEC = 45
-LLM_MAX_TOKENS = 160
+LLM_MAX_TOKENS = 360
 
 _SYSTEM_PROMPT = (
     "You are a Statistical Interpreter for semiconductor wafer screening models. "
     "Restate only the numeric facts in the user JSON. Do not invent fab processes, "
     "equipment names, or root causes. Do not mention features not listed. "
     "There is no real sensor-to-tool/chamber mapping, so never describe sensors as "
-    "physical equipment. Treat every attribution as "
-    "associational, not causal. When an SPC z-score or drift flag is given, you may "
-    "restate it as 'unusual vs the in-control baseline' or 'drifting over time'. "
-    "Write 3–5 concise sentences in plain English."
+    "physical equipment. Treat every attribution as associational, not causal. "
+    "When an SPC z-score or drift flag is given, you may restate it as 'unusual vs "
+    "the in-control baseline' or 'drifting over time'. When a process_gates block "
+    "is present, you may state that an independent sensor-space drift monitor (the "
+    "PCA Hotelling-T2 gate or the sBFA->BGM gate) flagged this wafer out-of-control "
+    "and whether that corroborates the model's verdict. When a model_context block "
+    "is present, you may mention the front-end and how many sensors/components the "
+    "model uses. Use any supplied reference definitions only to phrase the "
+    "statistics in plain English; never infer causes from them. Write a concise "
+    "4-6 sentence root-cause analysis following the arc: symptom (the verdict), "
+    "evidence (the top drivers with SPC z-scores, drift, and posterior confidence, "
+    "plus any gate corroboration), hypothesis (where to look, clearly "
+    "associational), and a suggested next action."
 )
 
 
@@ -161,6 +180,21 @@ def build_wafer_facts(
     if result.fail_probability_interval is not None:
         lo, hi = result.fail_probability_interval
         facts["fail_probability_credible_interval"] = [round(lo, 4), round(hi, 4)]
+
+    # Independent corroboration: did the standalone sensor-space drift monitors
+    # (PCA Hotelling-T2 gate, sBFA->BGM gate) flag this same wafer? Optional and
+    # empty-safe so page 6's live "build facts now" path still works pre-re-run.
+    gate_facts = wafer_gate_facts(
+        cached_benchmark_results(), track, result.observation_id
+    )
+    if gate_facts:
+        facts["process_gates"] = gate_facts
+
+    # Champion model context (front-end + selection footprint) from frozen
+    # artifacts, so the LLM can ground the model description in real numbers.
+    model_ctx = champion_model_context(model_id)
+    if model_ctx:
+        facts["model_context"] = model_ctx
     return facts
 
 
@@ -218,12 +252,25 @@ def generate_narrative_via_llm(
     model = model or resolve_llm_model(base_url=base_url)
     api_key = api_key or resolved_key
 
+    messages: list[dict[str, str]] = [{"role": "system", "content": _SYSTEM_PROMPT}]
+    definitions = reference_definitions_for_facts(facts)
+    if definitions:
+        messages.append(
+            {
+                "role": "system",
+                "content": (
+                    "Reference definitions (use only to phrase the statistics in "
+                    "plain English; do NOT infer causes from them): "
+                    + " ".join(definitions)
+                ),
+            }
+        )
+    messages.append(
+        {"role": "user", "content": json.dumps(facts, separators=(",", ":"))}
+    )
     payload = {
         "model": model,
-        "messages": [
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": json.dumps(facts, separators=(",", ":"))},
-        ],
+        "messages": messages,
         "temperature": 0.2,
         "max_tokens": LLM_MAX_TOKENS,
         "chat_template_kwargs": {"enable_thinking": False},
@@ -297,6 +344,8 @@ def build_narratives_artifact(
         "llm_base_url": llm_base_url or base_url,
         "llm_model": llm_model or model,
         "prompt_version": PROMPT_VERSION,
+        "glossary_version": GLOSSARY_VERSION,
+        "facts_schema_version": FACTS_SCHEMA_VERSION,
         "narratives": narratives,
     }
 

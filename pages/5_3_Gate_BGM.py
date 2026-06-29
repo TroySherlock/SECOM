@@ -6,21 +6,27 @@ import streamlit as st
 
 from secom.dashboard import render_blue_note
 from secom.dashboard.charts import (
+    fig_bgm_mode_weights,
+    fig_contribution_comparison,
     fig_factor_drift,
     fig_gate_control_chart,
     fig_gate_statistic_distributions,
     fig_sbfa_factor_space,
     fig_sbfa_loadings_heatmap,
+    fig_sensor_noise_spectrum,
 )
 from secom.dashboard.data import (
     factor_drift_ranking,
+    gate_contrast,
     gate_diagnostics,
     gate_drift_stats,
     sbfa_diagnostics,
+    sensor_noise_df,
 )
-from secom.dashboard.model_views import EFA_VS_SBFA_ONE_LINER, load_payload
+from secom.dashboard.model_views import PCA_VS_SBFA_ONE_LINER, load_payload
 
 _GATE = "bayes"
+_EMPTY = "No frozen gate-contrast artifacts in benchmark JSON. Re-run `python -m secom.benchmark`."
 
 # Statistic radio label -> (array key, limit key, limit side, OOC-mask key).
 _STATISTIC_SPECS = {
@@ -148,6 +154,28 @@ def _render_drift_scalar(payload: dict) -> None:
     )
 
 
+def _render_bgm_modes(payload: dict) -> None:
+    weights = np.asarray(
+        gate_contrast(payload, track="extrapolation").get("bgm_weights", []), dtype=float
+    )
+    if weights.size == 0:
+        st.info("No frozen BGM mode weights in benchmark JSON. Re-run `python -m secom.benchmark`.")
+        return
+    st.plotly_chart(
+        fig_bgm_mode_weights(weights),
+        width="stretch",
+        theme="streamlit",
+        key="p53_bgm_weights",
+    )
+    active = int((weights >= 0.05).sum())
+    st.caption(
+        f"The BGM keeps **{active} active mode(s)** above the 5% weight line. More than one is "
+        "direct evidence the in-control region is multimodal (multiple recipes / products / "
+        "chambers / eras) - structure a single PCA Hotelling ellipse cannot represent, which is "
+        "exactly the multimodality the 5.4 disagreement quadrant quantifies."
+    )
+
+
 def _render_factor_space(payload: dict, sbfa: dict, ranking) -> None:
     if not sbfa or ranking is None or ranking.empty:
         st.info("No frozen sBFA artifacts in benchmark JSON. Re-run `python -m secom.benchmark`.")
@@ -180,7 +208,7 @@ def _render_factor_space(payload: dict, sbfa: dict, ranking) -> None:
     )
     st.warning(
         "This is **one representative seed** (`members_[0]`); factor axes are rotation- and "
-        "sign-ambiguous and not comparable across runs or to the EFA gate. It is a qualitative "
+        "sign-ambiguous and not comparable across runs or to the PCA gate. It is a qualitative "
         "geometry view - the gate's actual decision uses the 8-D ensemble density + Q, not this 2-D picture."
     )
 
@@ -226,6 +254,57 @@ def _render_root_cause(sbfa: dict, ranking) -> None:
     )
 
 
+def _render_heteroscedasticity(contrast: dict) -> None:
+    noise = sensor_noise_df(contrast)
+    if noise.empty:
+        st.info(_EMPTY)
+        return
+
+    psi = noise["psi"].to_numpy(dtype=float)
+    st.plotly_chart(
+        fig_sensor_noise_spectrum(psi, noise["sensor"].astype(str).tolist()),
+        width="stretch",
+        theme="streamlit",
+        key="p53_noise_spectrum",
+    )
+    spread = float(psi.max() / psi[psi > 0].min()) if (psi > 0).any() else float("nan")
+    st.caption(
+        f"Per-sensor sBFA noise variance Ψ on a log axis, across **{psi.size} sensors**. The "
+        f"intrinsic noise spans roughly **{spread:,.0f}×** from the quietest to the noisiest "
+        "sensor. That spread is the whole point: under PCA's equal-weight residual, the noisiest "
+        "sensors look like the biggest contributors purely because they are noisy - not because "
+        "they drifted."
+    )
+
+    ex = contrast.get("example_wafer") or {}
+    rp = np.asarray(ex.get("pca_resid", []), dtype=float)
+    rs = np.asarray(ex.get("sbfa_resid", []), dtype=float)
+    names = list(contrast.get("feature_names", []))
+    if rp.size == 0 or rs.size != rp.size or len(names) != rp.size:
+        st.info(_EMPTY)
+        return
+    st.plotly_chart(
+        fig_contribution_comparison(rp, rs, np.asarray(contrast.get("psi", []), dtype=float), names),
+        width="stretch",
+        theme="streamlit",
+        key="p53_contribution",
+    )
+    st.caption(
+        f"Worked example: the in-control wafer with the most residual structure "
+        f"({ex.get('label', 'n/a')}). PCA weights every sensor equally (blue, residual²); sBFA "
+        "divides by Ψ (green, residual²/Ψ). **The ranking flips** - a chronically noisy sensor "
+        "that tops the equal-weight view drops once it is judged against its own noise floor, while "
+        "a normally quiet sensor's genuine deviation rises to the top."
+    )
+    render_blue_note(
+        "**Why this is the benefit.** Attribution is what an engineer acts on. PCA's smeared, "
+        "noise-inflated blame sends them to recalibrate the wrong (just-noisy) subsystem; sBFA's "
+        "noise-weighted contribution points at the sensor that actually moved relative to its own "
+        "history. Same excursion, correct root cause - less wasted teardown and faster recovery. "
+        "This is the same sparse, noise-aware model behind the root-cause loadings above."
+    )
+
+
 def main() -> None:
     st.title("5.3 sBFA → BGM gate")
     st.caption(
@@ -246,7 +325,7 @@ def main() -> None:
         "rate are statistically solid - unlike the noisy conditional-AUC curve. This is the gate "
         "demonstrating, in sensor space, that the forward window has drifted out of control."
     )
-    render_blue_note(EFA_VS_SBFA_ONE_LINER)
+    render_blue_note(PCA_VS_SBFA_ONE_LINER)
 
     statistic = st.radio(
         "Control statistic",
@@ -276,16 +355,28 @@ def main() -> None:
     ranking = factor_drift_ranking(sbfa)
 
     st.subheader("4. sBFA latent factor space")
+    _render_bgm_modes(payload)
     _render_factor_space(payload, sbfa, ranking)
 
     st.subheader("5. Which subsystem is drifting (root cause)")
     _render_root_cause(sbfa, ranking)
 
+    st.divider()
+    st.subheader("6. Why the attribution is noise-weighted: sensors are heteroscedastic")
+    st.caption(
+        "The root cause above points at *which* sensors; this explains *why* trusting them "
+        "requires weighting each by its own noise floor - the structural reason the custom gate's "
+        "blame is sharper than the PCA baseline's equal-weight residual."
+    )
+    _render_heteroscedasticity(gate_contrast(payload, track="extrapolation"))
+
     render_blue_note(
         "**5.3 is a Bayesian sensor-space drift monitor.** Trust the population drift evidence "
-        "(sections 1-3); treat the latent-space and loadings views (sections 4-5) as interpretable "
-        "diagnostics from a single representative fit. Conditional yield lift lives on **5.4 Gate "
-        "comparison**, where the confidence intervals are wide (~17-20 holdout fails)."
+        "(sections 1-3); treat the latent-space, loadings and noise-weighting views (sections 4-6) "
+        "as interpretable diagnostics from a single representative fit - this is the sensor-level "
+        "root cause the PCA baseline (5.2) defers to, thanks to the Laplace-sparse, heteroscedastic "
+        "noise model. Conditional yield lift and the head-to-head verdict live on **5.4 Gate "
+        "comparison** (CIs are wide at ~17-20 holdout fails)."
     )
 
 

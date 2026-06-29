@@ -220,7 +220,7 @@ def main() -> None:
         "interactions; **PLS** instead projects all clustered sensors onto a few supervised "
         "latent components (no T², no hubs).\n\n"
         "Note: this T² is an **engineered feature** inside the hsic/rfsel hub blocks — distinct "
-        "from the standalone EFA → Hotelling T² monitoring **gate** on the Gates pages (5.2)."
+        "from the standalone PCA → Hotelling T² monitoring **gate** on the Gates pages (5.2)."
     )
 
     fe_hsic, fe_rf, fe_pls = st.tabs(

@@ -419,6 +419,62 @@ def fig_sensor_drift_heatmap(
     return _sized(fig, height=520, margin=dict(t=80))
 
 
+def fig_wafer_drift_spikes(
+    sensors: list[str],
+    robust_z: np.ndarray,
+    drift_shift: np.ndarray,
+    *,
+    z_band: float = 2.0,
+    title: str = "Known-drifting sensors on this wafer (robust SPC z)",
+) -> go.Figure:
+    """One wafer's robust SPC z across the globally known-drifting sensors.
+
+    Each bar is a sensor from the era-drift set (its training->holdout mean shift
+    drifted past the global threshold); the bar height is *this* wafer's robust z
+    against the in-control passing-train distribution. Bars outside the +/- ``z_band``
+    reference region are the sensors actually spiking on this wafer - the in-control
+    excursion that trips the density gate even though the wafer passed.
+    """
+    z = np.asarray(robust_z, dtype=float)
+    if len(sensors) == 0 or z.size == 0:
+        return _sized(go.Figure(), height=320)
+    shift = np.asarray(drift_shift, dtype=float)
+    spiking = np.abs(z) > z_band
+    colors = [C_RED if s else C_BLUE for s in spiking]
+    customdata = np.column_stack([shift])
+
+    fig = go.Figure(
+        data=go.Bar(
+            x=z,
+            y=list(sensors),
+            orientation="h",
+            marker=dict(color=colors),
+            customdata=customdata,
+            hovertemplate=(
+                "Sensor %{y}<br>this wafer: %{x:.2f} σ (robust z vs in-control)"
+                "<br>era drift: %{customdata[0]:+.2f} σ<extra></extra>"
+            ),
+        )
+    )
+    for edge in (z_band, -z_band):
+        fig.add_vline(x=edge, line=dict(color=C_YELLOW, width=1, dash="dash"))
+    fig.add_vrect(
+        x0=-z_band,
+        x1=z_band,
+        fillcolor=C_YELLOW,
+        opacity=0.08,
+        line_width=0,
+    )
+    fig.add_vline(x=0.0, line=dict(color="rgba(128,128,128,0.6)", width=1))
+    fig.update_layout(
+        title=dict(text=title),
+        xaxis=dict(title=f"Robust SPC z (|z| > {z_band:g} = spiking)"),
+        yaxis=dict(title="Known-drifting sensor", type="category", autorange="reversed"),
+        showlegend=False,
+    )
+    return _sized(fig, height=460, margin=dict(l=120, r=40, t=70, b=50))
+
+
 def fig_missing_rate_distribution(
     df: pd.DataFrame,
     sensor_cols: list[str],
