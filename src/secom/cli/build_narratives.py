@@ -14,7 +14,7 @@ import time
 
 from tqdm import tqdm
 
-from secom.dashboard.explainability import cached_wafer_explanation, holdout_wafer_ids
+from secom.dashboard.explainability import _live_wafer_explanation, holdout_wafer_ids
 from secom.dashboard.narrator import (
     NARRATIVE_MODEL_BY_TRACK,
     LLMNarrativeError,
@@ -84,7 +84,7 @@ def _run_track(track: str, *, model: str, wafer_id: str | None) -> int:
     narratives: dict[str, str] = dict(existing) if wafer_id else {}
 
     for wid in tqdm(wafer_ids, desc=f"Gemma narratives [{track}]", unit="wafer"):
-        result = cached_wafer_explanation(narrative_model, wid, track)
+        result = _live_wafer_explanation(narrative_model, wid, track)
         if result is None:
             print(f"ERROR: wafer {wid!r} not found in {track} holdout", file=sys.stderr)
             return 1

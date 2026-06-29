@@ -26,6 +26,7 @@ dev = ["ruff", "vulture", "pytest"]
 [project.scripts]
 secom-build-seed = "secom.cli.build_seed:main"
 secom-build-narratives = "secom.cli.build_narratives:main"
+secom-build-explanations = "secom.cli.build_explanations:main"
 secom-tune = "secom.cli.run_tuning:main"
 secom-benchmark = "secom.cli.benchmark:main"
 

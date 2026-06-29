@@ -1,0 +1,13 @@
+# Runtime-only dependencies for the read-only Streamlit dashboard (e.g. Streamlit
+# Community Cloud). The dashboard reads frozen JSON caches (report cache,
+# explanations cache, wafer narratives), so the heavy modelling stack used only by
+# the offline build CLIs -- pymc, numpyro, jax, pyHSICLasso, shap, dbt-duckdb -- is
+# intentionally excluded. To regenerate the caches, install the full environment
+# from pyproject.toml instead.
+streamlit>=1.47
+pandas
+numpy
+plotly
+scikit-learn
+feature-engine
+duckdb

@@ -9,7 +9,7 @@ import streamlit as st
 
 from secom.bayes.model import BayesianElasticNetLogistic
 from secom.costs import DEFAULT_PROFILE_ID, resolve_threshold_profiles
-from secom.dashboard.data import model_info, report_entry
+from secom.dashboard.data import explanation_entry, model_info, report_entry
 from secom.metrics import predict_with_threshold
 from secom.pipelines import (
     BENCHMARK_MODEL_IDS,
@@ -77,6 +77,36 @@ class WaferExplanation:
     # pooled, so this is on the *same scale* as fail_probability (the point
     # estimate lands inside it). None for non-Bayesian heads.
     fail_probability_interval: tuple[float, float] | None = None
+
+
+def explanation_to_blob(result: "WaferExplanation") -> dict:
+    """JSON-serialisable form of a wafer explanation (used by the build CLI)."""
+    interval = result.fail_probability_interval
+    return {
+        "observation_id": result.observation_id,
+        "actual_label": int(result.actual_label),
+        "predicted_label": int(result.predicted_label),
+        "fail_probability": float(result.fail_probability),
+        "threshold": float(result.threshold),
+        "method": result.method,
+        "fail_probability_interval": list(interval) if interval is not None else None,
+        "local_df": result.local_df.to_dict(orient="records"),
+    }
+
+
+def _explanation_from_blob(blob: dict) -> "WaferExplanation":
+    """Reconstruct a wafer explanation from its frozen JSON form."""
+    interval = blob.get("fail_probability_interval")
+    return WaferExplanation(
+        observation_id=blob["observation_id"],
+        actual_label=int(blob["actual_label"]),
+        predicted_label=int(blob["predicted_label"]),
+        fail_probability=float(blob["fail_probability"]),
+        threshold=float(blob["threshold"]),
+        local_df=pd.DataFrame.from_records(blob.get("local_df") or []),
+        method=blob.get("method", ""),
+        fail_probability_interval=tuple(interval) if interval is not None else None,
+    )
 
 
 @st.cache_data(show_spinner=False)
@@ -183,15 +213,13 @@ def _pls_loadings(pipeline) -> tuple[np.ndarray, list[str]]:
     return loadings, sensors
 
 
-@st.cache_data(show_spinner="Projecting PLS components…")
-def cached_pls_score_scatter(
+def _live_pls_score_scatter(
     track: str = "interpolation",
     model_id: str = "pls_enet",
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Training-split latent scores (component 1 vs 2) for a PLS front-end.
+    """Build-time training-split latent scores (component 1 vs 2) for a PLS front-end.
 
-    Uses the cached live fit so page 2 can show the supervised projection that PLS
-    builds. Reuses ``PLSRegression.x_scores_`` (the training scores fit inside the
+    Reuses ``PLSRegression.x_scores_`` (the training scores fit inside the
     pipeline), aligned to the train labels. If the model has a single component,
     the second axis is returned as zeros.
     """
@@ -201,6 +229,19 @@ def cached_pls_score_scatter(
     t1 = scores[:, 0]
     t2 = scores[:, 1] if scores.shape[1] > 1 else np.zeros_like(t1)
     y = load_holdout_split(track).y_train.to_numpy().astype(int)
+    return t1, t2, y
+
+
+@st.cache_data(show_spinner=False)
+def cached_pls_score_scatter(
+    track: str = "interpolation",
+    model_id: str = "pls_enet",
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Frozen training-split latent scores (component 1 vs 2) for a PLS front-end."""
+    sc = explanation_entry(track, model_id).get("score_scatter") or {}
+    t1 = np.asarray(sc.get("t1", []), dtype=float)
+    t2 = np.asarray(sc.get("t2", []), dtype=float)
+    y = np.asarray(sc.get("y", []), dtype=int)
     return t1, t2, y
 
 
@@ -480,9 +521,8 @@ def _classify_outcome(actual: int, predicted: int) -> str:
     return "false_alarm" if predicted == 1 else "correct_pass"
 
 
-@st.cache_data(show_spinner="Scoring holdout wafers…")
-def cached_holdout_outcomes(model_id: str, track: str = DEFAULT_TRACK) -> pd.DataFrame:
-    """Per-wafer verdict for the champion: actual/predicted/proba/outcome.
+def _live_holdout_outcomes(model_id: str, track: str = DEFAULT_TRACK) -> pd.DataFrame:
+    """Build-time per-wafer verdict for the champion: actual/predicted/proba/outcome.
 
     Used to color-code the wafer picker so misses (false negatives) and false
     alarms surface first. Errors are sorted ahead of correct calls.
@@ -511,6 +551,13 @@ def cached_holdout_outcomes(model_id: str, track: str = DEFAULT_TRACK) -> pd.Dat
         .reset_index(drop=True)
     )
     return df
+
+
+@st.cache_data(show_spinner=False)
+def cached_holdout_outcomes(model_id: str, track: str = DEFAULT_TRACK) -> pd.DataFrame:
+    """Frozen per-wafer verdict for the champion (built by build_explanations)."""
+    records = explanation_entry(track, model_id).get("outcomes") or []
+    return pd.DataFrame.from_records(records)
 
 
 def key_findings(
@@ -568,12 +615,24 @@ def cached_global_importance(
     return top, signed, str(importance.get("caption", ""))
 
 
-@st.cache_data(show_spinner="Building wafer explanation…")
+def _live_wafer_explanation(
+    model_id: str, observation_id: object, track: str = DEFAULT_TRACK
+) -> WaferExplanation | None:
+    """Build-time per-wafer explanation (fits the pipeline)."""
+    pipeline, tuned = fit_holdout_pipeline(model_id, track)
+    return wafer_explanation(model_id, pipeline, tuned, observation_id, track)
+
+
+@st.cache_data(show_spinner=False)
 def cached_wafer_explanation(
     model_id: str, observation_id: object, track: str = DEFAULT_TRACK
 ) -> WaferExplanation | None:
-    pipeline, tuned = fit_holdout_pipeline(model_id, track)
-    return wafer_explanation(model_id, pipeline, tuned, observation_id, track)
+    """Frozen per-wafer explanation (built by build_explanations)."""
+    wafers = explanation_entry(track, model_id).get("wafers") or {}
+    blob = wafers.get(str(observation_id))
+    if not blob:
+        return None
+    return _explanation_from_blob(blob["explanation"])
 
 
 def _shap_mean_abs_vector(pipeline, X_train: pd.DataFrame, n_features: int) -> np.ndarray:
@@ -638,9 +697,8 @@ def _bayes_posterior_summary(pipeline) -> tuple[np.ndarray, ...]:
     )
 
 
-@st.cache_data(show_spinner="Reading posterior credible intervals…")
-def cached_bayes_hdis(model_id: str, track: str = DEFAULT_TRACK) -> pd.DataFrame | None:
-    """Posterior coefficient HDIs (feature/component space) for Bayesian heads.
+def _live_bayes_hdis(model_id: str, track: str = DEFAULT_TRACK) -> pd.DataFrame | None:
+    """Build-time posterior coefficient HDIs (feature/component space) for Bayesian heads.
 
     Returns None for non-Bayesian models. ``robust`` flags attributions whose 95%
     HDI excludes zero (robustly nonzero vs posterior noise).
@@ -666,8 +724,18 @@ def cached_bayes_hdis(model_id: str, track: str = DEFAULT_TRACK) -> pd.DataFrame
 
 
 @st.cache_data(show_spinner=False)
-def cached_pls_sensor_robust_map(model_id: str, track: str = DEFAULT_TRACK) -> dict:
-    """Map each sensor -> robust(bool) for pls_bayes via its dominant component.
+def cached_bayes_hdis(model_id: str, track: str = DEFAULT_TRACK) -> pd.DataFrame | None:
+    """Frozen posterior coefficient HDIs for Bayesian heads (None otherwise)."""
+    if model_info(model_id).explainability != "bayesian":
+        return None
+    records = (explanation_entry(track, model_id).get("global") or {}).get("bayes_hdis")
+    if not records:
+        return None
+    return pd.DataFrame.from_records(records)
+
+
+def _live_pls_sensor_robust_map(model_id: str, track: str = DEFAULT_TRACK) -> dict:
+    """Build-time map each sensor -> robust(bool) for pls_bayes via its dominant component.
 
     A sensor is called robust when the component it loads onto most strongly
     (weighted by posterior |mean|) has an HDI that excludes zero. Empty for
@@ -675,7 +743,7 @@ def cached_pls_sensor_robust_map(model_id: str, track: str = DEFAULT_TRACK) -> d
     """
     if not (is_pls_model(model_id) and model_info(model_id).explainability == "bayesian"):
         return {}
-    hdi_df = cached_bayes_hdis(model_id, track)
+    hdi_df = _live_bayes_hdis(model_id, track)
     if hdi_df is None or hdi_df.empty:
         return {}
     pipeline, _ = fit_holdout_pipeline(model_id, track)
@@ -695,6 +763,14 @@ def cached_pls_sensor_robust_map(model_id: str, track: str = DEFAULT_TRACK) -> d
         cstar = int(np.argmax(row)) if row.any() else int(np.argmax(np.abs(loadings[i])))
         out[str(s)] = bool(robust[cstar])
     return out
+
+
+@st.cache_data(show_spinner=False)
+def cached_pls_sensor_robust_map(model_id: str, track: str = DEFAULT_TRACK) -> dict:
+    """Frozen sensor -> robust(bool) map for pls_bayes (empty otherwise)."""
+    if not (is_pls_model(model_id) and model_info(model_id).explainability == "bayesian"):
+        return {}
+    return (explanation_entry(track, model_id).get("global") or {}).get("pls_robust_map") or {}
 
 
 def _bayes_beta_draws(pipeline) -> np.ndarray:
@@ -756,11 +832,10 @@ def _posterior_forest_frame(
     return df
 
 
-@st.cache_data(show_spinner="Sampling sensor-space posterior…")
-def cached_pls_sensor_posterior(
+def _live_pls_sensor_posterior(
     model_id: str, track: str = DEFAULT_TRACK, top_n: int = GLOBAL_SENSOR_TOP_N
 ) -> pd.DataFrame | None:
-    """Global signed sensor-coefficient posterior for pls_bayes (forest plot).
+    """Build-time global signed sensor-coefficient posterior for pls_bayes (forest plot).
 
     Back-projects each posterior draw's component coefficients through the PLS
     loadings (``sensor = comp @ loadings.T``) to get a *true* sensor-space
@@ -783,11 +858,23 @@ def cached_pls_sensor_posterior(
     return df.nlargest(top_n, "abs_mean").reset_index(drop=True)
 
 
-@st.cache_data(show_spinner="Sampling wafer posterior…")
-def wafer_sensor_posterior(
+@st.cache_data(show_spinner=False)
+def cached_pls_sensor_posterior(
+    model_id: str, track: str = DEFAULT_TRACK, top_n: int = GLOBAL_SENSOR_TOP_N
+) -> pd.DataFrame | None:
+    """Frozen global signed sensor-coefficient posterior for pls_bayes (None otherwise)."""
+    if not (is_pls_model(model_id) and model_info(model_id).explainability == "bayesian"):
+        return None
+    records = (explanation_entry(track, model_id).get("global") or {}).get("pls_sensor_posterior")
+    if not records:
+        return None
+    return pd.DataFrame.from_records(records)
+
+
+def _live_wafer_sensor_posterior(
     model_id: str, observation_id: object, track: str = DEFAULT_TRACK, top_n: int = LOCAL_TOP_N
 ) -> pd.DataFrame | None:
-    """Per-sensor contribution posterior for ONE wafer (pls_bayes forest plot).
+    """Build-time per-sensor contribution posterior for ONE wafer (pls_bayes forest plot).
 
     Contribution draw per component = ``beta_draw * scaled_score`` (the wafer's
     PLS scores are fixed), back-projected to sensors with the same sign-aware
@@ -816,6 +903,21 @@ def wafer_sensor_posterior(
     # Sensors only: non-sensor aux features (calendar, missing flags) are excluded.
     df = _posterior_forest_frame(sensor_draws, sensors, [])
     return df.nlargest(top_n, "abs_mean").reset_index(drop=True)
+
+
+@st.cache_data(show_spinner=False)
+def wafer_sensor_posterior(
+    model_id: str, observation_id: object, track: str = DEFAULT_TRACK, top_n: int = LOCAL_TOP_N
+) -> pd.DataFrame | None:
+    """Frozen per-sensor contribution posterior for ONE wafer (None otherwise)."""
+    if not (is_pls_model(model_id) and model_info(model_id).explainability == "bayesian"):
+        return None
+    wafers = explanation_entry(track, model_id).get("wafers") or {}
+    blob = wafers.get(str(observation_id))
+    records = (blob or {}).get("wafer_posterior") if blob else None
+    if not records:
+        return None
+    return pd.DataFrame.from_records(records)
 
 
 @st.cache_data(show_spinner=False)
@@ -930,18 +1032,10 @@ def cached_sensor_groups(track: str = DEFAULT_TRACK, n_groups: int = 8) -> dict:
     return mapping
 
 
-@st.cache_data(show_spinner="Computing sensor-space global importance…")
-def cached_global_sensor_importance(
+def _live_pls_global_importance(
     model_id: str, track: str = DEFAULT_TRACK
 ) -> tuple[pd.DataFrame, pd.DataFrame | None, str]:
-    """Global importance in one sensor vocabulary across all 9 models.
-
-    Selection/tree front-ends already speak sensor names, so their frozen
-    importance is reused as-is. PLS front-ends emit latent components, so they
-    are fit live and back-projected to sensors via the PLS loadings.
-    """
-    if not is_pls_model(model_id):
-        return cached_global_importance(model_id, track)
+    """Build-time PLS-back-projected sensor-space global importance."""
     pipeline, _ = fit_holdout_pipeline(model_id, track)
     split = load_holdout_split(track)
     importance, names, signed_vec = _global_vectors(model_id, pipeline, split.X_train)
@@ -953,3 +1047,27 @@ def cached_global_sensor_importance(
         + _PLS_COMPONENT_NOTE.get(kind, "")
     )
     return top, signed_df, caption
+
+
+@st.cache_data(show_spinner=False)
+def cached_global_sensor_importance(
+    model_id: str, track: str = DEFAULT_TRACK
+) -> tuple[pd.DataFrame, pd.DataFrame | None, str]:
+    """Global importance in one sensor vocabulary across all 9 models.
+
+    Selection/tree front-ends read their frozen report-cache importance directly;
+    PLS front-ends read the frozen back-projected importance from the explanations
+    cache (built by ``secom.cli.build_explanations``).
+    """
+    if not is_pls_model(model_id):
+        return cached_global_importance(model_id, track)
+    gi = (explanation_entry(track, model_id).get("global") or {}).get("global_importance")
+    if not gi:
+        raise FileNotFoundError(
+            f"No frozen PLS global importance for {model_id!r} ({track}). "
+            "Run: python -m secom.cli.build_explanations"
+        )
+    top = pd.DataFrame.from_records(gi.get("top") or [])
+    signed_records = gi.get("signed")
+    signed = pd.DataFrame.from_records(signed_records) if signed_records else None
+    return top, signed, str(gi.get("caption", ""))

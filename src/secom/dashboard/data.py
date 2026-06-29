@@ -19,6 +19,7 @@ from secom.costs import (
 from secom.pipelines import (
     BENCHMARK_MODEL_IDS,
     BENCHMARK_RESULTS_PATH,
+    EXPLANATIONS_CACHE_PATH,
     MODEL_CELLS,
     MODEL_IDS,
     PIPELINE_ARTIFACTS_PATH,
@@ -736,6 +737,30 @@ def report_entry(track: str, model_id: str) -> dict[str, Any]:
     if not entry:
         raise FileNotFoundError(
             f"No frozen report for {model_id!r} ({track}). Run: python -m secom.benchmark"
+        )
+    return entry
+
+
+@lru_cache(maxsize=None)
+def load_explanations_cache(path: Path | None = None) -> dict[str, Any]:
+    """Frozen per-wafer explainability cache written by ``secom.cli.build_explanations``."""
+    path = path or EXPLANATIONS_CACHE_PATH
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"Explanations cache not found at {path}. "
+            "Run: python -m secom.cli.build_explanations"
+        )
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def explanation_entry(track: str, model_id: str) -> dict[str, Any]:
+    """Frozen explainability entry (`outcomes`, `wafers`, `global`, ...) for one track/model."""
+    cache = load_explanations_cache()
+    entry = (cache.get(track) or {}).get(model_id)
+    if not entry:
+        raise FileNotFoundError(
+            f"No frozen explanations for {model_id!r} ({track}). "
+            "Run: python -m secom.cli.build_explanations"
         )
     return entry
 

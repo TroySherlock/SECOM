@@ -75,6 +75,9 @@ BENCHMARK_RESULTS_PATH = OUTPUT_DIR / "secom_pipeline_benchmark.json"
 PIPELINE_ARTIFACTS_PATH = OUTPUT_DIR / "secom_pipeline_artifacts.json"
 # Frozen PR-curve + global-importance cache the dashboard reads (per track/model).
 REPORT_CACHE_PATH = OUTPUT_DIR / "secom_report_cache.json"
+# Frozen per-wafer explainability cache (outcomes, local contributions, posteriors,
+# PLS global importance + score scatter) the dashboard reads instead of fitting live.
+EXPLANATIONS_CACHE_PATH = OUTPUT_DIR / "secom_explanations_cache.json"
 # Pre-generated wafer narratives. The narrative model is track-dependent:
 # extrapolation/temporal -> pls_bayes, interpolation/random -> hsic_rf.
 NARRATIVES_PATH = OUTPUT_DIR / "extrap_wafer_narratives.json"
