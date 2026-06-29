@@ -5,9 +5,16 @@ Run from repo root:
 """
 from __future__ import annotations
 
-import streamlit as st
+import sys
+from pathlib import Path
 
-from secom.dashboard import configure_page
+# Make the src-layout ``secom`` package importable on hosts that only install
+# requirements.txt (e.g. Streamlit Community Cloud), not the project itself.
+sys.path.insert(0, str(Path(__file__).parent / "src"))
+
+import streamlit as st  # noqa: E402
+
+from secom.dashboard import configure_page  # noqa: E402
 
 pages = {
     "Overview": [
