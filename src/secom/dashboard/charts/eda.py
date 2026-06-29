@@ -143,7 +143,7 @@ def fig_fails_over_time(
         layout_y2 = None
 
     fig.update_layout(
-        title=dict(text="Failures over time"),
+        title=dict(text="Failures over time", y=0.97, yanchor="top"),
         xaxis_title="Measurement time",
         yaxis=dict(
             title="Outcome (jittered)",
@@ -153,8 +153,8 @@ def fig_fails_over_time(
         ),
         yaxis2=layout_y2,
         showlegend=True,
-        legend=dict(orientation="h", yanchor="top", y=-0.2, x=0.5, xanchor="center"),
-        margin=dict(b=90),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0.5, xanchor="center"),
+        margin=dict(t=80),
     )
     return _sized(fig, height=400)
 
