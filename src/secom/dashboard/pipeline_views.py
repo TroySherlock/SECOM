@@ -88,7 +88,7 @@ def _render_rz_explainer(linear_ref: dict | None) -> None:
     mart = int(stages.get("mart_sensors", 422))
     after_impute = int(stages.get("after_impute", mart * 2))
 
-    st.subheader("Step 1 — robust-z (rz) twin features")
+    st.subheader("🧬 Step 1 — robust-z (rz) twin features")
     st.caption(
         "Why the feature count *doubles* before any selection: every kept raw sensor gets a "
         "causal rolling robust-z partner, built in the dbt mart."
@@ -136,11 +136,16 @@ def _render_shared_spine(linear_ref: dict | None, cluster_example: dict | None) 
     after_impute = int(stages.get("after_impute", 844))
     after_cluster = int(stages.get("after_cluster", 529))
 
-    st.subheader("Step 2 — the shared spine")
+    st.subheader("🧱 Step 2 — the shared spine")
     st.caption(
         "Four steps every cell of the 3×3 grid shares, regardless of front-end or classifier "
-        "head. All are fit on training folds only — no leakage."
+        "head. All are fit on training folds only."
     )
+    st.markdown(
+        f":gray-background[{after_impute:,} cols] → :gray-background[{after_cluster:,} kept] → "
+        ":gray-background[scaled] → :gray-background[calibrated P(fail)]"
+    )
+    st.badge("Fit on training folds only — no leakage", color="green", icon=":material/lock:")
     render_blue_note(
         "Upstream, dbt (`stg_secom` → `int_secom_*` → **`mart_secom_features`**) profiles sensors, "
         "drops >10% missing / zero-variance columns, and adds the rz twins, cyclical calendar "
@@ -149,17 +154,17 @@ def _render_shared_spine(linear_ref: dict | None, cluster_example: dict | None) 
 
     cols = st.columns(4, gap="medium")
     cards = [
-        ("1 · Impute", f"{after_impute:,} cols",
+        (":orange[1 · Impute]", f"{after_impute:,} cols",
          "Per-sensor **median** fill learned on the training fold, so sparse sensors stay usable "
          "without outliers skewing the fill value."),
-        ("2 · Cluster", f"→ {after_cluster:,} kept",
+        (":orange[2 · Cluster]", f"→ {after_cluster:,} kept",
          "`VarianceThreshold` drops near-constant columns, then **Spearman** "
          "`SmartCorrelatedSelection` collapses each correlated group to its single best member. "
          "The threshold is **CV-tuned**, so the survivor count differs per cell."),
-        ("3 · Scale", "front-end output",
+        (":orange[3 · Scale]", "front-end output",
          "`RobustScaler` (median / IQR) so heavy-tailed sensors and outliers don't dominate the "
          "downstream classifier."),
-        ("4 · Calibrate", "fail P(·)",
+        (":orange[4 · Calibrate]", "fail P(·)",
          "`CalibratedClassifierCV` (**Platt / sigmoid**) maps raw head scores to trustworthy fail "
          "probabilities — what the operating-point thresholds on the model pages rely on."),
     ]
@@ -170,31 +175,41 @@ def _render_shared_spine(linear_ref: dict | None, cluster_example: dict | None) 
                 st.markdown(f"`{chip}`")
                 st.markdown(detail)
 
-    with st.expander("Show the Spearman cluster (step 2 in action)"):
+    with st.container(border=True, key="card_cluster_demo"):
+        st.subheader("🔗 Step 2 in action — one Spearman cluster")
+        txt, chart = st.columns([1, 1.4], gap="large")
         if cluster_example:
-            st.plotly_chart(
-                fig_spearman_cluster(cluster_example),
-                width="stretch",
-                theme="streamlit",
-                key="p2_spearman_cluster",
-            )
             members = cluster_example.get("members", [])
-            st.caption(
-                "One correlated cluster from the holdout training fit — these sensors move "
-                f"together (high Spearman ρ), so only the best member survives: "
-                f"{', '.join(members)}."
-            )
+            with txt:
+                st.markdown(
+                    "These sensors move together (high :orange[**Spearman ρ**]), so "
+                    "`SmartCorrelatedSelection` keeps only the single best member and **drops the "
+                    "rest** — one correlated cluster from the holdout training fit."
+                )
+                if members:
+                    st.caption("Cluster members: " + ", ".join(f"`{m}`" for m in members))
+            with chart:
+                st.plotly_chart(
+                    fig_spearman_cluster(cluster_example),
+                    width="stretch",
+                    theme="streamlit",
+                    key="p2_spearman_cluster",
+                )
         else:
-            st.plotly_chart(
-                fig_spearman_cluster_example(),
-                width="stretch",
-                theme="streamlit",
-                key="p2_spearman_cluster",
-            )
-            st.caption(
-                "Example cluster: `c_340`, `c_204`, `c_67` grouped by high Spearman ρ "
-                "(illustrative)."
-            )
+            with txt:
+                st.markdown(
+                    "These sensors move together (high :orange[**Spearman ρ**]), so "
+                    "`SmartCorrelatedSelection` keeps only the single best member and **drops the "
+                    "rest**."
+                )
+                st.caption("Example cluster: `c_340`, `c_204`, `c_67` (illustrative).")
+            with chart:
+                st.plotly_chart(
+                    fig_spearman_cluster_example(),
+                    width="stretch",
+                    theme="streamlit",
+                    key="p2_spearman_cluster",
+                )
 
 
 # --- step 3: three front-ends ------------------------------------------------
@@ -504,9 +519,7 @@ def render_feature_spine() -> None:
         "follows the data through that shared spine: **rz twins → the shared spine.** The "
         "Front-ends & journeys page then shows how each front-end diverges."
     )
-    st.divider()
     _render_rz_explainer(ctx.linear_ref)
-    st.divider()
     _render_shared_spine(ctx.linear_ref, ctx.cluster_example)
 
 
