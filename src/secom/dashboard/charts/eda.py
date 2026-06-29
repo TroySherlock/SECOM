@@ -153,6 +153,8 @@ def fig_fails_over_time(
         ),
         yaxis2=layout_y2,
         showlegend=True,
+        legend=dict(orientation="h", yanchor="top", y=-0.2, x=0.5, xanchor="center"),
+        margin=dict(b=90),
     )
     return _sized(fig, height=400)
 
