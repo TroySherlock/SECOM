@@ -9,6 +9,7 @@ from secom.dashboard.charts._base import (
     C_GREEN,
     C_PURPLE,
     C_RED,
+    C_YELLOW,
     COLORSCALE_LOW_GREEN_HIGH_RED,
     C,
     _sized,
@@ -18,14 +19,16 @@ from secom.dashboard.charts._base import (
 def fig_hsic_selected_rank(
     selected_features: list[str],
     *,
-    top_k: int | None = 20,
+    top_k: int | None = None,
 ) -> go.Figure:
-    """Ordered bar of the real HSIC-Lasso selections.
+    """Ordered bar of the real HSIC-Lasso selections (raw vs rz twin, colour-coded).
 
     HSIC stores only the *order* it picked sensors (strongest nonlinear dependence
-    first), not the kernel magnitudes, so the bar height is selection-rank strength
-    (``k - position``) and is labeled as such. rz robust-z twins are colored apart
-    from raw sensors so the reader can see how often the drift-robust view wins.
+    first), not the kernel magnitudes, so the bar length is selection-rank strength
+    (``k - position``) and is labelled as such. Raw sensors and rz robust-z twins
+    are two separate traces so the legend is clean (no phantom ``trace 0``) and the
+    reader can see how often the drift-robust view wins. By default every selected
+    feature is shown.
     """
     feats = list(selected_features or [])
     if not feats:
@@ -35,31 +38,33 @@ def fig_hsic_selected_rank(
         feats = feats[:top_k]
     n = len(feats)
     strength = [k - i for i in range(n)]
-    is_rz = [f.endswith("_rz") for f in feats]
-    colors = [C_PURPLE if rz else C_BLUE for rz in is_rz]
 
-    fig = go.Figure(
-        go.Bar(
-            x=strength,
+    def _trace(name: str, color: str, *, want_rz: bool) -> go.Bar:
+        xs = [s if f.endswith("_rz") == want_rz else None for f, s in zip(feats, strength)]
+        return go.Bar(
+            x=xs,
             y=feats,
             orientation="h",
-            marker_color=colors,
-            customdata=[("rz robust-z twin" if rz else "raw sensor") for rz in is_rz],
-            hovertemplate="%{y} (%{customdata})<br>selection rank %{x}<extra></extra>",
+            name=name,
+            marker_color=color,
+            hovertemplate="%{y}<br>selection-rank strength %{x}<extra></extra>",
         )
-    )
-    fig.add_trace(go.Bar(x=[None], y=[None], marker_color=C_BLUE, name="raw sensor"))
-    fig.add_trace(go.Bar(x=[None], y=[None], marker_color=C_PURPLE, name="rz robust-z twin"))
+
+    fig = go.Figure()
+    fig.add_trace(_trace("raw sensor", C_YELLOW, want_rz=False))
+    fig.add_trace(_trace("rz robust-z twin", C_RED, want_rz=True))
     shown = f"top {n} of {k}" if top_k and k > n else f"all {k}"
     fig.update_layout(
-        title=dict(text=f"HSIC selection order ({shown})"),
+        title=dict(text=f"HSIC-Lasso selection order ({shown})"),
         xaxis_title="Selection-rank strength (higher = picked earlier; magnitudes not stored)",
         yaxis_title="Selected feature",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         barmode="overlay",
+        bargap=0.25,
     )
-    fig.update_yaxes(autorange="reversed")
-    return _sized(fig, height=420, margin=dict(l=90, r=24, t=86, b=52))
+    fig.update_yaxes(autorange="reversed", tickmode="linear", dtick=1)
+    height = max(360, 80 + 22 * n)
+    return _sized(fig, height=height, margin=dict(l=96, r=24, t=86, b=52))
 
 
 def fig_hsic_dependence_intuition() -> go.Figure:
@@ -266,18 +271,20 @@ def fig_spearman_cluster(cluster_example: dict | None) -> go.Figure:
     return _sized(fig, height=340, margin=dict(l=70, r=40, t=78, b=60))
 
 
-def fig_pipeline_feature_funnel(
+def fig_pipeline_stage_counts(
     stages: dict[str, int],
     *,
     title: str = "Feature count through the pipeline",
 ) -> go.Figure:
-    """Waterfall of the true per-stage feature count, including the rz doubling.
+    """Horizontal bar of the absolute feature count at each pipeline stage.
 
-    Unlike a monotonic funnel, this shows every step as a signed delta so the
-    flow is conserved and the one *increase* - the causal rolling-Z (rz) twin
-    that the dbt mart appends to every kept raw sensor - is explicit. Handles
-    both the selection front-ends (top-k + T2) and the PLS front-end (latent
-    components). Reads the per-model ``stages`` dict from the artifacts.
+    Reads top-to-bottom in flow order so the journey is obvious: staged sensors
+    -> dbt mart -> the one *increase* (the causal rolling-Z rz twins) -> cluster
+    -> front-end (top-k + T2/hubs, or PLS latent components) -> classifier input.
+    The rz-doubling stage is highlighted green and the final classifier input is
+    accented so the single increase and the endpoint read at a glance. Handles
+    both the selection front-ends and the PLS front-end from the per-model
+    ``stages`` dict written to the artifacts.
     """
     g = lambda k, d=0: int(stages.get(k, d))  # noqa: E731
     stg = g("stg_sensors")
@@ -287,68 +294,57 @@ def fig_pipeline_feature_funnel(
     drop_correlated = g("drop_correlated")
     auxiliary = g("auxiliary_features")
     after_preprocess = g("after_preprocess", g("classifier_input"))
+    classifier_input = g("classifier_input", after_preprocess)
     after_selection = stages.get("after_selection")
     after_hub = stages.get("after_hub_interactions")
 
     if not stg or not mart or not after_cluster:
         return _sized(go.Figure(), height=420)
 
-    labels: list[str] = ["Staged sensors"]
-    deltas: list[float] = [stg]
-    measures: list[str] = ["absolute"]
-
-    def step(label: str, delta: int) -> None:
-        labels.append(label)
-        deltas.append(delta)
-        measures.append("relative")
-
-    step("- dbt drop (>10% missing / zero-var)", -(stg - mart))
-    step("+ rz robust-z twins", after_impute - mart)
-    variance_drop = max(0, after_impute - drop_correlated - after_cluster)
-    if variance_drop:
-        step("- variance threshold", -variance_drop)
-    step("- Spearman correlated", -drop_correlated)
-
+    # (label, count, role) in pipeline order; role drives the bar colour.
+    rows: list[tuple[str, int, str]] = [
+        ("Staged sensors", stg, "neutral"),
+        ("dbt mart (drop >10% missing / zero-var)", mart, "neutral"),
+        ("+ rz robust-z twins", after_impute, "increase"),
+    ]
+    # Split the cluster step so the big cut is legible: VarianceThreshold first
+    # (drops near-constant columns), then Spearman SmartCorrelatedSelection.
+    if drop_correlated > 0:
+        rows.append(("After variance threshold", after_cluster + drop_correlated, "neutral"))
+    rows.append(("After Spearman correlation", after_cluster, "neutral"))
     if after_selection is not None:
-        sel = int(after_selection)
-        step("- top-k select", -(after_cluster - sel))
-        block = sel
-        if after_hub is not None and int(after_hub) != sel:
-            step("+ Hotelling T2 / hubs", int(after_hub) - sel)
-            block = int(after_hub)
+        rows.append(("After top-k select", int(after_selection), "neutral"))
+        if after_hub is not None and int(after_hub) != int(after_selection):
+            rows.append(("+ Hotelling T2 / hub interactions", int(after_hub), "neutral"))
     else:
         components = max(0, after_preprocess - auxiliary)
-        step("- PLS latent components", -(after_cluster - components))
-        block = components
+        rows.append(("PLS latent components", components, "neutral"))
+    rows.append(("Classifier input (+ auxiliary)", classifier_input, "total"))
 
-    if auxiliary:
-        step("+ auxiliary (calendar / missing)", auxiliary)
-
-    labels.append("Classifier input")
-    deltas.append(block + auxiliary)
-    measures.append("total")
+    role_color = {"neutral": C_BLUE, "increase": C_GREEN, "total": C_RED}
+    labels = [r[0] for r in rows]
+    counts = [r[1] for r in rows]
+    colors = [role_color[r[2]] for r in rows]
 
     fig = go.Figure(
-        go.Waterfall(
-            orientation="v",
-            measure=measures,
-            x=labels,
-            y=deltas,
-            text=[f"{int(v):+d}" if m == "relative" else f"{int(v)}"
-                  for v, m in zip(deltas, measures)],
+        go.Bar(
+            x=counts,
+            y=labels,
+            orientation="h",
+            marker_color=colors,
+            text=[f"{c:,}" for c in counts],
             textposition="outside",
-            connector=dict(line=dict(color="rgba(200,200,200,0.4)")),
-            increasing=dict(marker=dict(color=C_GREEN)),
-            decreasing=dict(marker=dict(color=C_RED)),
-            totals=dict(marker=dict(color=C_BLUE)),
-            hovertemplate="%{x}<br>%{y:+d} features<extra></extra>",
+            cliponaxis=False,
+            hovertemplate="%{y}<br>%{x:,} features<extra></extra>",
         )
     )
     fig.update_layout(
         title=dict(text=title),
-        yaxis_title="Feature count",
-        xaxis=dict(tickangle=-30),
-        yaxis=dict(gridcolor="rgba(200, 200, 200, 0.15)"),
+        xaxis_title="Feature count",
+        yaxis_title="",
         showlegend=False,
+        xaxis=dict(gridcolor="rgba(200, 200, 200, 0.15)"),
     )
-    return _sized(fig, height=460, margin=dict(l=56, r=36, t=72, b=140))
+    fig.update_yaxes(autorange="reversed")
+    fig.update_xaxes(range=[0, max(counts) * 1.15])
+    return _sized(fig, height=420, margin=dict(l=260, r=40, t=72, b=52))

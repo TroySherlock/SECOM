@@ -96,47 +96,51 @@ def main() -> None:
     st.subheader("The two gates")
     col_t2, col_bgm = st.columns(2)
     with col_t2:
-        st.markdown("**5.2 - Hotelling T² gate (PCA, fab standard)**")
-        st.markdown(
-            "- Standard PCA-MSPC on the raw post-cluster sensors (the **fab-standard baseline**)\n"
-            "- **Hotelling T²** flags in-subspace excursions (drift along known component directions)\n"
-            "- **Q / SPE** residual flags structural breaks the components cannot explain\n"
-            "- Frequentist, dense loadings; abstain on `T² > UCL` **or** `Q > UCL`"
-        )
+        with st.container(border=True):
+            st.markdown("**5.2 - Hotelling T² gate (PCA, fab standard)**")
+            st.markdown(
+                "- Standard PCA-MSPC on the raw post-cluster sensors (the **fab-standard baseline**)\n"
+                "- **Hotelling T²** flags in-subspace excursions (drift along known component directions)\n"
+                "- **Q / SPE** residual flags structural breaks the components cannot explain\n"
+                "- Frequentist, dense loadings; abstain on `T² > UCL` **or** `Q > UCL`"
+            )
     with col_bgm:
-        st.markdown("**5.3 - sBFA → BGM gate (custom)**")
+        with st.container(border=True):
+            st.markdown("**5.3 - sBFA → BGM gate (custom)**")
+            st.markdown(
+                "- Sparse Bayesian factor analysis (NumPyro, ADVI) with Laplace-sparse loadings\n"
+                "- A **Bayesian Gaussian mixture** density on the factor scores replaces T²\n"
+                "- Same **Q / SPE** residual for orthogonal novelty\n"
+                "- Robust-scaled + clipped; abstain on low BGM log-density **or** high Q\n"
+                "- The **custom** gate; 5.4 tests it against the PCA baseline at equal overkill"
+            )
+
+    with st.container(border=True):
+        st.subheader("The control statistics")
         st.markdown(
-            "- Sparse Bayesian factor analysis (NumPyro, ADVI) with Laplace-sparse loadings\n"
-            "- A **Bayesian Gaussian mixture** density on the factor scores replaces T²\n"
-            "- Same **Q / SPE** residual for orthogonal novelty\n"
-            "- Robust-scaled + clipped; abstain on low BGM log-density **or** high Q\n"
-            "- The **custom** gate; 5.4 tests it against the PCA baseline at equal overkill"
+            "- **Hotelling T²** - Mahalanobis distance of the factor scores; flags excursions **along** "
+            "the learned factor directions (5.2). \n"
+            "- **Q / SPE** - squared reconstruction residual; flags structural breaks **orthogonal** to "
+            "the factor model that T²/density cannot see (both gates). \n"
+            "- **BGM log-density** - log-likelihood under a Bayesian Gaussian mixture on the factor "
+            "scores; the multimodal analogue of T² (5.3). Low density trips the gate."
         )
+        st.latex(r"T^2 = (\mathbf{x}-\boldsymbol{\mu})^\top \Sigma^{-1}(\mathbf{x}-\boldsymbol{\mu})")
 
-    st.subheader("The control statistics")
-    st.markdown(
-        "- **Hotelling T²** - Mahalanobis distance of the factor scores; flags excursions **along** "
-        "the learned factor directions (5.2). \n"
-        "- **Q / SPE** - squared reconstruction residual; flags structural breaks **orthogonal** to "
-        "the factor model that T²/density cannot see (both gates). \n"
-        "- **BGM log-density** - log-likelihood under a Bayesian Gaussian mixture on the factor "
-        "scores; the multimodal analogue of T² (5.3). Low density trips the gate."
-    )
-    st.latex(r"T^2 = (\mathbf{x}-\boldsymbol{\mu})^\top \Sigma^{-1}(\mathbf{x}-\boldsymbol{\mu})")
-
-    st.subheader("How to read the gate pages")
-    st.markdown(
-        "- **5.2 Hotelling T² gate (PCA baseline)** - a four-section drift monitor: distribution "
-        "shift, the time-ordered MSPC control chart (the retraining trigger), an honest KS/AUC "
-        "drift scalar, and the PCA component space with its Hotelling ellipse.\n"
-        "- **5.3 sBFA → BGM gate (custom)** - the same monitor plus the Bayesian extras: the BGM "
-        "mixture weights (proof the in-control region is multimodal), a sparse-loadings root-cause "
-        "view that points at the candidate drifting subsystem, and why that attribution is "
-        "noise-weighted across heteroscedastic sensors.\n"
-        "- **5.4 Gate comparison** - the complete head-to-head story: whether the custom gate fires "
-        "under drift (coverage drift), a concrete passing wafer it caught, why PCA over-abstains on "
-        "a multimodal in-control region, the risk-coverage trade-off, and a verdict on which gate to run."
-    )
+    with st.container(border=True):
+        st.subheader("How to read the gate pages")
+        st.markdown(
+            "- **5.2 Hotelling T² gate (PCA baseline)** - a four-section drift monitor: distribution "
+            "shift, the time-ordered MSPC control chart (the retraining trigger), an honest KS/AUC "
+            "drift scalar, and the PCA component space with its Hotelling ellipse.\n"
+            "- **5.3 sBFA → BGM gate (custom)** - the same monitor plus the Bayesian extras: the BGM "
+            "mixture weights (proof the in-control region is multimodal), a sparse-loadings root-cause "
+            "view that points at the candidate drifting subsystem, and why that attribution is "
+            "noise-weighted across heteroscedastic sensors.\n"
+            "- **5.4 Gate comparison** - the complete head-to-head story: whether the custom gate fires "
+            "under drift (coverage drift), a concrete passing wafer it caught, why PCA over-abstains on "
+            "a multimodal in-control region, the risk-coverage trade-off, and a verdict on which gate to run."
+        )
 
     render_blue_note(
         "**Honest framing.** The per-wafer drift evidence (distribution shift, control chart, KS) "

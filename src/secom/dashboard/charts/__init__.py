@@ -65,7 +65,7 @@ from secom.dashboard.charts.gates import (
 from secom.dashboard.charts.pipeline import (
     fig_hsic_dependence_intuition,
     fig_hsic_selected_rank,
-    fig_pipeline_feature_funnel,
+    fig_pipeline_stage_counts,
     fig_pls_score_scatter,
     fig_rf_topk_selection,
     fig_rf_topk_selection_example,
@@ -102,7 +102,7 @@ __all__ = [
     # pipeline
     "fig_hsic_dependence_intuition",
     "fig_hsic_selected_rank",
-    "fig_pipeline_feature_funnel",
+    "fig_pipeline_stage_counts",
     "fig_pls_score_scatter",
     "fig_rf_topk_selection",
     "fig_rf_topk_selection_example",

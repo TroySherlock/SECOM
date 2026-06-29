@@ -26,6 +26,7 @@ def inject_dashboard_styles() -> None:
             overflow: hidden;
         }}
         [data-testid="stVerticalBlockBorderWrapper"] {{
+            background-color: {METRIC_BG} !important;
             border-radius: {RADIUS};
             overflow: hidden;
         }}

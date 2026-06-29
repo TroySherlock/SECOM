@@ -207,25 +207,26 @@ def _render_risk_coverage(payload: dict) -> None:
 
 
 def _render_verdict() -> None:
-    st.subheader("5. Verdict: which gate I would run")
-    st.markdown(
-        "**I would run the custom sBFA → BGM as the primary drift / excursion monitor on this "
-        "line, keeping the PCA-MSPC gate as an always-on conservative sanity check.** The case "
-        "rests on three structural facts, not on the noisy conditional yield deltas:\n"
-        "- **Drift response (section 1):** under the EDA-confirmed temporal drift the custom gate's "
-        "coverage actually moves, while the PCA T² limit stays flat - the custom gate sees the "
-        "in-subspace, between-mode drift PCA is blind to.\n"
-        "- **Multimodality (section 3):** the in-control region has more than one mode, so PCA's "
-        "single ellipse would needlessly overkill ~2% of perfectly healthy wafers that the BGM "
-        "keeps in-control.\n"
-        "- **Heteroscedasticity (5.3):** sensor noise spans orders of magnitude, so the custom "
-        "gate's noise-weighted attribution (shown on **5.3**) points engineers at the right "
-        "subsystem where PCA's equal-weight blame does not.\n\n"
-        "PCA remains valuable precisely *because* it is the trusted, dense, fully-understood fab "
-        "standard - it is the benchmark the custom gate has to beat, and a useful second opinion. "
-        "But as the operating monitor for a multimodal, uneven-noise line that drifts forward in "
-        "time, the custom gate is the better-specified detector."
-    )
+    with st.container(border=True):
+        st.subheader("5. Verdict: which gate I would run")
+        st.markdown(
+            "**I would run the custom sBFA → BGM as the primary drift / excursion monitor on this "
+            "line, keeping the PCA-MSPC gate as an always-on conservative sanity check.** The case "
+            "rests on three structural facts, not on the noisy conditional yield deltas:\n"
+            "- **Drift response (section 1):** under the EDA-confirmed temporal drift the custom gate's "
+            "coverage actually moves, while the PCA T² limit stays flat - the custom gate sees the "
+            "in-subspace, between-mode drift PCA is blind to.\n"
+            "- **Multimodality (section 3):** the in-control region has more than one mode, so PCA's "
+            "single ellipse would needlessly overkill ~2% of perfectly healthy wafers that the BGM "
+            "keeps in-control.\n"
+            "- **Heteroscedasticity (5.3):** sensor noise spans orders of magnitude, so the custom "
+            "gate's noise-weighted attribution (shown on **5.3**) points engineers at the right "
+            "subsystem where PCA's equal-weight blame does not.\n\n"
+            "PCA remains valuable precisely *because* it is the trusted, dense, fully-understood fab "
+            "standard - it is the benchmark the custom gate has to beat, and a useful second opinion. "
+            "But as the operating monitor for a multimodal, uneven-noise line that drifts forward in "
+            "time, the custom gate is the better-specified detector."
+        )
 
 
 def main() -> None:
