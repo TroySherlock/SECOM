@@ -63,12 +63,15 @@ from secom.dashboard.charts.gates import (
     fig_sensor_noise_spectrum,
 )
 from secom.dashboard.charts.pipeline import (
+    fig_calibrate_example,
     fig_hsic_dependence_intuition,
     fig_hsic_selected_rank,
+    fig_impute_example,
     fig_pipeline_stage_counts,
     fig_pls_score_scatter,
     fig_rf_topk_selection,
     fig_rf_topk_selection_example,
+    fig_scale_example,
     fig_spearman_cluster,
     fig_spearman_cluster_example,
 )
@@ -100,12 +103,15 @@ __all__ = [
     "fig_two_track_schematic",
     "fig_wafer_drift_spikes",
     # pipeline
+    "fig_calibrate_example",
     "fig_hsic_dependence_intuition",
     "fig_hsic_selected_rank",
+    "fig_impute_example",
     "fig_pipeline_stage_counts",
     "fig_pls_score_scatter",
     "fig_rf_topk_selection",
     "fig_rf_topk_selection_example",
+    "fig_scale_example",
     "fig_spearman_cluster",
     "fig_spearman_cluster_example",
     # benchmark

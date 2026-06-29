@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import streamlit as st
 
-from secom.dashboard import render_blue_note
+from secom.dashboard import render_blue_note, render_caveat
 from secom.dashboard.charts import (
     fig_gate_control_chart,
     fig_gate_statistic_distributions,
@@ -83,7 +83,7 @@ def _render_distribution_shift(payload: dict, *, stat_key: str, limit_key: str, 
         "passing-train reference. The in-distribution holdout (left) hugs the reference; under "
         "drift the temporal holdout (right) pushes past the control limit - the well-sampled signal."
     )
-    st.warning(
+    render_caveat(
         "T² is a Mahalanobis distance in the **fitted PCA subspace** - comparable only within "
         "one fit, not across the interpolation and extrapolation panels."
     )
@@ -122,7 +122,7 @@ def _render_control_chart(payload: dict, *, stat_key: str, limit_key: str, limit
     cfg = gate_config(payload, "extrapolation", _GATE)
     t2_a = cfg.get("t2_alpha", 0.03)
     q_a = cfg.get("q_alpha", 0.005)
-    st.warning(
+    render_caveat(
         f"Limits are passing-train quantiles (α = T² {t2_a:g} / Q {q_a:g}), so a "
         f"~{t2_a:.1%} / ~{q_a:.1%} in-control false-alarm rate is expected **by construction** - "
         "read the trend and the excess over that baseline, not the raw out-of-control count."
@@ -148,7 +148,7 @@ def _render_drift_scalar(payload: dict) -> None:
             st.metric("KS distance", f"{row['ks_distance']:.3f}")
             st.metric("Separability AUC", f"{row['separability_auc']:.3f}")
             st.caption(f"KS p = {row['ks_pvalue']:.1e} · n = {int(row['n_reference'])}/{int(row['n_holdout'])}")
-    st.warning(
+    render_caveat(
         "This measures **sensor/process distribution drift, not yield-prediction skill** - a high KS "
         "does not imply the gate catches fails. With n this large the p-value is tiny even for small "
         "shifts, so report the effect size (KS / AUC). On SECOM most forward-window signal lands in "
@@ -185,7 +185,7 @@ def _render_factor_space(factor: dict, ranking) -> None:
         "holdout split into pass, flagged pass, caught fail, and missed fail - so you can see which "
         "fails the gate's OOC region actually catches. Drift = the cloud sliding outside the region."
     )
-    st.warning(
+    render_caveat(
         "Standard PCA, **single fit**; component axes are sign-ambiguous and not comparable across "
         "runs or to the BGM gate. The 2-D ellipse approximates the full-k T² limit - it is a "
         "qualitative geometry view, not the gate's actual decision boundary."
@@ -223,16 +223,16 @@ def main() -> None:
     )
     stat_key, limit_key, limit_side, ooc_key = _STATISTIC_SPECS[statistic]
 
-    st.subheader("1. Control-statistic distribution shift")
+    st.subheader("📊 1. Control-statistic distribution shift")
     _render_distribution_shift(payload, stat_key=stat_key, limit_key=limit_key, limit_side=limit_side)
 
-    st.subheader("2. MSPC control chart (temporal holdout)")
+    st.subheader("📈 2. MSPC control chart (temporal holdout)")
     _render_control_chart(
         payload, stat_key=stat_key, limit_key=limit_key, limit_side=limit_side, ooc_key=ooc_key
     )
 
     st.divider()
-    st.subheader("3. A real drift number")
+    st.subheader("🔢 3. A real drift number")
     _render_drift_scalar(payload)
 
     st.divider()
@@ -240,7 +240,7 @@ def main() -> None:
     factor = pca_component_diagnostics(payload, track="extrapolation")
     ranking = factor_drift_ranking(factor)
 
-    st.subheader("4. PCA component space")
+    st.subheader("🗺️ 4. PCA component space")
     _render_factor_space(factor, ranking)
 
     render_blue_note(

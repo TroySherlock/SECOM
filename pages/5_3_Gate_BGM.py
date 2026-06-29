@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import streamlit as st
 
-from secom.dashboard import render_blue_note
+from secom.dashboard import render_blue_note, render_caveat
 from secom.dashboard.charts import (
     fig_bgm_mode_weights,
     fig_contribution_comparison,
@@ -84,7 +84,7 @@ def _render_distribution_shift(payload: dict, *, stat_key: str, limit_key: str, 
         "within one fit). The in-distribution holdout (left) hugs the reference; under drift the "
         "temporal holdout (right) pushes past the control limit - the well-sampled drift signal."
     )
-    st.warning(
+    render_caveat(
         "BGM log-density is only comparable **within one fitted gate** - do not read the absolute "
         "density value across the interpolation and extrapolation panels; compare each holdout only "
         "against its own reference."
@@ -121,7 +121,7 @@ def _render_control_chart(payload: dict, *, stat_key: str, limit_key: str, limit
         "the cumulative rate). A rolling rate climbing above its baseline into the latest era is "
         "the gate's drift / retraining trigger - exactly how a fab uses MSPC."
     )
-    st.warning(
+    render_caveat(
         "The limit is fixed from passing-train quantiles (α = density 0.03 / Q 0.005), so a ~3% "
         "density / ~0.5% Q in-control false-alarm rate is expected **by construction** - read the "
         "trend and the excess over that baseline, not the raw out-of-control count."
@@ -147,7 +147,7 @@ def _render_drift_scalar(payload: dict) -> None:
             st.metric("KS distance", f"{row['ks_distance']:.3f}")
             st.metric("Separability AUC", f"{row['separability_auc']:.3f}")
             st.caption(f"KS p = {row['ks_pvalue']:.1e} · n = {int(row['n_reference'])}/{int(row['n_holdout'])}")
-    st.warning(
+    render_caveat(
         "This measures **sensor/process distribution drift, not yield-prediction skill** - a high KS "
         "does not imply the gate catches fails. With n this large the p-value is tiny even for small "
         "shifts, so report the effect size (KS / AUC), not just significance."
@@ -206,7 +206,7 @@ def _render_factor_space(payload: dict, sbfa: dict, ranking) -> None:
         "missed fail - so you can see which fails the gate's OOC region actually catches. Drift = "
         "the temporal cloud sliding off the envelope."
     )
-    st.warning(
+    render_caveat(
         "This is **one representative seed** (`members_[0]`); factor axes are rotation- and "
         "sign-ambiguous and not comparable across runs or to the PCA gate. It is a qualitative "
         "geometry view - the gate's actual decision uses the 8-D ensemble density + Q, not this 2-D picture."
@@ -247,7 +247,7 @@ def _render_root_cause(sbfa: dict, ranking) -> None:
         "Laplace-sparse loadings (sensor × factor, strongest sensors only). The heavy-loading "
         "sensors of the top-drifting factor are the candidate drifting subsystem."
     )
-    st.warning(
+    render_caveat(
         "Loadings are correlational and Laplace-sparsified, **not causal** - read this as 'where to "
         "look first', not a proven root cause. Sign is arbitrary, so the magnitude (|loading|) is "
         "what matters."
@@ -335,18 +335,18 @@ def main() -> None:
     )
     stat_key, limit_key, limit_side, ooc_key = _STATISTIC_SPECS[statistic]
 
-    st.subheader("1. Control-statistic distribution shift")
+    st.subheader("📊 1. Control-statistic distribution shift")
     _render_distribution_shift(
         payload, stat_key=stat_key, limit_key=limit_key, limit_side=limit_side
     )
 
-    st.subheader("2. MSPC control chart (temporal holdout)")
+    st.subheader("📈 2. MSPC control chart (temporal holdout)")
     _render_control_chart(
         payload, stat_key=stat_key, limit_key=limit_key, limit_side=limit_side, ooc_key=ooc_key
     )
 
     st.divider()
-    st.subheader("3. A real drift number")
+    st.subheader("🔢 3. A real drift number")
     _render_drift_scalar(payload)
 
     st.divider()
@@ -354,15 +354,15 @@ def main() -> None:
     sbfa = sbfa_diagnostics(payload, track="extrapolation", gate=_GATE)
     ranking = factor_drift_ranking(sbfa)
 
-    st.subheader("4. sBFA latent factor space")
+    st.subheader("🗺️ 4. sBFA latent factor space")
     _render_bgm_modes(payload)
     _render_factor_space(payload, sbfa, ranking)
 
-    st.subheader("5. Which subsystem is drifting (root cause)")
+    st.subheader("🔍 5. Which subsystem is drifting (root cause)")
     _render_root_cause(sbfa, ranking)
 
     st.divider()
-    st.subheader("6. Why the attribution is noise-weighted: sensors are heteroscedastic")
+    st.subheader("⚖️ 6. Why the attribution is noise-weighted: sensors are heteroscedastic")
     st.caption(
         "The root cause above points at *which* sensors; this explains *why* trusting them "
         "requires weighting each by its own noise floor - the structural reason the custom gate's "

@@ -107,7 +107,7 @@ def render_cv_leaderboard(payload: dict) -> None:
     protocol_cv_df = cv_leaderboard_df(payload)
     metric_specs = _CV_METRIC_SPECS_STRATIFIED
 
-    st.subheader("Cross-validation leaderboard")
+    st.subheader("🏅 Cross-validation leaderboard")
     if protocol_cv_df.empty:
         st.warning("No stratified CV leaderboard rows in benchmark JSON.")
         return
@@ -158,7 +158,7 @@ def render_holdout_validation(payload: dict, *, track: str) -> None:
     view_cv_df = cv_leaderboard_df(payload)
     view_ho_df = holdout_df(payload, key=view_key)
 
-    st.subheader("Holdout evaluation (reporting only)")
+    st.subheader("🧪 Holdout evaluation (reporting only)")
     split_caption = _format_holdout_split_caption(payload.get(split_key) or {})
     if split_caption:
         st.caption(split_caption)
@@ -222,7 +222,7 @@ def render_model_deepdive(payload: dict, *, track: str) -> None:
     model_ids = list_model_ids(payload)
     tuned = payload.get("tuned_hyperparameters") or {}
 
-    st.subheader("Pipeline architecture & tuning")
+    st.subheader("⚙️ Pipeline architecture & tuning")
     champion = champion_for_track(track)
     default_index = model_ids.index(champion) if champion in model_ids else 0
     selected_id = st.selectbox(

@@ -271,6 +271,121 @@ def fig_spearman_cluster(cluster_example: dict | None) -> go.Figure:
     return _sized(fig, height=340, margin=dict(l=70, r=40, t=78, b=60))
 
 
+def fig_impute_example() -> go.Figure:
+    """Illustrative median impute: a sparse sensor whose gaps are filled at the
+    training-fold median, so the column stays usable without outliers skewing it."""
+    rng = np.random.default_rng(3)
+    n = 24
+    x = np.arange(n)
+    y = 50 + rng.normal(0, 6, n)
+    median = float(np.median(y))
+    gap_idx = np.array([4, 5, 12, 18, 19])
+    present_mask = np.ones(n, dtype=bool)
+    present_mask[gap_idx] = False
+
+    fig = go.Figure()
+    fig.add_hline(
+        y=median,
+        line=dict(color=C_YELLOW, dash="dash", width=1.5),
+        annotation_text="column median",
+        annotation_position="top left",
+        annotation_font=dict(size=11, color=C_YELLOW),
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=x[present_mask],
+            y=y[present_mask],
+            mode="markers",
+            name="observed",
+            marker=dict(color=C_BLUE, size=8, opacity=0.85),
+            hovertemplate="sample %{x}<br>value %{y:.1f}<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=gap_idx,
+            y=np.full(gap_idx.size, median),
+            mode="markers",
+            name="imputed (median)",
+            marker=dict(color=C_YELLOW, size=11, symbol="diamond",
+                        line=dict(color="rgba(0,0,0,0.35)", width=0.6)),
+            hovertemplate="sample %{x}<br>filled at median %{y:.1f}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        title=dict(text="Median impute: gaps → column median"),
+        xaxis_title="Wafer (time order)",
+        yaxis_title="Sensor reading",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    return _sized(fig, height=280, margin=dict(l=56, r=20, t=70, b=44))
+
+
+def fig_scale_example() -> go.Figure:
+    """Illustrative RobustScaler: a heavy-tailed raw sensor (blue) becomes
+    median-centered, IQR-scaled (green) so outliers stop dominating the head."""
+    rng = np.random.default_rng(11)
+    raw = rng.lognormal(mean=1.0, sigma=0.6, size=600)
+    median = float(np.median(raw))
+    q75, q25 = np.percentile(raw, [75, 25])
+    iqr = float(q75 - q25) or 1.0
+    scaled = (raw - median) / iqr
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Histogram(
+            x=raw, name="raw", marker_color=C_BLUE, opacity=0.6, nbinsx=40,
+            hovertemplate="raw %{x:.2f}<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Histogram(
+            x=scaled, name="robust-scaled", marker_color=C_GREEN, opacity=0.7, nbinsx=40,
+            hovertemplate="scaled %{x:.2f}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        title=dict(text="Robust scale: median-center, IQR-scale"),
+        xaxis_title="Sensor value",
+        yaxis_title="Count",
+        barmode="overlay",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    return _sized(fig, height=280, margin=dict(l=56, r=20, t=70, b=44))
+
+
+def fig_calibrate_example() -> go.Figure:
+    """Illustrative calibration: a raw head score is mapped through a Platt/sigmoid
+    curve to a trustworthy fail probability; the dashed line is the identity."""
+    raw = np.linspace(0.0, 1.0, 100)
+    calibrated = 1.0 / (1.0 + np.exp(-7.5 * (raw - 0.55)))
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=[0, 1], y=[0, 1], mode="lines", name="identity",
+            line=dict(color=C_YELLOW, dash="dash", width=1.5),
+            hoverinfo="skip",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=raw, y=calibrated, mode="lines", name="calibrator",
+            line=dict(color=C_PURPLE, width=3),
+            hovertemplate="raw %{x:.2f} → P(fail) %{y:.2f}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        title=dict(text="Calibrate: raw score → trustworthy P(fail)"),
+        xaxis_title="Raw head score",
+        yaxis_title="Calibrated P(fail)",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    fig.update_xaxes(range=[0, 1])
+    fig.update_yaxes(range=[0, 1])
+    return _sized(fig, height=280, margin=dict(l=56, r=20, t=70, b=44))
+
+
 def fig_pipeline_stage_counts(
     stages: dict[str, int],
     *,

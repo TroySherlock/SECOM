@@ -4,6 +4,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from secom.dashboard import render_verdict
 from secom.dashboard.data import holdout_delta_df
 from secom.dashboard.model_views import load_payload
 
@@ -27,7 +28,7 @@ def _render_champion_comparison() -> None:
     hsic = _champion_row(d, "hsic_rf")     # interpolation champion
     pls = _champion_row(d, "pls_bayes")    # extrapolation champion
 
-    with st.container(border=True, key="card_champs"):
+    with st.container(key="card_champs"):
         st.subheader("🏆 Two champions, two regimes")
         c1, c2 = st.columns(2)
         with c1:
@@ -67,7 +68,7 @@ def _render_champion_comparison() -> None:
 
 
 def _render_what_we_built() -> None:
-    with st.container(border=True, key="card_built"):
+    with st.container(key="card_built"):
         st.subheader("🛠️ What this project built")
         left, right = st.columns(2, gap="large")
         with left:
@@ -99,14 +100,14 @@ def _render_takeaways() -> None:
     st.subheader("⭐ Key strengths and takeaways")
     row1_left, row1_right = st.columns(2)
     with row1_left:
-        with st.container(border=True, key="card_takeaway_eval"):
+        with st.container(key="card_takeaway_eval"):
             st.markdown(
                 "🎯 **Honest evaluation is the backbone.** The two-track design (interpolation = "
                 "ceiling, extrapolation = forward holdout) refuses to report a single optimistic "
                 "number and instead quantifies the drop under drift — a senior-level instinct."
             )
     with row1_right:
-        with st.container(border=True, key="card_takeaway_abstain"):
+        with st.container(key="card_takeaway_abstain"):
             st.markdown(
                 "🛡️ **Abstention beats false confidence.** The gates encode \"don't predict on a "
                 "shifted process.\" The gate-comparison case rests on three independent structural "
@@ -116,14 +117,14 @@ def _render_takeaways() -> None:
             )
     row2_left, row2_right = st.columns(2)
     with row2_left:
-        with st.container(border=True, key="card_takeaway_calibration"):
+        with st.container(key="card_takeaway_calibration"):
             st.markdown(
                 "📏 **Calibration end-to-end.** A calibrated deploy probability and a same-scale "
                 "calibrated credible interval, plus a deterministic uncertainty/borderline "
                 "vocabulary, mean the narratives can no longer contradict themselves."
             )
     with row2_right:
-        with st.container(border=True, key="card_takeaway_llm"):
+        with st.container(key="card_takeaway_llm"):
             st.markdown(
                 "🤖 **The LLM is grounded, not generative trivia.** The v8 prompt reports only "
                 "derived facts (BGM gate, drift in SD, direction-counts, four-outcome actions). "
@@ -133,7 +134,7 @@ def _render_takeaways() -> None:
 
 
 def _render_what_we_found() -> None:
-    with st.container(border=True, key="card_found"):
+    with st.container(key="card_found"):
         st.subheader("🔬 What we found")
         st.markdown(
             "- **Drift is real and costly.** The champion ranking flips: `hsic_rf` wins "
@@ -151,7 +152,7 @@ def _render_what_we_found() -> None:
 
 
 def _render_left_out() -> None:
-    with st.container(border=True, key="card_left_out"):
+    with st.container(key="card_left_out"):
         st.subheader("🚧 Deliberately left out (and why)")
         st.caption(
             "SECOM is a fixed benchmark with only ~104 fails total (~17-20 in the temporal "
@@ -185,11 +186,12 @@ def main() -> None:
 
     _render_champion_comparison()
     _render_what_we_built()
+    st.divider()
     _render_takeaways()
     _render_what_we_found()
     _render_left_out()
 
-    st.success(
+    render_verdict(
         "**The bottom line.** On a rare-event, drifting, heavily-missing process, the most valuable "
         "thing a model can do is know when not to predict. This system measures the true cost of "
         "drift, abstains on out-of-control wafers instead of guessing, and explains what survives "

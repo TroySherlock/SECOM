@@ -10,12 +10,15 @@ import streamlit as st
 
 from secom.dashboard import render_blue_note
 from secom.dashboard.charts import (
+    fig_calibrate_example,
     fig_hsic_dependence_intuition,
     fig_hsic_selected_rank,
+    fig_impute_example,
     fig_pipeline_stage_counts,
     fig_pls_score_scatter,
     fig_rf_topk_selection,
     fig_rf_topk_selection_example,
+    fig_scale_example,
     fig_spearman_cluster,
     fig_spearman_cluster_example,
 )
@@ -96,7 +99,7 @@ def _render_rz_explainer(linear_ref: dict | None) -> None:
 
     what, why, how = st.columns(3, gap="medium")
     with what:
-        with st.container(border=True, key="card_rz_what"):
+        with st.container(key="card_rz_what"):
             st.markdown("#### 🧬 What")
             st.markdown(
                 f"Each raw sensor `c_NNN` gets a twin `c_NNN_rz`: its value re-expressed as a "
@@ -105,7 +108,7 @@ def _render_rz_explainer(linear_ref: dict | None) -> None:
                 f"`{mart:,}` sensors become `{after_impute:,}` columns."
             )
     with why:
-        with st.container(border=True, key="card_rz_why"):
+        with st.container(key="card_rz_why"):
             st.markdown("#### 🎯 Why")
             st.markdown(
                 "Raw levels drift across the fab's lifetime, so an absolute reading means "
@@ -114,7 +117,7 @@ def _render_rz_explainer(linear_ref: dict | None) -> None:
                 "on the extrapolation track, while the raw twin keeps the absolute level."
             )
     with how:
-        with st.container(border=True, key="card_rz_how"):
+        with st.container(key="card_rz_how"):
             st.markdown("#### 🛠️ How")
             st.markdown(
                 "Computed in `mart_secom_features.sql` with a windowed median/IQR over "
@@ -139,7 +142,7 @@ def _render_shared_spine(linear_ref: dict | None, cluster_example: dict | None) 
     st.subheader("🧱 Step 2 — the shared spine")
     st.caption(
         "Four steps every cell of the 3×3 grid shares, regardless of front-end or classifier "
-        "head. All are fit on training folds only."
+        "head. All are fit on training folds only — read top to bottom, each with a worked example."
     )
     st.markdown(
         f":gray-background[{after_impute:,} cols] → :gray-background[{after_cluster:,} kept] → "
@@ -152,63 +155,76 @@ def _render_shared_spine(linear_ref: dict | None, cluster_example: dict | None) 
         "features and missing-flags. Everything below runs in sklearn on that mart."
     )
 
-    cols = st.columns(4, gap="medium")
-    cards = [
-        (":orange[1 · Impute]", f"{after_impute:,} cols",
-         "Per-sensor **median** fill learned on the training fold, so sparse sensors stay usable "
-         "without outliers skewing the fill value."),
-        (":orange[2 · Cluster]", f"→ {after_cluster:,} kept",
-         "`VarianceThreshold` drops near-constant columns, then **Spearman** "
-         "`SmartCorrelatedSelection` collapses each correlated group to its single best member. "
-         "The threshold is **CV-tuned**, so the survivor count differs per cell."),
-        (":orange[3 · Scale]", "front-end output",
-         "`RobustScaler` (median / IQR) so heavy-tailed sensors and outliers don't dominate the "
-         "downstream classifier."),
-        (":orange[4 · Calibrate]", "fail P(·)",
-         "`CalibratedClassifierCV` (**Platt / sigmoid**) maps raw head scores to trustworthy fail "
-         "probabilities — what the operating-point thresholds on the model pages rely on."),
-    ]
-    for i, (col, (title, chip, detail)) in enumerate(zip(cols, cards)):
-        with col:
-            with st.container(border=True, key=f"card_spine_{i}"):
-                st.markdown(f"#### {title}")
-                st.markdown(f"`{chip}`")
-                st.markdown(detail)
+    if cluster_example:
+        cluster_fig = fig_spearman_cluster(cluster_example)
+        members = cluster_example.get("members", [])
+        cluster_caption = (
+            "Holdout-fit cluster — kept the single best member, dropped the rest: "
+            + ", ".join(f"`{m}`" for m in members)
+            if members
+            else "One correlated cluster from the holdout training fit."
+        )
+    else:
+        cluster_fig = fig_spearman_cluster_example()
+        cluster_caption = "Illustrative cluster: `c_340`, `c_204`, `c_67` collapse to one survivor."
 
-    with st.container(border=True, key="card_cluster_demo"):
-        st.subheader("🔗 Step 2 in action — one Spearman cluster")
-        txt, chart = st.columns([1, 1.4], gap="large")
-        if cluster_example:
-            members = cluster_example.get("members", [])
-            with txt:
-                st.markdown(
-                    "These sensors move together (high :orange[**Spearman ρ**]), so "
-                    "`SmartCorrelatedSelection` keeps only the single best member and **drops the "
-                    "rest** — one correlated cluster from the holdout training fit."
-                )
-                if members:
-                    st.caption("Cluster members: " + ", ".join(f"`{m}`" for m in members))
-            with chart:
+    steps = [
+        {
+            "slug": "impute",
+            "title": "1 · Impute",
+            "chip": f"{after_impute:,} cols",
+            "detail": "Per-sensor **median** fill learned on the training fold, so sparse sensors "
+                      "stay usable without outliers skewing the fill value.",
+            "fig": fig_impute_example(),
+            "caption": None,
+        },
+        {
+            "slug": "cluster",
+            "title": "2 · Cluster",
+            "chip": f"→ {after_cluster:,} kept",
+            "detail": "`VarianceThreshold` drops near-constant columns, then **Spearman** "
+                      "`SmartCorrelatedSelection` collapses each correlated group to its single "
+                      "best member. The threshold is **CV-tuned**, so the survivor count differs "
+                      "per cell.",
+            "fig": cluster_fig,
+            "caption": cluster_caption,
+        },
+        {
+            "slug": "scale",
+            "title": "3 · Scale",
+            "chip": "front-end output",
+            "detail": "`RobustScaler` (median / IQR) so heavy-tailed sensors and outliers don't "
+                      "dominate the downstream classifier.",
+            "fig": fig_scale_example(),
+            "caption": None,
+        },
+        {
+            "slug": "calibrate",
+            "title": "4 · Calibrate",
+            "chip": "fail P(·)",
+            "detail": "`CalibratedClassifierCV` (**Platt / sigmoid**) maps raw head scores to "
+                      "trustworthy fail probabilities — what the operating-point thresholds on the "
+                      "model pages rely on.",
+            "fig": fig_calibrate_example(),
+            "caption": None,
+        },
+    ]
+
+    for step in steps:
+        with st.container(key=f"card_spine_{step['slug']}"):
+            text_col, chart_col = st.columns([1, 1.1], gap="large")
+            with text_col:
+                st.markdown(f"#### {step['title']}")
+                st.markdown(f"`{step['chip']}`")
+                st.markdown(step["detail"])
+                if step["caption"]:
+                    st.caption(step["caption"])
+            with chart_col:
                 st.plotly_chart(
-                    fig_spearman_cluster(cluster_example),
+                    step["fig"],
                     width="stretch",
                     theme="streamlit",
-                    key="p2_spearman_cluster",
-                )
-        else:
-            with txt:
-                st.markdown(
-                    "These sensors move together (high :orange[**Spearman ρ**]), so "
-                    "`SmartCorrelatedSelection` keeps only the single best member and **drops the "
-                    "rest**."
-                )
-                st.caption("Example cluster: `c_340`, `c_204`, `c_67` (illustrative).")
-            with chart:
-                st.plotly_chart(
-                    fig_spearman_cluster_example(),
-                    width="stretch",
-                    theme="streamlit",
-                    key="p2_spearman_cluster",
+                    key=f"p2_spine_{step['slug']}",
                 )
 
 
@@ -230,7 +246,7 @@ def _cross_method_agreement(models: dict) -> dict | None:
 
 
 def _render_front_end_overview() -> None:
-    st.subheader("Step 3 — the three front-ends")
+    st.subheader("🔱 Step 3 — the three front-ends")
     render_blue_note(
         "The front-end is the **only** place the nine pipelines diverge — everything else (the "
         "shared spine, the calibrated head) is shared. Two front-ends *select* a small sensor "
@@ -238,7 +254,7 @@ def _render_front_end_overview() -> None:
     )
     a, b, c = st.columns(3, gap="medium")
     with a:
-        with st.container(border=True, key="card_fe_hsic"):
+        with st.container(key="card_fe_hsic"):
             st.markdown("#### HSIC-Lasso → T² + hubs")
             st.markdown(
                 "Keeps the **top-k** sensors by *kernel statistical dependence* with the fail "
@@ -247,7 +263,7 @@ def _render_front_end_overview() -> None:
                 "_Used by_ `hsic_enet`, `hsic_rf`, `hsic_bayes`."
             )
     with b:
-        with st.container(border=True, key="card_fe_rf"):
+        with st.container(key="card_fe_rf"):
             st.markdown("#### RF-selection → T² + hubs")
             st.markdown(
                 "Keeps the **top-k** sensors by random-forest impurity importance, then appends "
@@ -256,7 +272,7 @@ def _render_front_end_overview() -> None:
                 "_Used by_ `rfsel_enet`, `rfsel_rf`, `rfsel_bayes`."
             )
     with c:
-        with st.container(border=True, key="card_fe_pls"):
+        with st.container(key="card_fe_pls"):
             st.markdown("#### PLS components")
             st.markdown(
                 "**No selection.** Projects *all* clustered sensors onto a few supervised latent "
@@ -448,7 +464,7 @@ def _render_agreement_callout(models: dict) -> None:
 
 
 def _render_journey(ctx: _PipelineContext) -> None:
-    st.subheader("The whole journey — two champions, two routes")
+    st.subheader("🛣️ The whole journey — two champions, two routes")
     render_blue_note(
         "The two champion models take **different routes** to the classifier. `hsic_rf` "
         "(interpolation champion) **selects** a small sensor subset then appends Hotelling T² + "

@@ -93,7 +93,7 @@ def main() -> None:
     )
 
     st.divider()
-    st.subheader("Two evaluation tracks")
+    st.subheader("🔀 Two evaluation tracks")
     render_blue_note(
         "Every model is scored two ways. **Interpolation** uses a random train/test split "
         "(can the model fit the process as sampled?). **Extrapolation** uses a temporal forward "
@@ -126,7 +126,7 @@ def main() -> None:
     )
 
     with tab_balance:
-        st.subheader("Rare fails across the campaign")
+        st.subheader("📉 Rare fails across the campaign")
         show_weekly = st.checkbox("Show weekly fail rate overlay", value=False, key="p1_weekly")
         balance_left, balance_right = st.columns(2, gap="large")
         with balance_left:
@@ -156,7 +156,7 @@ def main() -> None:
         )
 
     with tab_drift:
-        st.subheader("Sensor drift — what extrapolation works against")
+        st.subheader("🌊 Sensor drift — what extrapolation works against")
         drift = era_drift_summary(
             df,
             timestamp_col=TIMESTAMP_COL,
@@ -202,7 +202,7 @@ def main() -> None:
         )
 
     with tab_quality:
-        st.subheader("Missingness and redundancy")
+        st.subheader("🧩 Missingness and redundancy")
         render_blue_note(
             "Missingness is structured, not missing-at-random: NaNs cluster by sensor and by time "
             "window (recipe / tool-state changes), and many sensors are near-duplicates with "
@@ -247,7 +247,7 @@ def main() -> None:
         )
 
     with tab_sensor:
-        st.subheader("Individual channel distributions")
+        st.subheader("📊 Individual channel distributions")
         if not sensor_cols:
             st.warning("No sensor columns found.")
         else:
@@ -274,10 +274,10 @@ def main() -> None:
                 )
 
     with tab_data:
-        st.subheader("Cleaned telemetry matrix (`stg_secom`)")
+        st.subheader("🗂️ Cleaned telemetry matrix (`stg_secom`)")
         dict_col, table_col = st.columns([1, 2.5], gap="large")
         with dict_col:
-            with st.container(border=True, key="card_p1_data_dict"):
+            with st.container(key="card_p1_data_dict"):
                 st.markdown(_stg_data_dictionary_md(stats))
         with table_col:
             filt_col, ncol_col = st.columns(2)

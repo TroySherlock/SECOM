@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from secom.dashboard import render_blue_note
+from secom.dashboard import render_blue_note, render_verdict
 from secom.dashboard.charts import (
     fig_gate_disagreement_scatter,
     fig_wafer_drift_spikes,
@@ -66,7 +66,7 @@ def _coverage_drift_table(payload: dict) -> pd.DataFrame:
 
 
 def _render_coverage_drift(payload: dict) -> None:
-    st.subheader("1. Does the custom gate fire under drift?")
+    st.subheader("🔥 1. Does the custom gate fire under drift?")
     st.caption(
         "Coverage = fraction of wafers each gate keeps at its fitted limits. A coverage drop into "
         "the temporal window means the gate is abstaining more - it is detecting the forward-window "
@@ -95,7 +95,7 @@ def _render_coverage_drift(payload: dict) -> None:
 
 
 def _render_multimodality(payload: dict, contrast: dict) -> None:
-    st.subheader("3. Why PCA over-abstains: the in-control region is multimodal")
+    st.subheader("🌐 3. Why PCA over-abstains: the in-control region is multimodal")
     summary = gate_disagreement_summary(contrast)
     ref = contrast.get("reference") or {}
     t2 = np.asarray(ref.get("pca_t2", []), dtype=float)
@@ -133,7 +133,7 @@ def _render_multimodality(payload: dict, contrast: dict) -> None:
         key="p54_disagreement",
     )
     if summary:
-        st.success(
+        render_verdict(
             f"**{summary['pca_only']} of {summary['n_total']} healthy wafers** sit outside PCA's "
             "single ellipse (T² above its limit) but inside the BGM's modes (density in-control). "
             "The PCA baseline would overkill these; the custom gate does not."
@@ -159,7 +159,7 @@ def _render_multimodality(payload: dict, contrast: dict) -> None:
 
 
 def _render_caught_wafer(payload: dict) -> None:
-    st.subheader("2. A wafer the custom gate caught")
+    st.subheader("🎯 2. A wafer the custom gate caught")
     wafers = bgm_ooc_wafers(payload, track="extrapolation")
     if wafers.empty:
         st.info(
@@ -215,7 +215,7 @@ def _render_caught_wafer(payload: dict) -> None:
 
 
 def _render_risk_coverage(payload: dict) -> None:
-    st.subheader("4. The risk-coverage trade-off (temporal holdout)")
+    st.subheader("⚖️ 4. The risk-coverage trade-off (temporal holdout)")
     metric = st.radio(
         "Metric",
         list(DELTA_METRIC_COLS),
@@ -236,8 +236,8 @@ def _render_risk_coverage(payload: dict) -> None:
 
 
 def _render_verdict() -> None:
-    st.subheader("5. Verdict: which gate I would run")
-    with st.container(border=True, key="card_verdict"):
+    st.subheader("🏁 5. Verdict: which gate I would run")
+    with st.container(key="card_verdict"):
         st.markdown(
             "**I would run the custom sBFA → BGM as the primary drift / excursion monitor on this "
             "line, keeping the PCA-MSPC gate as an always-on conservative sanity check.** The case "

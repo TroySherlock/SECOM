@@ -13,7 +13,7 @@ import pandas as pd
 import streamlit as st
 
 from secom.costs import THRESHOLD_PROFILES
-from secom.dashboard import render_blue_note
+from secom.dashboard import render_blue_note, render_caveat
 from secom.dashboard.charts import (
     fig_local_contributions,
     fig_posterior_forest,
@@ -94,12 +94,11 @@ def _render_header() -> None:
         "Each track shows its single champion model, expressed in one sensor "
         "vocabulary (PLS is back-projected from latent components via its loadings)."
     )
-    st.warning(
+    render_caveat(
         "**Honesty caveat — associational, not causal.** Every attribution is a "
         "model-derived hypothesis to guide investigation, not a proven root cause. "
         "SECOM ships no sensor-to-tool/chamber map, so there is no real-equipment "
-        "grouping here.",
-        icon="⚠️",
+        "grouping here."
     )
 
 
@@ -234,7 +233,7 @@ def _ooc_gate_labels(gate_facts: dict) -> list[str]:
 
 
 def _render_key_findings(kf: dict, track: str, gate_facts: dict) -> None:
-    st.subheader("Key findings")
+    st.subheader("🔑 Key findings")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Actual", kf["actual"], border=True)
     m2.metric("Predicted (deploy threshold)", kf["predicted"], border=True)
@@ -462,7 +461,7 @@ def _render_drift_linkage(local_df: pd.DataFrame) -> None:
 
 # --- tab 2: global drivers ---------------------------------------------------
 def _render_global(model_id: str, track: str) -> None:
-    st.subheader("What the model learned (global drivers)")
+    st.subheader("🧠 What the model learned (global drivers)")
     if track == "extrapolation" and is_pls_model(model_id):
         _render_global_forest(model_id, track)
     else:
