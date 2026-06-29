@@ -1,4 +1,4 @@
-"""Extrapolation track: forward-in-time test (in-dist-tuned, temporal holdout)."""
+"""Extrapolation (1/2): holdout evaluation — forward-in-time test."""
 from __future__ import annotations
 
 import streamlit as st
@@ -10,11 +10,7 @@ from secom.dashboard.data import (
     holdout_comparison_df,
     holdout_delta_df,
 )
-from secom.dashboard.model_views import (
-    load_payload,
-    render_holdout_validation,
-    render_model_deepdive,
-)
+from secom.dashboard.model_views import load_payload, render_holdout_validation
 
 
 def _render_drift_cost(payload: dict) -> None:
@@ -97,11 +93,20 @@ def main() -> None:
     render_holdout_validation(payload, track="extrapolation")
 
     st.divider()
-    render_model_deepdive(payload, track="extrapolation")
+    _render_drift_cost(payload)
 
-    st.divider()
-    with st.expander("Cost of drift — interpolation minus extrapolation holdout", expanded=False):
-        _render_drift_cost(payload)
+    render_blue_note(
+        "**Why the ranking flips under drift.** `hsic_rf` is the interpolation champion "
+        "(PR-AUC ≈ 0.34) but collapses to the **worst** model here (≈ 0.09): selection-based heads "
+        "lock onto a handful of era-specific sensors, so when those sensors drift away the signal "
+        "evaporates on the later regime. The PLS heads do the opposite — by **projecting every "
+        "clustered sensor into a few supervised latent components** they average over hundreds of "
+        "weak, redundant channels, and that aggregate signal survives drift. The **linear** PLS "
+        "heads extrapolate best: `pls_enet` rises ≈ 0.10 → 0.18 and `pls_bayes` ≈ 0.11 → 0.20 to "
+        "become the **extrapolation champion** — a genuine *boost* on the forward holdout, not just "
+        "a smaller drop. (Read direction over exact magnitude: the temporal holdout carries only "
+        "~17–20 fails.)"
+    )
 
 
 main()

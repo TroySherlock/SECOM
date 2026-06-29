@@ -306,7 +306,7 @@ def _render_heteroscedasticity(contrast: dict) -> None:
 
 
 def main() -> None:
-    st.title("5.3 sBFA → BGM gate")
+    st.title("sBFA → BGM gate")
     st.caption(
         "Sparse Bayesian factor analysis (NumPyro, ADVI) → Bayesian Gaussian mixture density + "
         "Q/SPE residual, in the raw post-cluster sensor space, fit on passing-train wafers. Low "

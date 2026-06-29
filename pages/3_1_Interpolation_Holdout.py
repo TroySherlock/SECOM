@@ -1,4 +1,4 @@
-"""Interpolation track: in-distribution ceiling (stratified CV + random holdout)."""
+"""Interpolation (1/2): holdout evaluation — in-distribution ceiling."""
 from __future__ import annotations
 
 import streamlit as st
@@ -8,7 +8,6 @@ from secom.dashboard.model_views import (
     load_payload,
     render_cv_leaderboard,
     render_holdout_validation,
-    render_model_deepdive,
 )
 
 
@@ -38,9 +37,6 @@ def main() -> None:
 
     with st.expander("Cross-validation leaderboard (5×2 stratified)", expanded=False):
         render_cv_leaderboard(payload)
-
-    st.divider()
-    render_model_deepdive(payload, track="interpolation")
 
 
 main()

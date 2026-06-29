@@ -114,10 +114,6 @@ def main() -> None:
     )
 
     st.divider()
-    st.subheader("Project pipeline")
-    render_blue_note(_mart_pipeline_md())
-
-    st.divider()
 
     tab_balance, tab_drift, tab_quality, tab_sensor, tab_data = st.tabs(
         [

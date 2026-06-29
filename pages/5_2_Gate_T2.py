@@ -193,7 +193,7 @@ def _render_factor_space(factor: dict, ranking) -> None:
 
 
 def main() -> None:
-    st.title("5.2 Hotelling T² gate (PCA, fab standard)")
+    st.title("Hotelling T² gate (PCA, fab standard)")
     st.caption(
         "Standard PCA-MSPC on the raw post-cluster sensors → Hotelling T² (in-subspace excursions) "
         "+ Q/SPE residual (structural breaks), fit on passing-train wafers. Abstain when either "

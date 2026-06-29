@@ -1,4 +1,9 @@
-"""Preprocessing and feature engineering pipeline page."""
+"""Shared renderers for the Pipeline pages (feature spine + front-ends/journeys).
+
+Extracted from the former single Pipeline page so the two subpages
+(`pages/2_1_Pipeline_Spine.py` and `pages/2_2_Pipeline_FrontEnds.py`) can reuse
+the same helpers, mirroring the `model_views.py` pattern.
+"""
 from __future__ import annotations
 
 import streamlit as st
@@ -53,6 +58,30 @@ def illustrative_reduction_profile() -> dict[str, int]:
     }
 
 
+class _PipelineContext:
+    """Loaded pipeline artifacts and the slices each renderer needs."""
+
+    def __init__(self) -> None:
+        artifacts: dict | None = None
+        self.artifact_caption = ""
+        if artifacts_available():
+            artifacts = load_pipeline_artifacts()
+            generated = artifacts.get("generated_at", "")[:19].replace("T", " ")
+            self.artifact_caption = (
+                f"From holdout training fit (`secom_pipeline_artifacts.json`, {generated} UTC)."
+            )
+        else:
+            st.warning(
+                "Pipeline artifacts not found. Run `python -m secom.cli.benchmark` "
+                "after tuning to populate reporting charts. Showing illustrative fallbacks."
+            )
+        self.linear_ref = get_reference_artifacts(artifacts, "linear") if artifacts else None
+        self.topk_ref = get_reference_artifacts(artifacts, "topk") if artifacts else None
+        shared = (artifacts or {}).get("shared", {})
+        self.cluster_example = shared.get("spearman_cluster_example")
+        self.models = (artifacts or {}).get("models", {})
+
+
 # --- step 1: rz twins --------------------------------------------------------
 def _render_rz_explainer(linear_ref: dict | None) -> None:
     stages = (linear_ref or {}).get("stages") or {}
@@ -94,10 +123,10 @@ def _render_rz_explainer(linear_ref: dict | None) -> None:
             )
 
     render_blue_note(
-        "The rz twins are the single **increase** in the feature-count chart at the foot of this "
-        f"page (the jump from {mart:,} → {after_impute:,}). The variance + correlation step then "
-        "prunes whichever twin is redundant, so a sensor can survive as its raw form, its rz form, "
-        "or both."
+        "The rz twins are the single **increase** in the feature-count chart on the Front-ends & "
+        f"journeys page (the jump from {mart:,} → {after_impute:,}). The variance + correlation "
+        "step then prunes whichever twin is redundant, so a sensor can survive as its raw form, "
+        "its rz form, or both."
     )
 
 
@@ -132,7 +161,7 @@ def _render_shared_spine(linear_ref: dict | None, cluster_example: dict | None) 
          "downstream classifier."),
         ("4 · Calibrate", "fail P(·)",
          "`CalibratedClassifierCV` (**Platt / sigmoid**) maps raw head scores to trustworthy fail "
-         "probabilities — what the operating-point thresholds on pages 3–4 rely on."),
+         "probabilities — what the operating-point thresholds on the model pages rely on."),
     ]
     for i, (col, (title, chip, detail)) in enumerate(zip(cols, cards)):
         with col:
@@ -189,7 +218,7 @@ def _render_front_end_overview() -> None:
     st.subheader("Step 3 — the three front-ends")
     render_blue_note(
         "The front-end is the **only** place the nine pipelines diverge — everything else (the "
-        "spine above, the calibrated head) is shared. Two front-ends *select* a small sensor "
+        "shared spine, the calibrated head) is shared. Two front-ends *select* a small sensor "
         "subset; the third *projects* all sensors into a few supervised directions."
     )
     a, b, c = st.columns(3, gap="medium")
@@ -223,7 +252,7 @@ def _render_front_end_overview() -> None:
             )
     render_blue_note(
         "The T² here is an **engineered feature** inside the hsic/rfsel hub blocks — distinct from "
-        "the standalone PCA → Hotelling T² monitoring **gate** on the Gates pages (5.2)."
+        "the standalone PCA → Hotelling T² monitoring **gate** on the Gates pages."
     )
 
 
@@ -403,65 +432,7 @@ def _render_agreement_callout(models: dict) -> None:
     )
 
 
-# --- main --------------------------------------------------------------------
-def main() -> None:
-    st.title("Pipeline")
-    st.caption(
-        "How SECOM features are prepared before model training. "
-        "See the Interpolation / Extrapolation pages' **Deep-dive** and **Thresholding** tabs for "
-        "PR curves and the conservative / BER-min / aggressive / economic (cost-optimal) operating "
-        "points."
-    )
-
-    artifacts: dict | None = None
-    artifact_caption = ""
-    if artifacts_available():
-        artifacts = load_pipeline_artifacts()
-        generated = artifacts.get("generated_at", "")[:19].replace("T", " ")
-        artifact_caption = (
-            f"From holdout training fit (`secom_pipeline_artifacts.json`, {generated} UTC)."
-        )
-    else:
-        st.warning(
-            "Pipeline artifacts not found. Run `python -m secom.cli.benchmark` "
-            "after tuning to populate reporting charts. Showing illustrative fallbacks."
-        )
-
-    linear_ref = get_reference_artifacts(artifacts, "linear") if artifacts else None
-    topk_ref = get_reference_artifacts(artifacts, "topk") if artifacts else None
-    shared = (artifacts or {}).get("shared", {})
-    cluster_example = shared.get("spearman_cluster_example")
-    models = (artifacts or {}).get("models", {})
-
-    render_blue_note(
-        "Every cell of the 3×3 grid (3 front-ends × 3 classifier heads) runs the **same spine** — "
-        "impute → cluster → scale → calibrate — but each **front-end** builds features "
-        "differently. All steps are fit on training folds only (no leakage) and compared with "
-        "PR AUC across repeated CV. The page follows the data: **rz twins → shared spine → "
-        "front-ends → the end-to-end feature count.**"
-    )
-
-    st.divider()
-    _render_rz_explainer(linear_ref)
-
-    st.divider()
-    _render_shared_spine(linear_ref, cluster_example)
-
-    st.divider()
-    _render_front_end_overview()
-    fe_hsic, fe_rf, fe_pls = st.tabs(
-        ["HSIC-Lasso → T² + hubs", "RF-selection → T² + hubs", "PLS components"]
-    )
-    with fe_hsic:
-        _render_hsic_tab(models)
-    with fe_rf:
-        _render_rf_tab(models, topk_ref, linear_ref)
-    with fe_pls:
-        _render_pls_tab(models)
-
-    _render_agreement_callout(models)
-
-    st.divider()
+def _render_journey(ctx: _PipelineContext) -> None:
     st.subheader("The whole journey — two champions, two routes")
     render_blue_note(
         "The two champion models take **different routes** to the classifier. `hsic_rf` "
@@ -474,8 +445,8 @@ def main() -> None:
         "earlier was the old `rfsel_enet` reference, not these models."
     )
 
-    hsic_stages = (models.get("hsic_rf") or {}).get("stages")
-    pls_stages = (models.get("pls_bayes") or {}).get("stages")
+    hsic_stages = (ctx.models.get("hsic_rf") or {}).get("stages")
+    pls_stages = (ctx.models.get("pls_bayes") or {}).get("stages")
     fallback = illustrative_reduction_profile()
 
     left, right = st.columns(2, gap="medium")
@@ -515,12 +486,45 @@ def main() -> None:
 
     render_blue_note(HYPERPARAM_NOTE)
 
-    if artifact_caption:
-        st.caption(artifact_caption)
+    if ctx.artifact_caption:
+        st.caption(ctx.artifact_caption)
     else:
         st.caption(
             "Illustrative stage counts (communication only), not live transformer execution."
         )
 
 
-main()
+# --- public entry points -----------------------------------------------------
+def render_feature_spine() -> None:
+    """Steps 1-2: rz twin features and the shared preprocessing spine."""
+    ctx = _PipelineContext()
+    render_blue_note(
+        "Every cell of the 3×3 grid (3 front-ends × 3 classifier heads) runs the **same spine** — "
+        "impute → cluster → scale → calibrate — fit on training folds only (no leakage). This page "
+        "follows the data through that shared spine: **rz twins → the shared spine.** The "
+        "Front-ends & journeys page then shows how each front-end diverges."
+    )
+    st.divider()
+    _render_rz_explainer(ctx.linear_ref)
+    st.divider()
+    _render_shared_spine(ctx.linear_ref, ctx.cluster_example)
+
+
+def render_front_ends_and_journeys() -> None:
+    """Step 3: the three front-ends, cross-method agreement, and champion journeys."""
+    ctx = _PipelineContext()
+    _render_front_end_overview()
+    fe_hsic, fe_rf, fe_pls = st.tabs(
+        ["HSIC-Lasso → T² + hubs", "RF-selection → T² + hubs", "PLS components"]
+    )
+    with fe_hsic:
+        _render_hsic_tab(ctx.models)
+    with fe_rf:
+        _render_rf_tab(ctx.models, ctx.topk_ref, ctx.linear_ref)
+    with fe_pls:
+        _render_pls_tab(ctx.models)
+
+    _render_agreement_callout(ctx.models)
+
+    st.divider()
+    _render_journey(ctx)

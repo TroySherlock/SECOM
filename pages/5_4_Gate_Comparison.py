@@ -259,7 +259,7 @@ def _render_verdict() -> None:
 
 
 def main() -> None:
-    st.title("5.4 Gate comparison")
+    st.title("Gate comparison")
     st.caption(
         "The complete head-to-head story: the custom sBFA → BGM gate vs the standard PCA baseline "
         "on the temporal (drift) protocol. Does the custom gate detect drift the baseline misses, "

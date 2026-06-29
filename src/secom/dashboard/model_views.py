@@ -43,6 +43,7 @@ from secom.dashboard.data import (
     operating_table_df,
     resolved_threshold_profile_config,
 )
+from secom.dashboard.explainability import champion_for_track
 from secom.dashboard.pr_curves import load_model_scores, load_pr_curves
 
 # Gate identity per (track, gate) -> display label + flagged-count column stem.
@@ -221,25 +222,18 @@ def render_model_deepdive(payload: dict, *, track: str) -> None:
     model_ids = list_model_ids(payload)
     tuned = payload.get("tuned_hyperparameters") or {}
 
-    with st.expander("Metric glossary", expanded=False):
-        st.markdown(
-            "- **PR-AUC** - area under the precision-recall curve; the headline ranking metric "
-            "because it ignores the easy true-negatives that dominate this imbalanced "
-            "(~6.7% fail) problem.\n"
-            "- **BER** - balanced error rate = 1 − (TPR + TNR) / 2; treats a missed fail and a "
-            "false alarm as equally costly (a model-comparison metric, *not* the deploy objective).\n"
-            "- **Catch rate (TPR / recall)** - fraction of real fails the model flags.\n"
-            "- **Overkill rate (FPR)** - fraction of good wafers wrongly flagged (= 1 − TNR); a "
-            "scrapped/re-tested good wafer. Cheap relative to an escape, but it costs throughput.\n"
-            "- **Precision** - of everything flagged Fail, how many truly fail; low by design at "
-            "~6.7% prevalence, so treat the model as risk *triage*, not a precise gate."
-        )
-
     st.subheader("Pipeline architecture & tuning")
+    champion = champion_for_track(track)
+    default_index = model_ids.index(champion) if champion in model_ids else 0
     selected_id = st.selectbox(
         "Select pipeline",
         model_ids,
-        format_func=lambda mid: model_info(mid).display_name,
+        index=default_index,
+        format_func=lambda mid: (
+            f"{model_info(mid).display_name} — champion"
+            if mid == champion
+            else model_info(mid).display_name
+        ),
         key=f"dd_model_{track}",
     )
     info = model_info(selected_id)

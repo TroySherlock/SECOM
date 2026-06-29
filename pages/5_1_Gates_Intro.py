@@ -67,7 +67,7 @@ def _render_sensor_drift() -> None:
 
 
 def main() -> None:
-    st.title("5.1 Gates - introduction")
+    st.title("Gates — introduction")
     st.caption(
         "Two standalone multivariate process-control (MSPC) gates, fit on passing-train wafers "
         "only and evaluated separately from the classifiers. Each is framed as a sensor-space "
