@@ -477,39 +477,25 @@ def fig_sbfa_loadings_heatmap(
     return _sized(fig, height=max(420, 60 + 22 * len(sensors)), margin=dict(l=140, r=48, t=72, b=48))
 
 
-def fig_gate_disagreement_scatter(
-    pca_t2: np.ndarray,
-    bgm_density: np.ndarray,
+def _disagreement_quadrants(
+    fig: go.Figure,
+    t2: np.ndarray,
+    dens: np.ndarray,
     *,
     t2_ucl: float,
     density_lcl: float,
-    title: str = "Where the gates disagree (passing wafers)",
-) -> go.Figure:
-    """Per passing-wafer Hotelling T2 (x) vs BGM log-density (y), split by quadrant.
-
-    The control limits draw four quadrants. The money quadrant is high-T2 /
-    high-density: healthy wafers PCA flags out-of-control (above its single
-    Hotelling ellipse) but the multimodal BGM keeps in-control. Each point is one
-    in-control passing wafer; colour encodes which gate(s) would abstain.
-    """
-    fig = go.Figure()
-    t2 = np.asarray(pca_t2, dtype=float)
-    dens = np.asarray(bgm_density, dtype=float)
-    if t2.size == 0 or dens.size == 0 or t2.size != dens.size:
-        return _sized(fig.update_layout(title=dict(text=title)), height=520, margin=dict(l=64, r=48, t=72, b=56))
-
+    sizes: tuple[int, int, int, int] = (5, 7, 7, 9),
+    opacity: float = 1.0,
+    suffix: str = "",
+) -> None:
+    """Add the four quadrant traces (by which gate abstains) for one wafer cloud."""
     pca_ooc = t2 > t2_ucl
     bgm_ooc = dens < density_lcl
-    pca_only = pca_ooc & ~bgm_ooc
-    bgm_only = ~pca_ooc & bgm_ooc
-    both = pca_ooc & bgm_ooc
-    neither = ~pca_ooc & ~bgm_ooc
-
     groups = [
-        (neither, "Both in-control", C_BLUE, 5),
-        (both, "Both flag OOC", C_RED, 7),
-        (bgm_only, "BGM only", C_ORANGE, 7),
-        (pca_only, "PCA flags, BGM clears", C_GREEN, 9),
+        (~pca_ooc & ~bgm_ooc, "Both in-control", C_BLUE, sizes[0]),
+        (pca_ooc & bgm_ooc, "Both flag OOC", C_RED, sizes[1]),
+        (~pca_ooc & bgm_ooc, "BGM only", C_ORANGE, sizes[2]),
+        (pca_ooc & ~bgm_ooc, "PCA flags, BGM clears", C_GREEN, sizes[3]),
     ]
     for mask, name, color, size in groups:
         if not mask.any():
@@ -520,11 +506,64 @@ def fig_gate_disagreement_scatter(
                 x=t2[mask],
                 y=dens[mask],
                 mode="markers",
-                name=f"{name} (n={n})",
-                marker=dict(color=color, size=size, line=dict(width=0)),
+                name=f"{name}{suffix} (n={n})",
+                marker=dict(color=color, size=size, opacity=opacity, line=dict(width=0)),
                 hovertemplate="T²=%{x:.2f}<br>log-density=%{y:.2f}<extra></extra>",
             )
         )
+
+
+def fig_gate_disagreement_scatter(
+    pca_t2: np.ndarray,
+    bgm_density: np.ndarray,
+    *,
+    t2_ucl: float,
+    density_lcl: float,
+    holdout_t2: np.ndarray | None = None,
+    holdout_density: np.ndarray | None = None,
+    title: str = "Where the gates disagree (passing wafers)",
+) -> go.Figure:
+    """Per-wafer Hotelling T2 (x) vs BGM log-density (y), split by quadrant.
+
+    The control limits draw four quadrants. The money quadrant is high-T2 /
+    high-density: healthy wafers PCA flags out-of-control (above its single
+    Hotelling ellipse) but the multimodal BGM keeps in-control; colour encodes
+    which gate(s) would abstain.
+
+    When ``holdout_t2`` / ``holdout_density`` are supplied, the pre-drift
+    reference is rendered as a single muted grey ghost cloud and the temporal
+    holdout is drawn quadrant-coloured at full opacity, so the downward drift in
+    BGM log-density (the cloud sinking below the density limit) is visible.
+    """
+    fig = go.Figure()
+    t2 = np.asarray(pca_t2, dtype=float)
+    dens = np.asarray(bgm_density, dtype=float)
+    if t2.size == 0 or dens.size == 0 or t2.size != dens.size:
+        return _sized(fig.update_layout(title=dict(text=title)), height=520, margin=dict(l=64, r=48, t=72, b=56))
+
+    ho_t2 = np.asarray(holdout_t2, dtype=float) if holdout_t2 is not None else np.empty(0)
+    ho_dens = np.asarray(holdout_density, dtype=float) if holdout_density is not None else np.empty(0)
+    has_holdout = ho_t2.size > 0 and ho_t2.size == ho_dens.size
+
+    if has_holdout:
+        # Reference becomes a muted grey ghost cloud; the holdout carries the
+        # quadrant colours so the drift-down reads as the focus.
+        fig.add_trace(
+            go.Scatter(
+                x=t2,
+                y=dens,
+                mode="markers",
+                name=f"Pre-drift reference (n={t2.size})",
+                marker=dict(color="rgba(150,150,150,0.22)", size=5, line=dict(width=0)),
+                hovertemplate="reference<br>T²=%{x:.2f}<br>log-density=%{y:.2f}<extra></extra>",
+            )
+        )
+        _disagreement_quadrants(
+            fig, ho_t2, ho_dens, t2_ucl=t2_ucl, density_lcl=density_lcl, suffix=" (holdout)"
+        )
+    else:
+        _disagreement_quadrants(fig, t2, dens, t2_ucl=t2_ucl, density_lcl=density_lcl)
+
     fig.add_vline(x=float(t2_ucl), line=dict(color=C_YELLOW, width=1.5, dash="dash"))
     fig.add_hline(y=float(density_lcl), line=dict(color=C_YELLOW, width=1.5, dash="dash"))
     fig.update_layout(

@@ -27,6 +27,7 @@ from secom.dashboard.data import (
     bgm_ooc_wafers,
     gate_conditional_df,
     gate_contrast,
+    gate_diagnostics,
     gate_disagreement_summary,
 )
 from secom.dashboard.explainability import wafer_drift_spikes
@@ -93,7 +94,7 @@ def _render_coverage_drift(payload: dict) -> None:
     )
 
 
-def _render_multimodality(contrast: dict) -> None:
+def _render_multimodality(payload: dict, contrast: dict) -> None:
     st.subheader("3. Why PCA over-abstains: the in-control region is multimodal")
     summary = gate_disagreement_summary(contrast)
     ref = contrast.get("reference") or {}
@@ -103,12 +104,29 @@ def _render_multimodality(contrast: dict) -> None:
         st.info(_EMPTY)
         return
 
+    density_lcl = float(ref.get("bgm_density_lcl", float("-inf")))
+
+    # Holdout per-wafer stats are already frozen, in matching X_test order across
+    # the two gate diagnostics blocks (PCA T2 and BGM density).
+    pca_hold = gate_diagnostics(payload, "extrapolation", "pca").get("holdout") or {}
+    bgm_hold = gate_diagnostics(payload, "extrapolation", "bayes").get("holdout") or {}
+    ho_t2 = np.asarray(pca_hold.get("t2", []), dtype=float)
+    ho_dens = np.asarray(bgm_hold.get("density", []), dtype=float)
+    has_holdout = ho_t2.size > 0 and ho_t2.size == ho_dens.size
+
     st.plotly_chart(
         fig_gate_disagreement_scatter(
             t2,
             dens,
             t2_ucl=float(ref.get("pca_t2_ucl", float("inf"))),
-            density_lcl=float(ref.get("bgm_density_lcl", float("-inf"))),
+            density_lcl=density_lcl,
+            holdout_t2=ho_t2 if has_holdout else None,
+            holdout_density=ho_dens if has_holdout else None,
+            title=(
+                "Where the gates disagree, and how the holdout drifts down"
+                if has_holdout
+                else "Where the gates disagree (passing wafers)"
+            ),
         ),
         width="stretch",
         theme="streamlit",
@@ -120,8 +138,19 @@ def _render_multimodality(contrast: dict) -> None:
             "single ellipse (T² above its limit) but inside the BGM's modes (density in-control). "
             "The PCA baseline would overkill these; the custom gate does not."
         )
+    if has_holdout:
+        n_below = int((ho_dens < density_lcl).sum())
+        n_ho = int(ho_dens.size)
+        ref_pct = 100.0 * float((dens < density_lcl).mean()) if dens.size else 0.0
+        st.info(
+            f"Under the forward temporal holdout, **{n_below} of {n_ho} wafers "
+            f"({100.0 * n_below / n_ho:.0f}%)** fall below the BGM density limit, versus the "
+            f"~{ref_pct:.0f}% the gate allows in-control on the pre-drift reference - the cloud has "
+            "drifted down, exactly the in-subspace shift the BGM gate is built to catch."
+        )
     st.caption(
-        "Each point is one in-control passing wafer. The green quadrant (high T², high density) is "
+        "Grey points are the in-control pre-drift reference; coloured points are the temporal "
+        "holdout, split by which gate would abstain. The green quadrant (high T², high density) is "
         "the cost of a single homoscedastic ellipse: wafers PCA abstains on that are genuinely "
         "normal for a multimodal line (multiple recipes / products / chambers / eras). The BGM "
         "wraps each mode separately, so a wafer in a legitimate second mode stays in-control. See "
@@ -207,8 +236,8 @@ def _render_risk_coverage(payload: dict) -> None:
 
 
 def _render_verdict() -> None:
-    with st.container(border=True):
-        st.subheader("5. Verdict: which gate I would run")
+    st.subheader("5. Verdict: which gate I would run")
+    with st.container(border=True, key="card_verdict"):
         st.markdown(
             "**I would run the custom sBFA → BGM as the primary drift / excursion monitor on this "
             "line, keeping the PCA-MSPC gate as an always-on conservative sanity check.** The case "
@@ -260,7 +289,7 @@ def main() -> None:
     _render_caught_wafer(payload)
     st.divider()
     if contrast:
-        _render_multimodality(contrast)
+        _render_multimodality(payload, contrast)
     else:
         st.info(_EMPTY)
     st.divider()

@@ -25,9 +25,11 @@ def inject_dashboard_styles() -> None:
             border-radius: {RADIUS};
             overflow: hidden;
         }}
-        [data-testid="stVerticalBlockBorderWrapper"] {{
+        [class*="st-key-card_"] {{
             background-color: {METRIC_BG} !important;
-            border-radius: {RADIUS};
+            border: none !important;
+            border-radius: {RADIUS} !important;
+            padding: 1rem !important;
             overflow: hidden;
         }}
         [data-testid="stIFrame"],

@@ -96,7 +96,7 @@ def main() -> None:
     st.subheader("The two gates")
     col_t2, col_bgm = st.columns(2)
     with col_t2:
-        with st.container(border=True):
+        with st.container(border=True, key="card_gate_pca"):
             st.markdown("**5.2 - Hotelling T² gate (PCA, fab standard)**")
             st.markdown(
                 "- Standard PCA-MSPC on the raw post-cluster sensors (the **fab-standard baseline**)\n"
@@ -105,7 +105,7 @@ def main() -> None:
                 "- Frequentist, dense loadings; abstain on `T² > UCL` **or** `Q > UCL`"
             )
     with col_bgm:
-        with st.container(border=True):
+        with st.container(border=True, key="card_gate_bgm"):
             st.markdown("**5.3 - sBFA → BGM gate (custom)**")
             st.markdown(
                 "- Sparse Bayesian factor analysis (NumPyro, ADVI) with Laplace-sparse loadings\n"
@@ -115,7 +115,7 @@ def main() -> None:
                 "- The **custom** gate; 5.4 tests it against the PCA baseline at equal overkill"
             )
 
-    with st.container(border=True):
+    with st.container(border=True, key="card_control_stats"):
         st.subheader("The control statistics")
         st.markdown(
             "- **Hotelling T²** - Mahalanobis distance of the factor scores; flags excursions **along** "
@@ -127,7 +127,7 @@ def main() -> None:
         )
         st.latex(r"T^2 = (\mathbf{x}-\boldsymbol{\mu})^\top \Sigma^{-1}(\mathbf{x}-\boldsymbol{\mu})")
 
-    with st.container(border=True):
+    with st.container(border=True, key="card_how_to_read"):
         st.subheader("How to read the gate pages")
         st.markdown(
             "- **5.2 Hotelling T² gate (PCA baseline)** - a four-section drift monitor: distribution "

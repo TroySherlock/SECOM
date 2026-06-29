@@ -2,9 +2,9 @@
 
 One champion per track (pls_bayes for the temporal/extrapolation track, hsic_rf
 for the random/interpolation track). The page leads with deterministic KEY
-FINDINGS, then offers three focused views: a per-wafer RCA, the champion's global
-drivers, and a constrained plain-English interpretation. PLS attributions are
-back-projected through the fitted loadings into one sensor vocabulary.
+FINDINGS followed by a constrained plain-English (local Gemma) summary, then two
+focused views: a per-wafer RCA and the champion's global drivers. PLS attributions
+are back-projected through the fitted loadings into one sensor vocabulary.
 """
 from __future__ import annotations
 
@@ -44,9 +44,7 @@ from secom.dashboard.explainability import (
     wafer_drift_spikes,
     wafer_sensor_posterior,
 )
-from secom.dashboard.glossary import reference_definitions_for_facts
 from secom.dashboard.narrator import (
-    build_wafer_facts,
     get_wafer_narrative,
     load_narratives,
     narrative_model_for_track,
@@ -304,10 +302,9 @@ def _render_wafer_detail(
     if result.fail_probability_interval is not None:
         lo, hi = result.fail_probability_interval
         st.caption(
-            f"Posterior P(fail) spread (pre-calibration): "
-            f"{100 * lo:.1f}%–{100 * hi:.1f}% around an uncalibrated mean of "
-            f"{100 * (result.fail_probability_uncalibrated or 0):.1f}% — a rough "
-            "uncertainty band, not the calibrated point estimate above."
+            f"95% credible interval for the calibrated P(fail): "
+            f"{100 * lo:.1f}%–{100 * hi:.1f}% — same scale as the point estimate "
+            "above (a wider band means the model is less certain)."
         )
     st.caption(result.method)
 
@@ -534,9 +531,9 @@ def _render_global_bar(model_id: str, track: str) -> None:
     )
 
 
-# --- tab 3: plain-English RCA (LLM) -----------------------------------------
+# --- inline plain-English summary (LLM), shown under Key Findings -----------
 def _render_narrative(model_id: str, track: str, wafer_id: object) -> None:
-    st.subheader("Plain-English RCA summary")
+    st.markdown("#### Plain-English summary")
     render_blue_note(
         "Constrained **Statistical Interpreter** (local Gemma): it restates the "
         "numeric facts only — no invented fab processes, equipment, or causes. This "
@@ -568,27 +565,6 @@ def _render_narrative(model_id: str, track: str, wafer_id: object) -> None:
                 f"{payload.get('prompt_version', '')}"
             )
 
-    with st.expander("Inspect the structured facts the interpreter receives"):
-        st.caption(
-            "Builds the facts JSON live for the narrative model (may fit the model). "
-            "These are the only inputs the LLM is allowed to restate."
-        )
-        if wafer_id is not None and st.checkbox("Build facts now", key="p6_facts_go"):
-            try:
-                result = cached_wafer_explanation(model_id, wafer_id, track)
-                if result is None:
-                    st.info("Wafer not in this holdout split.")
-                else:
-                    facts = build_wafer_facts(model_id, result, track)
-                    st.json(facts)
-                    definitions = reference_definitions_for_facts(facts)
-                    if definitions:
-                        st.markdown("**Method notes** (plain-English grounding)")
-                        for definition in definitions:
-                            st.caption(definition)
-            except Exception as exc:  # noqa: BLE001
-                st.exception(exc)
-
 
 def main() -> None:
     _render_header()
@@ -619,16 +595,13 @@ def main() -> None:
     local_df = _annotate_robust(result.local_df, model_id, track)
     kf = key_findings(result, local_df, track)
     _render_key_findings(kf, track, gate_facts)
+    _render_narrative(model_id, track, wafer_id)
 
-    tab_wafer, tab_global, tab_llm = st.tabs(
-        ["Wafer RCA", "Global drivers", "Plain-English RCA"]
-    )
+    tab_wafer, tab_global = st.tabs(["Wafer RCA", "Global drivers"])
     with tab_wafer:
         _render_wafer_detail(model_id, track, wafer_id, result, local_df, gate_facts)
     with tab_global:
         _render_global(model_id, track)
-    with tab_llm:
-        _render_narrative(model_id, track, wafer_id)
 
 
 main()

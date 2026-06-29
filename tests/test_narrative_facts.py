@@ -4,9 +4,9 @@ Covers two invariants:
   * ``reference_definitions_for_facts`` returns only real glossary snippets and
     can reach every definition the facts can emit (no orphan keys).
   * ``build_wafer_facts`` stays JSON-serializable once the optional process-gate
-    and model-context blocks are appended. The non-Bayesian interpolation
-    champion (``hsic_rf``) needs no posterior/artifact fitting, so this runs in a
-    clean checkout; it skips if local data is genuinely unavailable.
+    block is appended. The non-Bayesian interpolation champion (``hsic_rf``) needs
+    no posterior/artifact fitting, so this runs in a clean checkout; it skips if
+    local data is genuinely unavailable.
 """
 from __future__ import annotations
 
@@ -47,15 +47,24 @@ def test_reference_definitions_reach_every_snippet() -> None:
         "fail_probability": 0.8,
         "threshold": 0.3,
         "fail_probability_credible_interval": [0.6, 0.95],
+        "uncertainty": "moderate",
+        "borderline": False,
         "n_drifting_contributors": 1,
+        "n_raising_contributors": 1,
+        "n_lowering_contributors": 0,
         "top_contributors": [
-            {"feature": "c_1", "spc_z": 3.2, "drifting": True, "attribution_robust": True}
+            {
+                "feature": "c_1",
+                "spc_z": 3.2,
+                "drifting": True,
+                "drift_shift": 2.4,
+                "attribution_robust": True,
+            }
         ],
         "process_gates": {
             "pca": {"out_of_control": True, "tripped": ["Hotelling T2 above limit"]},
             "bayes": {"out_of_control": True, "tripped": ["Q/SPE above limit"]},
         },
-        "model_context": {"front_end": "HSIC", "n_selected": 50},
     }
     seen: set[str] = set()
     for outcome in _OUTCOMES:
@@ -98,7 +107,6 @@ def test_build_wafer_facts_is_json_serializable() -> None:
     text = json.dumps(facts)  # must not raise
     assert facts["outcome"] == "caught_fail"
     assert facts["model_id"] == "hsic_rf"
-    # The optional blocks are empty-safe: present only when data backs them.
+    # The optional gate block is empty-safe: present only when data backs it.
     assert "process_gates" not in facts or isinstance(facts["process_gates"], dict)
-    assert "model_context" not in facts or isinstance(facts["model_context"], dict)
     assert "top_contributors" in json.loads(text)

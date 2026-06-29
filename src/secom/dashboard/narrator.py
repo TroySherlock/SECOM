@@ -24,7 +24,6 @@ import pandas as pd
 
 from secom.dashboard.data import (
     cached_benchmark_results,
-    champion_model_context,
     model_info,
     wafer_gate_facts,
 )
@@ -49,11 +48,14 @@ NARRATIVE_PATH_BY_TRACK = {
 }
 # Back-compat default (temporal champion).
 NARRATIVE_MODEL_ID = NARRATIVE_MODEL_BY_TRACK["extrapolation"]
-PROMPT_VERSION = "statistical-interpreter-v5-pca-gate"
+PROMPT_VERSION = "statistical-interpreter-v8-natural-language"
 # Bumped whenever the shape of build_wafer_facts changes (provenance for frozen
 # narratives). v2 adds the process_gates + model_context blocks; v3 renames the
-# EFA gate key to the PCA (fab-standard) gate.
-FACTS_SCHEMA_VERSION = "v3-pca-gate"
+# EFA gate key to the PCA (fab-standard) gate; v4 reports only the BGM gate and
+# drops model_context; v5 reports a calibrated fail_probability_credible_interval
+# (same scale as P(fail)) plus uncertainty / borderline / direction-count facts
+# and per-contributor drift_shift magnitudes.
+FACTS_SCHEMA_VERSION = "v5-calibrated-interval"
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8080/v1"
 DEFAULT_MODEL = "gemma"
@@ -63,21 +65,51 @@ LLM_MAX_TOKENS = 360
 _SYSTEM_PROMPT = (
     "You are a Statistical Interpreter for semiconductor wafer screening models. "
     "Restate only the numeric facts in the user JSON. Do not invent fab processes, "
-    "equipment names, or root causes. Do not mention features not listed. "
-    "There is no real sensor-to-tool/chamber mapping, so never describe sensors as "
-    "physical equipment. Treat every attribution as associational, not causal. "
-    "When an SPC z-score or drift flag is given, you may restate it as 'unusual vs "
-    "the in-control baseline' or 'drifting over time'. When a process_gates block "
-    "is present, you may state that an independent sensor-space drift monitor (the "
-    "PCA Hotelling-T2 gate or the sBFA->BGM gate) flagged this wafer out-of-control "
-    "and whether that corroborates the model's verdict. When a model_context block "
-    "is present, you may mention the front-end and how many sensors/components the "
-    "model uses. Use any supplied reference definitions only to phrase the "
-    "statistics in plain English; never infer causes from them. Write a concise "
-    "4-6 sentence root-cause analysis following the arc: symptom (the verdict), "
-    "evidence (the top drivers with SPC z-scores, drift, and posterior confidence, "
-    "plus any gate corroboration), hypothesis (where to look, clearly "
-    "associational), and a suggested next action."
+    "equipment names, or root causes. Do not mention features not listed, and do "
+    "not describe the model's feature front-end or how many sensors/components it "
+    "uses. There is no real sensor-to-tool/chamber mapping, so never describe "
+    "sensors as physical equipment. Treat every attribution as associational, not "
+    "causal. "
+    "Always write statistics and outcomes in natural language; never echo the raw "
+    "JSON field names - say 'correct pass' not 'correct_pass', 'fail probability' "
+    "not 'fail_probability', 'drift' not 'drift_shift', and 'missed fail (escape)' "
+    "not 'missed_fail'. "
+    "When an SPC z-score is given, judge it by the 2-sigma convention: restate "
+    "|z| >= 2 as 'elevated/unusual vs the in-control baseline' (|z| > 3 is roughly "
+    "the top 0.1% tail) and only |z| < 2 as 'within the in-control baseline'. When "
+    "a contributor has a drift_shift, it drifted that many SD between the training "
+    "and holdout eras (e.g. 'drifted 2.4 SD between eras'); a drifting flag is "
+    "'drifting over time'. "
+    "The fail_probability_credible_interval is a calibrated 95% credible interval "
+    "on the same scale as fail_probability, so you may relate the two and compare "
+    "the interval to the deploy threshold. Use the supplied uncertainty label "
+    "(low/moderate/high) for how certain the model is - do not invent your own "
+    "'wide'/'narrow' wording. Use the borderline flag to decide tone: when true, "
+    "call it a marginal/near-threshold call; when false, call it decisive. "
+    "When a process_gates block is present, you may state whether the BGM "
+    "log-density gate (an independent sensor-space drift monitor) flagged this "
+    "wafer out-of-control and whether that corroborates the model's verdict; refer "
+    "to it only as 'the BGM log-density gate'. "
+    "Deployment note: the extrapolation (PLS-Bayes) track's verdict uses the "
+    "cost-optimal economic threshold. "
+    "Use any supplied reference definitions only to phrase the statistics in plain "
+    "English; never infer causes from them. Write a concise 4-6 sentence root-cause "
+    "analysis following the arc: symptom (the verdict, using the exact outcome - "
+    "never call a fail a pass), evidence (the top drivers with SPC z-scores, drift "
+    "magnitudes, and posterior confidence, plus any gate corroboration). When most "
+    "of the largest contributors push against the verdict (compare the raising vs "
+    "lowering contributor counts), say so explicitly - e.g. the fail comes from the "
+    "net of many smaller signals while the largest individual drivers lean toward "
+    "pass. Then give a hypothesis "
+    "(a single sensible first point of contact - prefer a drifting contributor, "
+    "otherwise the largest-magnitude robust driver - phrased associationally, e.g. "
+    "'a sensible first place to look is ...'), and a next action matched to the "
+    "outcome. Action by outcome: for a missed_fail (escape) recommend containing "
+    "the lot and routing it to manual review; for a caught_fail call it a correct "
+    "catch and recommend holding/dispositioning the wafer as a genuine reject "
+    "(never describe it as a pass and never say no action is needed); for a "
+    "false_alarm suggest a cheap re-test to confirm; for a correct_pass recommend "
+    "no action UNLESS the BGM gate fired, in which case route it to manual review."
 )
 
 
@@ -131,6 +163,9 @@ def _contributor_rows(local_df: pd.DataFrame, robust_map: dict[str, bool]) -> li
         if spc is not None and pd.notna(spc):
             entry["spc_z"] = round(float(spc), 2)
         entry["drifting"] = bool(row.get("drift_flag", False))
+        shift = row.get("drift_shift")
+        if shift is not None and pd.notna(shift):
+            entry["drift_shift"] = round(float(shift), 2)
         if feat in robust_map:
             entry["attribution_robust"] = bool(robust_map[feat])
         rows.append(entry)
@@ -156,11 +191,19 @@ def build_wafer_facts(
     robust_map = _robust_map(model_id, track)
     contributors = _contributor_rows(result.local_df, robust_map)
     n_drifting = sum(1 for c in contributors if c.get("drifting"))
+    n_raising = sum(
+        1 for c in contributors if c.get("direction") in ("positive", "raises_fail_risk")
+    )
+    n_lowering = sum(
+        1 for c in contributors if c.get("direction") in ("negative", "lowers_fail_risk")
+    )
     if result.actual_label == 1:
         outcome = "caught_fail" if result.predicted_label == 1 else "missed_fail"
     else:
         outcome = "false_alarm" if result.predicted_label == 1 else "correct_pass"
 
+    fail_probability = round(result.fail_probability, 4)
+    threshold = round(result.threshold, 4)
     facts: dict[str, Any] = {
         "model_id": model_id,
         "model_name": info.display_name,
@@ -170,31 +213,34 @@ def build_wafer_facts(
         "actual": _label_text(result.actual_label),
         "predicted": _label_text(result.predicted_label),
         "outcome": outcome,
-        "fail_probability": round(result.fail_probability, 4),
-        "threshold": round(result.threshold, 4),
+        "fail_probability": fail_probability,
+        "threshold": threshold,
+        # Decision sits within 0.5x-2x the deploy threshold - a marginal call.
+        "borderline": bool(0.5 * threshold <= fail_probability <= 2.0 * threshold),
         "n_drifting_contributors": int(n_drifting),
+        "n_raising_contributors": int(n_raising),
+        "n_lowering_contributors": int(n_lowering),
         "method": result.method,
         "top_contributors": contributors,
         "caveat": "associational, not causal; no real tool/chamber mapping exists",
     }
     if result.fail_probability_interval is not None:
         lo, hi = result.fail_probability_interval
+        # Calibrated 95% credible interval, same scale as fail_probability.
         facts["fail_probability_credible_interval"] = [round(lo, 4), round(hi, 4)]
+        width = hi - lo
+        facts["uncertainty"] = (
+            "low" if width < 0.10 else "moderate" if width <= 0.30 else "high"
+        )
 
-    # Independent corroboration: did the standalone sensor-space drift monitors
-    # (PCA Hotelling-T2 gate, sBFA->BGM gate) flag this same wafer? Optional and
-    # empty-safe so page 6's live "build facts now" path still works pre-re-run.
+    # Independent corroboration: did the standalone BGM log-density gate flag this
+    # same wafer? Narratives report only the custom BGM gate (not the PCA
+    # baseline). Optional and empty-safe so page 6's live path still works.
     gate_facts = wafer_gate_facts(
         cached_benchmark_results(), track, result.observation_id
     )
-    if gate_facts:
-        facts["process_gates"] = gate_facts
-
-    # Champion model context (front-end + selection footprint) from frozen
-    # artifacts, so the LLM can ground the model description in real numbers.
-    model_ctx = champion_model_context(model_id)
-    if model_ctx:
-        facts["model_context"] = model_ctx
+    if gate_facts.get("bayes"):
+        facts["process_gates"] = {"bayes": gate_facts["bayes"]}
     return facts
 
 

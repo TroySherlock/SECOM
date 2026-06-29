@@ -67,7 +67,7 @@ def _render_rz_explainer(linear_ref: dict | None) -> None:
 
     what, why, how = st.columns(3, gap="medium")
     with what:
-        with st.container(border=True):
+        with st.container(border=True, key="card_rz_what"):
             st.markdown("#### 🧬 What")
             st.markdown(
                 f"Each raw sensor `c_NNN` gets a twin `c_NNN_rz`: its value re-expressed as a "
@@ -76,7 +76,7 @@ def _render_rz_explainer(linear_ref: dict | None) -> None:
                 f"`{mart:,}` sensors become `{after_impute:,}` columns."
             )
     with why:
-        with st.container(border=True):
+        with st.container(border=True, key="card_rz_why"):
             st.markdown("#### 🎯 Why")
             st.markdown(
                 "Raw levels drift across the fab's lifetime, so an absolute reading means "
@@ -85,7 +85,7 @@ def _render_rz_explainer(linear_ref: dict | None) -> None:
                 "on the extrapolation track, while the raw twin keeps the absolute level."
             )
     with how:
-        with st.container(border=True):
+        with st.container(border=True, key="card_rz_how"):
             st.markdown("#### 🛠️ How")
             st.markdown(
                 "Computed in `mart_secom_features.sql` with a windowed median/IQR over "
@@ -134,9 +134,9 @@ def _render_shared_spine(linear_ref: dict | None, cluster_example: dict | None) 
          "`CalibratedClassifierCV` (**Platt / sigmoid**) maps raw head scores to trustworthy fail "
          "probabilities — what the operating-point thresholds on pages 3–4 rely on."),
     ]
-    for col, (title, chip, detail) in zip(cols, cards):
+    for i, (col, (title, chip, detail)) in enumerate(zip(cols, cards)):
         with col:
-            with st.container(border=True):
+            with st.container(border=True, key=f"card_spine_{i}"):
                 st.markdown(f"#### {title}")
                 st.markdown(f"`{chip}`")
                 st.markdown(detail)
@@ -194,7 +194,7 @@ def _render_front_end_overview() -> None:
     )
     a, b, c = st.columns(3, gap="medium")
     with a:
-        with st.container(border=True):
+        with st.container(border=True, key="card_fe_hsic"):
             st.markdown("#### HSIC-Lasso → T² + hubs")
             st.markdown(
                 "Keeps the **top-k** sensors by *kernel statistical dependence* with the fail "
@@ -203,7 +203,7 @@ def _render_front_end_overview() -> None:
                 "_Used by_ `hsic_enet`, `hsic_rf`, `hsic_bayes`."
             )
     with b:
-        with st.container(border=True):
+        with st.container(border=True, key="card_fe_rf"):
             st.markdown("#### RF-selection → T² + hubs")
             st.markdown(
                 "Keeps the **top-k** sensors by random-forest impurity importance, then appends "
@@ -212,7 +212,7 @@ def _render_front_end_overview() -> None:
                 "_Used by_ `rfsel_enet`, `rfsel_rf`, `rfsel_bayes`."
             )
     with c:
-        with st.container(border=True):
+        with st.container(border=True, key="card_fe_pls"):
             st.markdown("#### PLS components")
             st.markdown(
                 "**No selection.** Projects *all* clustered sensors onto a few supervised latent "

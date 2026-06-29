@@ -719,41 +719,6 @@ def load_pipeline_artifacts(path: Path | None = None) -> dict[str, Any]:
 
 
 @lru_cache(maxsize=None)
-def champion_model_context(model_id: str) -> dict[str, Any]:
-    """Front-end + selection context for one model, from frozen pipeline artifacts.
-
-    PLS cells report the latent-component count and clustered-sensor input; the
-    selection (HSIC / RF-select) cells report how many sensors survived selection
-    and the highest-leverage hub sensors. Cached per ``model_id`` (only a couple
-    of champions are queried per batch). Returns ``{}`` when artifacts are absent
-    so the narrator stays optional/empty-safe.
-    """
-    try:
-        artifacts = load_pipeline_artifacts()
-    except FileNotFoundError:
-        return {}
-    model = (artifacts.get("models") or {}).get(model_id) or {}
-    if not model:
-        return {}
-    front_end = MODEL_CELLS.get(model_id, ("", ""))[0]
-    stages = model.get("stages") or {}
-    ctx: dict[str, Any] = {"front_end": _FRONT_END_NAME.get(front_end, front_end)}
-    if front_end == "pls":
-        aux = int(stages.get("auxiliary_features", 0))
-        classifier_input = int(stages.get("classifier_input", 0))
-        ctx["n_components"] = max(0, classifier_input - aux)
-        ctx["n_clustered"] = int(stages.get("after_cluster", 0))
-    else:
-        hub = model.get("hub_interactions") or {}
-        ctx["n_selected"] = int(
-            stages.get("after_selection", hub.get("n_hubs_selected", 0))
-        )
-        hub_sensors = hub.get("hub_sensors") or []
-        if hub_sensors:
-            ctx["hub_sensors"] = [str(s) for s in hub_sensors[:5]]
-    return ctx
-
-
 def load_report_cache(path: Path | None = None) -> dict[str, Any]:
     """Frozen PR-curve + global-importance cache written by ``secom.benchmark``."""
     path = path or REPORT_CACHE_PATH

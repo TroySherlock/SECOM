@@ -72,11 +72,11 @@ class WaferExplanation:
     threshold: float
     local_df: pd.DataFrame
     method: str
-    # Best-effort posterior P(fail) credible interval for Bayesian heads, taken
-    # from the base estimator's posterior logits *before* sigmoid calibration
-    # (the calibrated point estimate may fall outside it). None for other heads.
+    # Calibrated 95% credible interval for P(fail) on Bayesian heads: the posterior
+    # logit draws are pushed through the same per-fold sigmoid calibrators and
+    # pooled, so this is on the *same scale* as fail_probability (the point
+    # estimate lands inside it). None for non-Bayesian heads.
     fail_probability_interval: tuple[float, float] | None = None
-    fail_probability_uncalibrated: float | None = None
 
 
 @st.cache_data(show_spinner=False)
@@ -286,27 +286,46 @@ def pls_global_sensor_importance(
     return top, signed_df
 
 
-def _bayes_fail_interval(
+def calibrated_fail_interval(
     pipeline, row_scaled: np.ndarray, q: tuple[float, float] = (0.025, 0.975)
-) -> tuple[tuple[float, float] | None, float | None]:
-    """Posterior P(fail) credible interval from the base Bayesian estimator.
+) -> tuple[float, float] | None:
+    """Calibrated 95% credible interval for P(fail) on a Bayesian head.
 
-    Uses the uncalibrated posterior logits (pre-sigmoid), so this is a spread
-    around the *uncalibrated* mean, not the calibrated point estimate.
+    Each fold's posterior logit draws are sigmoided to base probabilities and
+    pushed through *that fold's* fitted sigmoid (Platt) calibrator, then pooled
+    across folds. The result is on the same scale as ``pipeline.predict_proba``
+    (the fold-averaged calibrated probability), so the deployed point estimate
+    lands inside the band. Returns ``None`` for non-Bayesian heads or if the
+    calibration internals are unavailable.
     """
-    est = fitted_base_classifier(pipeline)
-    if not isinstance(est, BayesianElasticNetLogistic):
-        return None, None
     try:
-        logits = est._logits_samples(row_scaled.reshape(1, -1))
+        clf = pipeline.named_steps["classifier"]
+        if hasattr(clf, "estimator_"):  # FixedThresholdClassifier
+            clf = clf.estimator_
+        calibrated = getattr(clf, "calibrated_classifiers_", None)
+        if not calibrated:
+            return None
+        pooled: list[np.ndarray] = []
+        for cc in calibrated:
+            base = cc.estimator
+            if not isinstance(base, BayesianElasticNetLogistic):
+                return None
+            logits = np.clip(
+                np.asarray(base._logits_samples(row_scaled.reshape(1, -1)), dtype=float),
+                -30.0,
+                30.0,
+            ).ravel()
+            if logits.size == 0:
+                return None
+            probs = 1.0 / (1.0 + np.exp(-logits))
+            pooled.append(np.asarray(cc.calibrators[0].predict(probs), dtype=float))
+        draws = np.concatenate(pooled)
+        if draws.size == 0:
+            return None
+        lo, hi = (float(v) for v in np.quantile(draws, q))
+        return (lo, hi)
     except Exception:
-        return None, None
-    logits = np.clip(np.asarray(logits, dtype=float), -30.0, 30.0).ravel()
-    if logits.size == 0:
-        return None, None
-    probs = 1.0 / (1.0 + np.exp(-logits))
-    lo, hi = (float(v) for v in np.quantile(probs, q))
-    return (lo, hi), float(probs.mean())
+        return None
 
 
 def _robust_z(value: float, ref_values) -> float:
@@ -416,9 +435,9 @@ def wafer_explanation(
 
     local_df = _enrich_local_df(local_df, split, row, track)
 
-    interval, uncal_mean = (None, None)
+    interval = None
     if kind == "bayesian":
-        interval, uncal_mean = _bayes_fail_interval(pipeline, row_scaled)
+        interval = calibrated_fail_interval(pipeline, row_scaled)
 
     return WaferExplanation(
         observation_id=observation_id,
@@ -429,7 +448,6 @@ def wafer_explanation(
         local_df=local_df,
         method=method,
         fail_probability_interval=interval,
-        fail_probability_uncalibrated=uncal_mean,
     )
 
 

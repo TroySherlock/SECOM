@@ -281,7 +281,7 @@ def main() -> None:
         st.subheader("Cleaned telemetry matrix (`stg_secom`)")
         dict_col, table_col = st.columns([1, 2.5], gap="large")
         with dict_col:
-            with st.container(border=True):
+            with st.container(border=True, key="card_p1_data_dict"):
                 st.markdown(_stg_data_dictionary_md(stats))
         with table_col:
             filt_col, ncol_col = st.columns(2)
