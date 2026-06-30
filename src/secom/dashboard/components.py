@@ -236,23 +236,24 @@ def render_model_deepdive(payload: dict, *, track: str) -> None:
         ),
         key=f"dd_model_{track}",
     )
-    info = model_info(selected_id)
-    left, right = st.columns([1.2, 1], gap="large")
-    with left:
-        st.markdown(f"### {info.display_name}")
-        st.markdown(f"**Family:** {info.family}")
-        st.markdown(f"**Classifier:** {info.classifier}")
-        st.markdown(f"**Feature path:** {info.feature_path}")
-        st.markdown(info.description)
-        st.markdown(f"**Tuning notebook:** `{info.tuning_notebook}`")
-    with right:
-        st.markdown("**Tuned hyperparameters (in-distribution / stratified CV)**")
-        st.markdown(_format_params(tuned.get(selected_id, {})))
-        if is_extrap:
-            st.caption(
-                "Same in-distribution-tuned params reused for the temporal forward "
-                "holdout (no separate temporal tuning)."
-            )
+    with st.container(key="card_built"):
+        info = model_info(selected_id)
+        left, right = st.columns([1.2, 1], gap="large")
+        with left:
+            st.markdown(f"### {info.display_name}")
+            st.markdown(f"**Family:** {info.family}")
+            st.markdown(f"**Classifier:** {info.classifier}")
+            st.markdown(f"**Feature path:** {info.feature_path}")
+            st.markdown(info.description)
+            st.markdown(f"**Tuning notebook:** `{info.tuning_notebook}`")
+        with right:
+            st.markdown("**Tuned hyperparameters (in-distribution / stratified CV)**")
+            st.markdown(_format_params(tuned.get(selected_id, {})))
+            if is_extrap:
+                st.caption(
+                    "Same in-distribution-tuned params reused for the temporal forward "
+                    "holdout (no separate temporal tuning)."
+                )
 
     deepdive_ho_df = holdout_df(
         payload, key="holdout" if is_extrap else "holdout_random"

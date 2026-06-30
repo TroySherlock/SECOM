@@ -1,4 +1,4 @@
-"""Gates 5.4 - the complete gate-comparison story: PCA baseline vs custom sBFA -> BGM.
+"""Gate comparison - the complete story: PCA baseline vs custom sBFA -> BGM.
 
 One linear narrative answering "is the custom gate worth running beside the fab
 standard?" on the temporal (drift) protocol:
@@ -8,8 +8,8 @@ standard?" on the temporal (drift) protocol:
 4. The risk-coverage trade-off on the temporal holdout.
 5. Verdict - which gate I would run on this line.
 
-The noise-weighted-attribution case (sensors are heteroscedastic) lives on 5.3,
-next to the sparse-loadings root cause it explains.
+The noise-weighted-attribution case (sensors are heteroscedastic) lives on the
+sBFA → BGM gate page, next to the sparse-loadings root cause it explains.
 """
 from __future__ import annotations
 
@@ -154,7 +154,7 @@ def _render_multimodality(payload: dict, contrast: dict) -> None:
         "the cost of a single homoscedastic ellipse: wafers PCA abstains on that are genuinely "
         "normal for a multimodal line (multiple recipes / products / chambers / eras). The BGM "
         "wraps each mode separately, so a wafer in a legitimate second mode stays in-control. See "
-        "**5.3** for the BGM mode weights that prove more than one mode is active."
+        "**sBFA → BGM gate** for the BGM mode weights that prove more than one mode is active."
     )
 
 
@@ -248,8 +248,8 @@ def _render_verdict() -> None:
             "- **Multimodality (section 3):** the in-control region has more than one mode, so PCA's "
             "single ellipse would needlessly overkill ~2% of perfectly healthy wafers that the BGM "
             "keeps in-control.\n"
-            "- **Heteroscedasticity (5.3):** sensor noise spans orders of magnitude, so the custom "
-            "gate's noise-weighted attribution (shown on **5.3**) points engineers at the right "
+            "- **Heteroscedasticity (sBFA → BGM gate):** sensor noise spans orders of magnitude, so the custom "
+            "gate's noise-weighted attribution (shown on **sBFA → BGM gate**) points engineers at the right "
             "subsystem where PCA's equal-weight blame does not.\n\n"
             "PCA remains valuable precisely *because* it is the trusted, dense, fully-understood fab "
             "standard - it is the benchmark the custom gate has to beat, and a useful second opinion. "
@@ -273,8 +273,9 @@ def main() -> None:
         return
 
     render_blue_note(
-        "**The honest framing.** 5.1 showed the sensors drift; 5.2 and 5.3 showed each gate detects "
-        "it (5.3 also shows why its noise-weighted attribution across **heteroscedastic** sensors is "
+        "**The honest framing.** The introduction showed the sensors drift; the Hotelling T² and "
+        "sBFA → BGM gate pages showed each gate detects it (the latter also shows why its "
+        "noise-weighted attribution across **heteroscedastic** sensors is "
         "sharper). PCA is the trusted fab standard and drops nothing; the custom gate earns its place "
         "only where it is provably better. This page makes the case: it fires under drift (section "
         "1), here is a concrete passing wafer it caught (section 2), and it does not overkill a "

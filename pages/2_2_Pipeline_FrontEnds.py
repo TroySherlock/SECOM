@@ -5,7 +5,6 @@ import streamlit as st
 
 from secom.dashboard import render_blue_note
 from secom.dashboard.charts import (
-    fig_hsic_dependence_intuition,
     fig_hsic_selected_rank,
     fig_pipeline_stage_counts,
     fig_pls_score_scatter,
@@ -105,7 +104,7 @@ def _render_front_end_overview() -> None:
                 "extrapolation.\n\n"
                 "_Used by_ `pls_enet`, `pls_rf`, `pls_bayes`."
             )
-    render_blue_note(
+    st.caption(
         "The T² here is an **engineered feature** inside the hsic/rfsel hub blocks — distinct from "
         "the standalone PCA → Hotelling T² monitoring **gate** on the Gates pages."
     )
@@ -154,20 +153,6 @@ def _render_hsic_tab(models: dict) -> None:
             )
     else:
         st.info("HSIC front-end artifact not available; run `python -m secom.cli.benchmark`.")
-
-    with st.expander("Why a kernel method beats correlation (intuition)"):
-        st.plotly_chart(
-            fig_hsic_dependence_intuition(),
-            width="stretch",
-            theme="streamlit",
-            key="p2_hsic_intuition",
-        )
-        st.caption(
-            "A U-shaped sensor→fail link: fails concentrate at both extremes, so the linear "
-            "correlation is ≈ 0 and a Pearson/Spearman filter is blind to it — but kernel "
-            "dependence (HSIC) detects it."
-        )
-
 
 def _render_rf_tab(models: dict, topk_ref: dict | None, linear_ref: dict | None) -> None:
     st.markdown(
@@ -288,8 +273,9 @@ def _render_agreement_callout(models: dict) -> None:
 
 
 def _render_journey(ctx: PipelineContext) -> None:
-    st.subheader("🛣️ The whole journey — two champions, two routes")
-    render_blue_note(
+    with st.container(key="card_journey"):
+        st.subheader("🛣️ The whole journey — two champions, two routes")
+        st.markdown(
         "The two champion models take **different routes** to the classifier. `hsic_rf` "
         "(interpolation champion) **selects** a small sensor subset then appends Hotelling T² + "
         "hub interactions; `pls_bayes` (extrapolation champion) **projects** the whole clustered "

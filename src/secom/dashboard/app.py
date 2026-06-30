@@ -9,6 +9,7 @@ METRIC_BG = "#3c3836"
 NOTE_BLUE = "#7daea3"
 NOTE_GREEN = "#a9b665"
 NOTE_AMBER = "#d8a657"
+NOTE_RED = "#ea6962"
 TEXT_COLOR = "#d4be98"
 RADIUS = "0.75rem"
 
@@ -56,6 +57,9 @@ def inject_dashboard_styles() -> None:
         [class*="st-key-note_amber"] {{
             background-color: color-mix(in srgb, {NOTE_AMBER} 22%, {METRIC_BG}) !important;
         }}
+        [class*="st-key-note_red"] {{
+            background-color: color-mix(in srgb, {NOTE_RED} 22%, {METRIC_BG}) !important;
+        }}
         [data-testid="stIFrame"],
         [data-testid="stIFrame"] iframe {{
             border-radius: {RADIUS};
@@ -96,8 +100,13 @@ def render_verdict(message: str) -> None:
 
 
 def render_caveat(message: str) -> None:
-    """Caution-emphasis note (amber) - genuine interpretation caveats."""
+    """Caution-emphasis note (amber/yellow) - warnings, OOC, false alarms."""
     _render_note(message, "amber")
+
+
+def render_alert(message: str) -> None:
+    """Negative-emphasis note (red) - missed fails / hard failures."""
+    _render_note(message, "red")
 
 
 def configure_page(*, page_title: str = "SECOM", page_icon: str = "🔬") -> None:

@@ -1,4 +1,4 @@
-"""Gates 5.3 - sBFA → BGM gate with Tier-1 drift monitor (distribution shift + control chart)."""
+"""sBFA → BGM gate with Tier-1 drift monitor (distribution shift + control chart)."""
 from __future__ import annotations
 
 import numpy as np
@@ -172,7 +172,7 @@ def _render_bgm_modes(payload: dict) -> None:
         f"The BGM keeps **{active} active mode(s)** above the 5% weight line. More than one is "
         "direct evidence the in-control region is multimodal (multiple recipes / products / "
         "chambers / eras) - structure a single PCA Hotelling ellipse cannot represent, which is "
-        "exactly the multimodality the 5.4 disagreement quadrant quantifies."
+        "exactly the multimodality the Gate comparison disagreement quadrant quantifies."
     )
 
 
@@ -371,12 +371,12 @@ def main() -> None:
     _render_heteroscedasticity(gate_contrast(payload, track="extrapolation"))
 
     render_blue_note(
-        "**5.3 is a Bayesian sensor-space drift monitor.** Trust the population drift evidence "
+        "**This is a Bayesian sensor-space drift monitor.** Trust the population drift evidence "
         "(sections 1-3); treat the latent-space, loadings and noise-weighting views (sections 4-6) "
         "as interpretable diagnostics from a single representative fit - this is the sensor-level "
-        "root cause the PCA baseline (5.2) defers to, thanks to the Laplace-sparse, heteroscedastic "
-        "noise model. Conditional yield lift and the head-to-head verdict live on **5.4 Gate "
-        "comparison** (CIs are wide at ~17-20 holdout fails)."
+        "root cause the PCA baseline (Hotelling T² gate) defers to, thanks to the Laplace-sparse, "
+        "heteroscedastic noise model. Conditional yield lift and the head-to-head verdict live on "
+        "**Gate comparison** (CIs are wide at ~17-20 holdout fails)."
     )
 
 

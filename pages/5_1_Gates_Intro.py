@@ -1,4 +1,4 @@
-"""Gates 5.1 - introduction: what the MSPC abstention gates are and how to read them."""
+"""Gates introduction: what the MSPC abstention gates are and how to read them."""
 from __future__ import annotations
 
 import streamlit as st
@@ -88,16 +88,16 @@ def main() -> None:
         "scores new wafers in measurement-time order. When the rolling out-of-control rate climbs "
         "above its in-control baseline (equivalently, coverage drops), that is the **drift / "
         "retraining trigger** - the signal to refit on recent data. On SECOM this fires mainly "
-        "through the BGM density and the shared Q channel; the PCA T² limit barely moves. **5.4** "
-        "shows a concrete passing wafer the custom gate caught this way."
+        "through the BGM density and the shared Q channel; the PCA T² limit barely moves. **Gate "
+        "comparison** shows a concrete passing wafer the custom gate caught this way."
     )
 
     st.divider()
-    st.subheader("🚪 The two gates")
     col_t2, col_bgm = st.columns(2)
     with col_t2:
         with st.container(key="card_gate_pca"):
-            st.markdown("**5.2 - Hotelling T² gate (PCA, fab standard)**")
+            st.subheader("🚪 Standard gate")
+            st.markdown("**Hotelling T² gate (PCA, fab standard)**")
             st.markdown(
                 "- Standard PCA-MSPC on the raw post-cluster sensors (the **fab-standard baseline**)\n"
                 "- **Hotelling T²** flags in-subspace excursions (drift along known component directions)\n"
@@ -106,38 +106,37 @@ def main() -> None:
             )
     with col_bgm:
         with st.container(key="card_gate_bgm"):
-            st.markdown("**5.3 - sBFA → BGM gate (custom)**")
+            st.subheader("🚪 Custom gate")
+            st.markdown("**sBFA → BGM gate (custom)**")
             st.markdown(
                 "- Sparse Bayesian factor analysis (NumPyro, ADVI) with Laplace-sparse loadings\n"
                 "- A **Bayesian Gaussian mixture** density on the factor scores replaces T²\n"
                 "- Same **Q / SPE** residual for orthogonal novelty\n"
                 "- Robust-scaled + clipped; abstain on low BGM log-density **or** high Q\n"
-                "- The **custom** gate; 5.4 tests it against the PCA baseline at equal overkill"
             )
 
     with st.container(key="card_control_stats"):
         st.subheader("📐 The control statistics")
         st.markdown(
             "- **Hotelling T²** - Mahalanobis distance of the factor scores; flags excursions **along** "
-            "the learned factor directions (5.2). \n"
+            "the learned factor directions (Hotelling T² gate). \n"
             "- **Q / SPE** - squared reconstruction residual; flags structural breaks **orthogonal** to "
             "the factor model that T²/density cannot see (both gates). \n"
             "- **BGM log-density** - log-likelihood under a Bayesian Gaussian mixture on the factor "
-            "scores; the multimodal analogue of T² (5.3). Low density trips the gate."
+            "scores; the multimodal analogue of T² (sBFA → BGM gate). Low density trips the gate."
         )
-        st.latex(r"T^2 = (\mathbf{x}-\boldsymbol{\mu})^\top \Sigma^{-1}(\mathbf{x}-\boldsymbol{\mu})")
 
     with st.container(key="card_how_to_read"):
         st.subheader("🧭 How to read the gate pages")
         st.markdown(
-            "- **5.2 Hotelling T² gate (PCA baseline)** - a four-section drift monitor: distribution "
+            "- **Hotelling T² gate (PCA baseline)** - a four-section drift monitor: distribution "
             "shift, the time-ordered MSPC control chart (the retraining trigger), an honest KS/AUC "
             "drift scalar, and the PCA component space with its Hotelling ellipse.\n"
-            "- **5.3 sBFA → BGM gate (custom)** - the same monitor plus the Bayesian extras: the BGM "
+            "- **sBFA → BGM gate (custom)** - the same monitor plus the Bayesian extras: the BGM "
             "mixture weights (proof the in-control region is multimodal), a sparse-loadings root-cause "
             "view that points at the candidate drifting subsystem, and why that attribution is "
             "noise-weighted across heteroscedastic sensors.\n"
-            "- **5.4 Gate comparison** - the complete head-to-head story: whether the custom gate fires "
+            "- **Gate comparison** - the complete head-to-head story: whether the custom gate fires "
             "under drift (coverage drift), a concrete passing wafer it caught, why PCA over-abstains on "
             "a multimodal in-control region, the risk-coverage trade-off, and a verdict on which gate to run."
         )
@@ -146,7 +145,7 @@ def main() -> None:
         "**Honest framing.** The per-wafer drift evidence (distribution shift, control chart, KS) "
         "is computed over **all** wafers, so it is the statistically solid story - the gate is an "
         "MSPC drift/excursion monitor, not a way to manufacture recall. Conditional yield metrics "
-        "(5.4) rest on only ~17-20 holdout fails, so read their direction, not their magnitude."
+        "(Gate comparison) rest on only ~17-20 holdout fails, so read their direction, not their magnitude."
     )
 
 

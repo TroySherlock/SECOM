@@ -1,9 +1,9 @@
-"""Gates 5.2 - Hotelling T² gate (standard PCA → T² + Q) drift monitor.
+"""Hotelling T² gate (standard PCA → T² + Q) drift monitor.
 
-The fab-standard MSPC baseline (mirrors 5.3's custom sBFA → BGM gate): PCA on the
+The fab-standard MSPC baseline (mirrors the custom sBFA → BGM gate): PCA on the
 raw post-cluster sensors, then distribution shift, an MSPC control chart, an
 honest drift scalar, and a PCA component-space scatter with a Hotelling control
-ellipse. Conditional performance and risk-coverage live on 5.4 Gate comparison.
+ellipse. Conditional performance and risk-coverage live on Gate comparison.
 """
 from __future__ import annotations
 
@@ -197,7 +197,7 @@ def main() -> None:
     st.caption(
         "Standard PCA-MSPC on the raw post-cluster sensors → Hotelling T² (in-subspace excursions) "
         "+ Q/SPE residual (structural breaks), fit on passing-train wafers. Abstain when either "
-        "statistic exceeds its upper control limit. This is the fab-standard baseline for 5.4."
+        "statistic exceeds its upper control limit. This is the fab-standard baseline for Gate comparison."
     )
 
     try:
@@ -244,10 +244,10 @@ def main() -> None:
     _render_factor_space(factor, ranking)
 
     render_blue_note(
-        "**5.2 is the fab-standard sensor-space drift monitor.** Trust the population drift evidence "
+        "**This is the fab-standard sensor-space drift monitor.** Trust the population drift evidence "
         "(sections 1-3); treat the component-space view (section 4) as an interpretable diagnostic "
         "from a single PCA fit. For the sensor-level root cause use the custom gate's sparse loadings "
-        "on **5.3**; conditional yield lift and the head-to-head verdict live on **5.4 Gate comparison**."
+        "on **sBFA → BGM gate**; conditional yield lift and the head-to-head verdict live on **Gate comparison**."
     )
 
 

@@ -13,7 +13,12 @@ import pandas as pd
 import streamlit as st
 
 from secom.costs import THRESHOLD_PROFILES
-from secom.dashboard import render_blue_note, render_caveat
+from secom.dashboard import (
+    render_alert,
+    render_blue_note,
+    render_caveat,
+    render_verdict,
+)
 from secom.dashboard.charts import (
     fig_local_contributions,
     fig_posterior_forest,
@@ -250,21 +255,20 @@ def _render_key_findings(kf: dict, track: str, gate_facts: dict) -> None:
         f"({kf['outcome_label']})."
     )
     if kf["outcome"] == "missed_fail":
-        st.error(verdict, icon="🔴")
+        render_alert(f"🔴 {verdict}")
     elif kf["outcome"] == "false_alarm":
-        st.warning(verdict, icon="🟠")
+        render_caveat(f"🟠 {verdict}")
     else:
-        st.success(verdict, icon="✅")
+        render_verdict(f"✅ {verdict}")
 
     ooc_labels = _ooc_gate_labels(gate_facts)
     if ooc_labels:
-        st.warning(
-            "**Process gate OOC:** "
+        render_caveat(
+            "🚧 **Process gate OOC:** "
             + "; ".join(ooc_labels)
             + ". This wafer sits on a drifted process, so the classifier is "
             "extrapolating — the standalone gate would abstain here and route it "
-            "to manual review.",
-            icon="🚧",
+            "to manual review."
         )
 
     bullets: list[str] = []
@@ -532,37 +536,36 @@ def _render_global_bar(model_id: str, track: str) -> None:
 
 # --- inline plain-English summary (LLM), shown under Key Findings -----------
 def _render_narrative(model_id: str, track: str, wafer_id: object) -> None:
-    st.markdown("#### Plain-English summary")
-    render_blue_note(
-        "Constrained **Statistical Interpreter** (local Gemma): it restates the "
-        "numeric facts only — no invented fab processes, equipment, or causes. This "
-        "is an interpretation to guide investigation, not a fab diagnosis."
-    )
-    st.caption(
-        f"For the **{_track_word(track)}** track the narrative model is "
-        f"**{model_info(model_id).display_name}** (`{model_id}`)."
-    )
 
-    payload = _load_track_narratives(track)
-    if payload is None:
-        st.warning(
-            "No frozen narratives for this track yet. Generate them with the local "
-            "Gemma: `python -m secom.cli.build_narratives`"
+
+        with st.container(key="card_built"):
+            st.markdown("#### LLM-generated summary")
+            payload = _load_track_narratives(track)
+            if payload is None:
+                st.warning(
+                    "No frozen narratives for this track yet. Generate them with the local "
+                    "Gemma: `python -m secom.cli.build_narratives`"
+                )
+            elif wafer_id is not None:
+                narrative = get_wafer_narrative(wafer_id, payload)
+                if narrative is None:
+                    st.warning(
+                        f"No frozen narrative for wafer {wafer_id}. Regenerate with: "
+                        f"`python -m secom.cli.build_narratives --track {track} "
+                        f"--wafer-id {wafer_id}`"
+                    )
+                else:
+                    st.markdown(narrative)
+                    st.caption(
+                        f"Pre-generated summary (local Gemma) · prompt "
+                        f"{payload.get('prompt_version', '')}"
+                    )
+                    
+        render_blue_note(
+            "Constrained **Statistical Interpreter** (local Gemma): it restates the "
+            "numeric facts only — no invented fab processes, equipment, or causes. This "
+            "is an interpretation to guide investigation, not a fab diagnosis."
         )
-    elif wafer_id is not None:
-        narrative = get_wafer_narrative(wafer_id, payload)
-        if narrative is None:
-            st.warning(
-                f"No frozen narrative for wafer {wafer_id}. Regenerate with: "
-                f"`python -m secom.cli.build_narratives --track {track} "
-                f"--wafer-id {wafer_id}`"
-            )
-        else:
-            st.markdown(narrative)
-            st.caption(
-                f"Pre-generated summary (local Gemma) · prompt "
-                f"{payload.get('prompt_version', '')}"
-            )
 
 
 def main() -> None:
