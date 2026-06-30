@@ -17,7 +17,7 @@ import streamlit as st  # noqa: E402
 from secom.dashboard import configure_page  # noqa: E402
 
 pages = {
-    "Overview": [
+    "Introduction": [
         st.Page("app_pages/1_Overview.py", title="Overview", default=True),
     ],
     "Pipeline": [
