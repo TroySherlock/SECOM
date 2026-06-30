@@ -15,7 +15,7 @@ pytest.importorskip("streamlit")
 from streamlit.testing.v1 import AppTest  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-PAGES_DIR = REPO_ROOT / "pages"
+PAGES_DIR = REPO_ROOT / "app_pages"
 PAGE_FILES = sorted(p.name for p in PAGES_DIR.glob("*.py"))
 
 # Substrings that indicate a missing-data environment rather than a code bug.
