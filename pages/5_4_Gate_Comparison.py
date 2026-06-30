@@ -142,7 +142,7 @@ def _render_multimodality(payload: dict, contrast: dict) -> None:
         n_below = int((ho_dens < density_lcl).sum())
         n_ho = int(ho_dens.size)
         ref_pct = 100.0 * float((dens < density_lcl).mean()) if dens.size else 0.0
-        st.info(
+        render_blue_note(
             f"Under the forward temporal holdout, **{n_below} of {n_ho} wafers "
             f"({100.0 * n_below / n_ho:.0f}%)** fall below the BGM density limit, versus the "
             f"~{ref_pct:.0f}% the gate allows in-control on the pre-drift reference - the cloud has "

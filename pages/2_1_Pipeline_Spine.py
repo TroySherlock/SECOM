@@ -82,7 +82,6 @@ def _render_shared_spine(linear_ref: dict | None, cluster_example: dict | None) 
         f":gray-background[{after_impute:,} cols] → :gray-background[{after_cluster:,} kept] → "
         ":gray-background[scaled] → :gray-background[calibrated P(fail)]"
     )
-    st.badge("Fit on training folds only — no leakage", color="green", icon=":material/lock:")
     render_blue_note(
         "Upstream, dbt (`stg_secom` → `int_secom_*` → **`mart_secom_features`**) profiles sensors, "
         "drops >10% missing / zero-variance columns, and adds the rz twins, cyclical calendar "

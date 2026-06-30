@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from secom.dashboard import render_blue_note
+from secom.dashboard import render_blue_note, render_verdict
 from secom.dashboard.charts import (
     fig_hsic_selected_rank,
     fig_pipeline_stage_counts,
@@ -264,7 +264,7 @@ def _render_agreement_callout(models: dict) -> None:
             f"**Top picks:** HSIC's #1 is `{agree['hsic_top']}`, RF's #1 is `{agree['rf_top']}`."
         )
     shared_txt = ", ".join(f"`{s}`" for s in shared[:10]) if shared else "—"
-    st.success(
+    render_verdict(
         f"{lead} A kernel-dependence filter and a tree-importance filter use completely different "
         f"maths, so when they converge on the same sensors that is strong, method-independent "
         f"evidence of a genuine fail signal — not an artifact of one technique. They jointly keep "
