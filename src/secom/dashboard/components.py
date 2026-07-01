@@ -502,7 +502,7 @@ def _render_thresholding_tab(
             f"Holdout operating point per profile in fab terms: catch rate, overkill rate, precision, "
             f"and the raw fails-caught / good-flagged counts. **Economic** is the recall-leaning "
             f"cost-optimal point at {cost_ratio:g}:1. **Precision is low by design** here "
-            "(~7% prevalence, PR-AUC ~0.2): most flags are good wafers, so treat a flag as **risk "
+            "(6.6% prevalence, PR-AUC ~0.2): most flags are good wafers, so treat a flag as **risk "
             "triage** - an enriched pool to inspect - not a precise gate. BER (right) is the "
             "symmetric, prevalence-free summary kept for model comparison."
         )

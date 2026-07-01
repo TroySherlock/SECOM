@@ -83,7 +83,10 @@ def main() -> None:
     render_blue_note(
         "**Forward view.** Hyperparameters come from the single in-distribution 5×2 stratified "
         "CV (no separate temporal tuning — blocked CV collapsed to one noisy fold, so it was "
-        "dropped). The headline holdout is unweighted: recency weighting needs a temporal-CV "
+        "dropped). Because that random-stratified CV spans the full timeline, hyperparameters such "
+        "as `top_k`, correlation threshold and `C` were chosen with later-era wafers in view; the "
+        "forward holdout is therefore honest for refit weights, but not a fully sealed model-"
+        "selection test. The headline holdout is unweighted: recency weighting needs a temporal-CV "
         "validation signal we do not have, so we do not sweep λ on a single forward holdout. The "
         "drop from the Interpolation page is the cost of drift; selection-based models that lock "
         "onto era-specific sensors degrade most here. All holdout metrics are reporting-only "

@@ -125,7 +125,9 @@ def _render_control_chart(payload: dict, *, stat_key: str, limit_key: str, limit
     render_caveat(
         f"Limits are passing-train quantiles (α = T² {t2_a:g} / Q {q_a:g}), so a "
         f"~{t2_a:.1%} / ~{q_a:.1%} in-control false-alarm rate is expected **by construction** - "
-        "read the trend and the excess over that baseline, not the raw out-of-control count."
+        "read the trend and the excess over that baseline, not the raw out-of-control count. These "
+        "are empirical quantiles rather than textbook F / χ² limits because the score distributions "
+        "are visibly non-Gaussian."
     )
 
 
@@ -196,7 +198,8 @@ def main() -> None:
     st.title("Hotelling T² gate (PCA, fab standard)")
     st.caption(
         "Standard PCA-MSPC on the raw post-cluster sensors → Hotelling T² (in-subspace excursions) "
-        "+ Q/SPE residual (structural breaks), fit on passing-train wafers. Abstain when either "
+        "+ Q/SPE residual (structural breaks). Feature pruning and scaling are fit on the full "
+        "training set; PCA and control limits are fit on passing-train wafers. Abstain when either "
         "statistic exceeds its upper control limit. This is the fab-standard baseline for Gate comparison."
     )
 
@@ -246,7 +249,8 @@ def main() -> None:
     render_blue_note(
         "**This is the fab-standard sensor-space drift monitor.** Trust the population drift evidence "
         "(sections 1-3); treat the component-space view (section 4) as an interpretable diagnostic "
-        "from a single PCA fit. For the sensor-level root cause use the custom gate's sparse loadings "
+        "from a single PCA fit. The PCA gate uses 10 components as a comparable-dimensional baseline "
+        "beside the 8-factor sBFA gate, not as a variance-explained-tuned optimum. For the sensor-level root cause use the custom gate's sparse loadings "
         "on **sBFA → BGM gate**; conditional yield lift and the head-to-head verdict live on **Gate comparison**."
     )
 

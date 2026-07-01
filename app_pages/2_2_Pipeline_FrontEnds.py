@@ -215,6 +215,14 @@ def _render_pls_tab(models: dict) -> None:
         classifier_input = int(pls_stages.get("classifier_input", 0))
         aux = int(pls_stages.get("auxiliary_features", 0))
         n_components = max(0, classifier_input - aux)
+        selection_stages = (models.get("rfsel_enet") or {}).get("stages") or {}
+        selection_cluster = selection_stages.get("after_cluster")
+        comparison = (
+            f" For comparison, `rfsel_enet` keeps {int(selection_cluster):,} clustered sensors "
+            "under its own tuned Spearman threshold."
+            if selection_cluster is not None and int(selection_cluster) != after_cluster
+            else ""
+        )
         c1, c2, c3 = st.columns(3)
         c1.metric("Clustered sensors fed to PLS", f"{after_cluster:,}")
         c2.metric("Compressed to components", f"{n_components:,}")
@@ -223,10 +231,9 @@ def _render_pls_tab(models: dict) -> None:
             f"PLS takes the **whole** clustered sensor block ({after_cluster:,} columns — no "
             f"top-k) and compresses it into just {n_components:,} supervised latent components, "
             f"then adds {aux:,} shared auxiliary features (calendar, missing flags, "
-            f"`n_missing_sensors`) to reach {classifier_input:,} classifier inputs. The clustered "
-            "count is larger than the selection front-ends' (e.g. `rfsel_enet`'s 377) because the "
-            "Spearman correlation threshold is **CV-tuned per cell** — PLS does better keeping a "
-            "wider block to blend."
+            f"`n_missing_sensors`) to reach {classifier_input:,} classifier inputs. The Spearman "
+            "correlation threshold is **CV-tuned per cell**, so the clustered count can differ "
+            f"between front-ends.{comparison}"
         )
     else:
         st.info("PLS front-end artifact not available; run `python -m secom.cli.benchmark`.")
@@ -273,22 +280,32 @@ def _render_agreement_callout(models: dict) -> None:
 
 
 def _render_journey(ctx: PipelineContext) -> None:
-    with st.container(key="card_journey"):
-        st.subheader("🛣️ The whole journey — two champions, two routes")
-        st.markdown(
-        "The two champion models take **different routes** to the classifier. `hsic_rf` "
-        "(interpolation champion) **selects** a small sensor subset then appends Hotelling T² + "
-        "hub interactions; `pls_bayes` (extrapolation champion) **projects** the whole clustered "
-        "block into a handful of supervised latent components. Note the cluster step is now split "
-        "into its two cuts — `VarianceThreshold` (near-constant columns) then Spearman "
-        "`SmartCorrelatedSelection`. Because the correlation threshold is **CV-tuned per cell**, "
-        "both champions keep 706 sensors; the more aggressive 844 → 377 cut you may have seen "
-        "earlier was the old `rfsel_enet` reference, not these models."
-    )
-
     hsic_stages = (ctx.models.get("hsic_rf") or {}).get("stages")
     pls_stages = (ctx.models.get("pls_bayes") or {}).get("stages")
     fallback = illustrative_reduction_profile()
+    hsic_cluster = int((hsic_stages or fallback).get("after_cluster", 0))
+    pls_cluster = int((pls_stages or fallback).get("after_cluster", 0))
+    if hsic_cluster and pls_cluster and hsic_cluster == pls_cluster:
+        cluster_text = f"both champions keep {hsic_cluster:,} clustered sensors before diverging"
+    elif hsic_cluster and pls_cluster:
+        cluster_text = (
+            f"`hsic_rf` keeps {hsic_cluster:,} clustered sensors and `pls_bayes` keeps "
+            f"{pls_cluster:,} before diverging"
+        )
+    else:
+        cluster_text = "each champion reaches its own CV-tuned clustered sensor block before diverging"
+
+    with st.container(key="card_journey"):
+        st.subheader("🛣️ The whole journey — two champions, two routes")
+        st.markdown(
+            "The two champion models take **different routes** to the classifier. `hsic_rf` "
+            "(interpolation champion) **selects** a small sensor subset then appends Hotelling T² + "
+            "hub interactions; `pls_bayes` (extrapolation champion) **projects** the whole clustered "
+            "block into a handful of supervised latent components. The cluster step is split into "
+            "two cuts — `VarianceThreshold` (near-constant columns) then Spearman "
+            "`SmartCorrelatedSelection`; because the correlation threshold is **CV-tuned per cell**, "
+            f"{cluster_text}."
+        )
 
     left, right = st.columns(2, gap="medium")
     with left:

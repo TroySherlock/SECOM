@@ -75,7 +75,7 @@ def _render_what_we_built() -> None:
             st.markdown(
                 "An end-to-end, drift-aware defect-detection system for the SECOM line, built as "
                 "one honest narrative rather than a single accuracy number:\n"
-                "- **Overview** — the problem: ~7% fail rate, hundreds of weak/redundant sensors, "
+                "- **Overview** — the problem: 6.6% fail rate, hundreds of weak/redundant sensors, "
                 "structured missingness, and a process that drifts forward in time.\n"
                 "- **Pipeline** — the shared feature spine (rz twins, variance/correlation pruning) "
                 "and the three front-ends with the two champion journeys.\n"
@@ -104,7 +104,7 @@ def _render_takeaways() -> None:
             st.markdown(
                 "🎯 **Honest evaluation is the backbone.** The two-track design (interpolation = "
                 "ceiling, extrapolation = forward holdout) refuses to report a single optimistic "
-                "number and instead quantifies the drop under drift — a senior-level instinct."
+                "number and instead quantifies the drop under drift."
             )
     with row1_right:
         with st.container(key="card_takeaway_abstain"):
@@ -129,7 +129,7 @@ def _render_takeaways() -> None:
                 "🤖 **The LLM is grounded, not generative trivia.** The v8 prompt reports only "
                 "derived facts (BGM gate, drift in SD, direction-counts, four-outcome actions). "
                 "Across both tracks there are zero raw-token leaks and consistent, correct "
-                "dispositions — it reads like a process engineer."
+                "dispositions."
             )
 
 
@@ -170,15 +170,15 @@ def _render_left_out() -> None:
             "stand-ins for that loop.\n"
             "- **Semi-supervised learning via sample statistics.** Leaning harder on the unlabeled "
             "passing-wafer distribution (self-training / distribution-matching) is partially already "
-            "realized — the gates are fit on passing wafers only — but full SSL was deferred because "
-            "validating any gain needs more labels than SECOM has."
+            "realized — the gates set their control limits and latent models from passing wafers — "
+            "but full SSL was deferred because validating any gain needs more labels than SECOM has."
         )
 
 
 def main() -> None:
     st.title("Conclusion — what we built, found, and left out")
     st.caption(
-        "SECOM in one line: a rare-event (~7% fail), temporally drifting, heavily-missing process "
+        "SECOM in one line: a rare-event (6.6% fail), temporally drifting, heavily-missing process "
         "where a single accuracy number is misleading. This project answers it with honest "
         "two-track evaluation, abstention gates that refuse to extrapolate onto a shifted process, "
         "and calibrated, grounded explanations."

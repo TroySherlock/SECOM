@@ -535,32 +535,33 @@ def _render_global_bar(model_id: str, track: str) -> None:
 
 
 # --- inline plain-English summary (LLM), shown under Key Findings -----------
-def _render_narrative(model_id: str, track: str, wafer_id: object) -> None:
+def _render_narrative(track: str, wafer_id: object) -> None:
+    with st.container(key="card_built"):
+        st.markdown("#### LLM-generated summary")
+        payload = _load_track_narratives(track)
+        if payload is None:
+            st.warning(
+                "No frozen narratives for this track yet. Generate them with the local "
+                "Gemma: `python -m secom.cli.build_narratives`"
+            )
+            return
+        if wafer_id is None:
+            return
 
+        narrative = get_wafer_narrative(wafer_id, payload)
+        if narrative is None:
+            st.warning(
+                f"No frozen narrative for wafer {wafer_id}. Regenerate with: "
+                f"`python -m secom.cli.build_narratives --track {track} "
+                f"--wafer-id {wafer_id}`"
+            )
+            return
 
-        with st.container(key="card_built"):
-            st.markdown("#### LLM-generated summary")
-            payload = _load_track_narratives(track)
-            if payload is None:
-                st.warning(
-                    "No frozen narratives for this track yet. Generate them with the local "
-                    "Gemma: `python -m secom.cli.build_narratives`"
-                )
-            elif wafer_id is not None:
-                narrative = get_wafer_narrative(wafer_id, payload)
-                if narrative is None:
-                    st.warning(
-                        f"No frozen narrative for wafer {wafer_id}. Regenerate with: "
-                        f"`python -m secom.cli.build_narratives --track {track} "
-                        f"--wafer-id {wafer_id}`"
-                    )
-                else:
-                    st.markdown(narrative)
-                    st.caption(
-                        f"Pre-generated summary (local Gemma) · prompt "
-                        f"{payload.get('prompt_version', '')}"
-                    )
-                    
+        st.markdown(narrative)
+        st.caption(
+            f"Pre-generated summary (local Gemma) · prompt "
+            f"{payload.get('prompt_version', '')}"
+        )
         render_blue_note(
             "Constrained **Statistical Interpreter** (local Gemma): it restates the "
             "numeric facts only — no invented fab processes, equipment, or causes. This "
@@ -597,7 +598,7 @@ def main() -> None:
     local_df = _annotate_robust(result.local_df, model_id, track)
     kf = key_findings(result, local_df, track)
     _render_key_findings(kf, track, gate_facts)
-    _render_narrative(model_id, track, wafer_id)
+    _render_narrative(track, wafer_id)
 
     tab_wafer, tab_global = st.tabs(["Wafer RCA", "Global drivers"])
     with tab_wafer:

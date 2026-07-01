@@ -25,10 +25,10 @@ def _render_rz_explainer(linear_ref: dict | None) -> None:
     mart = int(stages.get("mart_sensors", 422))
     after_impute = int(stages.get("after_impute", mart * 2))
 
-    st.subheader("🧬 Step 1 — robust-z (rz) twin features")
+    st.subheader("🧬 Step 1 — rolling-z (rz) twin features")
     st.caption(
         "Why the feature count *doubles* before any selection: every kept raw sensor gets a "
-        "causal rolling robust-z partner, built in the dbt mart."
+        "causal rolling-z partner, built in the dbt mart."
     )
 
     what, why, how = st.columns(3, gap="medium")
@@ -37,8 +37,9 @@ def _render_rz_explainer(linear_ref: dict | None) -> None:
             st.markdown("#### 🧬 What")
             st.markdown(
                 f"Each raw sensor `c_NNN` gets a twin `c_NNN_rz`: its value re-expressed as a "
-                f"**robust z-score** (median / IQR) over a strictly-past rolling window. The mart "
-                f"carries **both** — raw absolutes *and* the local-deviation view — so "
+                f"**causal rolling z-score** (trailing mean / sample SD over the previous "
+                f"50 wafers). The mart carries **both** — raw absolutes *and* the "
+                f"local-deviation view — so "
                 f"`{mart:,}` sensors become `{after_impute:,}` columns."
             )
     with why:
@@ -54,9 +55,12 @@ def _render_rz_explainer(linear_ref: dict | None) -> None:
         with st.container(key="card_rz_how"):
             st.markdown("#### 🛠️ How")
             st.markdown(
-                "Computed in `mart_secom_features.sql` with a windowed median/IQR over "
+                "Computed in `mart_secom_features.sql` with a windowed mean / sample SD "
+                "(`avg` / `stddev_samp`) over "
                 "`rows between 50 preceding and 1 preceding` — **strictly past** rows only, so "
-                "the current wafer never sees its own or future values. **No leakage.**"
+                "the current wafer never sees its own or future values. **No leakage.** Empty "
+                "early windows are filled with rz = 0; the first few dozen rows therefore have "
+                "short, noisier baselines."
             )
 
     render_blue_note(
@@ -85,7 +89,10 @@ def _render_shared_spine(linear_ref: dict | None, cluster_example: dict | None) 
     render_blue_note(
         "Upstream, dbt (`stg_secom` → `int_secom_*` → **`mart_secom_features`**) profiles sensors, "
         "drops >10% missing / zero-variance columns, and adds the rz twins, cyclical calendar "
-        "features and missing-flags. Everything below runs in sklearn on that mart."
+        "features and missing-flags. These keep/drop rules profile all 1,567 rows, including the "
+        "holdout era; because they use unsupervised metadata only, the leakage risk is negligible, "
+        "but train-only profiling would be the purist alternative. Everything below runs in sklearn "
+        "on that mart."
     )
 
     if cluster_example:
@@ -165,7 +172,7 @@ def main() -> None:
     st.title("Pipeline — feature spine")
     st.caption(
         "How raw SECOM sensors become the shared feature spine every model starts from: the "
-        "robust-z twin features and the impute → cluster → scale → calibrate steps shared across "
+        "rolling-z twin features and the impute → cluster → scale → calibrate steps shared across "
         "the whole 3×3 grid. The Front-ends & journeys page shows how each model diverges from here."
     )
 

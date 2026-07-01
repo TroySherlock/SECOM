@@ -115,6 +115,8 @@ class MahalanobisT2Features(BaseEstimator, TransformerMixin):
         if self.score_columns is not None:
             pattern = re.compile(self.score_columns)
             return _columns_matching(X_df.columns, pattern)
+        # T2 uses raw c_* levels only; _rz twins are excluded so this distance
+        # reflects absolute sensor excursions, not rolling-z deviations.
         cols = sensor_value_columns(X_df.columns)
         return cols if cols else list(X_df.columns)
 

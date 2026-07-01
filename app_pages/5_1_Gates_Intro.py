@@ -69,9 +69,10 @@ def _render_sensor_drift() -> None:
 def main() -> None:
     st.title("Gates — introduction")
     st.caption(
-        "Two standalone multivariate process-control (MSPC) gates, fit on passing-train wafers "
-        "only and evaluated separately from the classifiers. Each is framed as a sensor-space "
-        "drift / excursion monitor: it flags out-of-control wafers so the model can abstain."
+        "Two standalone multivariate process-control (MSPC) gates, evaluated separately from the "
+        "classifiers. Their control limits and latent models are fit on passing-train wafers, while "
+        "the shared feature pruning is fit on the full training set. Each gate is framed as a "
+        "sensor-space drift / excursion monitor: it flags out-of-control wafers so the model can abstain."
     )
 
     render_blue_note(
@@ -84,9 +85,10 @@ def main() -> None:
     _render_sensor_drift()
 
     render_blue_note(
-        "**The monitoring loop.** Each gate fits its control limits on passing-train wafers, then "
-        "scores new wafers in measurement-time order. When the rolling out-of-control rate climbs "
-        "above its in-control baseline (equivalently, coverage drops), that is the **drift / "
+        "**The monitoring loop.** Each gate fits its control limits on passing-train wafers after "
+        "the shared training-set preprocessing, then scores new wafers in measurement-time order. "
+        "When the rolling out-of-control rate climbs above its in-control baseline (equivalently, "
+        "coverage drops), that is the **drift / "
         "retraining trigger** - the signal to refit on recent data. On SECOM this fires mainly "
         "through the BGM density and the shared Q channel; the PCA T² limit barely moves. **Gate "
         "comparison** shows a concrete passing wafer the custom gate caught this way."

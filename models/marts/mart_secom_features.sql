@@ -54,9 +54,10 @@ selected as (
 
 ),
 
--- Causal rolling-Z (local standardization) for the extrapolation track.
--- Strictly-past window (excludes the current row) so no future leakage; the
--- raw absolutes are retained and rz columns are added alongside them.
+-- Causal rolling z-score (local mean / sample-SD standardization) for the
+-- extrapolation track. Strictly-past window (excludes the current row) so no
+-- future leakage; the raw absolutes are retained and rz columns are added
+-- alongside them.
 {% set rz_window_rows = 50 %}
 rolled as (
 

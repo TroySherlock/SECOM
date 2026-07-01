@@ -57,7 +57,7 @@ Training and benchmarking read **`public.mart_secom_features`**.
 def main() -> None:
     st.title("SECOM defect detection — the problem")
     st.caption(
-        "What we are up against: semiconductor process monitoring where ~7% of wafers fail, "
+        "What we are up against: semiconductor process monitoring where 6.6% of wafers fail, "
         "the signal is spread across hundreds of weak, redundant sensors with structured "
         "missingness, and the process drifts over time — so a model trained on the past must "
         "still hold up on a later, shifted regime."
@@ -83,13 +83,13 @@ def main() -> None:
     k2.metric("Fails", f"{stats['n_fail']:,}", border=True)
     k3.metric("Fail prevalence", f"{fail_pct:.1f}%", border=True)
     k4.metric("Sensor channels", f"{stats['n_sensors']:,}", border=True)
-    k5.metric("Campaign window", stats["date_range"], border=True)
+    k5.metric("Date range", stats["date_range"], border=True)
     st.caption(
         f"Positive class = **fail** (engineering convention); fails are the rare class at "
         f"{fail_pct:.1f}% prevalence. These are labelled outcomes of a curated benchmark set "
         f"(class balance), not a fab line-yield figure. The cleaned `stg_secom` view exposes "
         f"{stats['n_sensors']:,} sensor channels (the classic SECOM feature count); the dbt "
-        "feature funnel on the Pipeline page counts 591 raw staged columns before cleaning."
+        "feature funnel on the Pipeline page counts 590 raw staged columns before cleaning."
     )
 
     st.divider()
@@ -290,7 +290,7 @@ def main() -> None:
             with ncol_col:
                 n_cols = st.selectbox(
                     "Sensor columns shown",
-                    [50, 100, 200, 591],
+                    [50, 100, 200, 590],
                     index=0,
                     key="p1_n_cols",
                 )

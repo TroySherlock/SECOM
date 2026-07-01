@@ -75,8 +75,9 @@ STAT_DEFINITIONS: dict[str, str] = {
         "negative)."
     ),
     "process_gate": (
-        "Process gate: a standalone MSPC monitor fit on passing wafers only; it "
-        "flags (abstains on) wafers that look out-of-control, independently of "
+        "Process gate: a standalone MSPC monitor whose control limits and latent "
+        "model are fit on passing wafers after shared training-set preprocessing; "
+        "it flags (abstains on) wafers that look out-of-control, independently of "
         "the yield model."
     ),
     "hotelling_t2": (

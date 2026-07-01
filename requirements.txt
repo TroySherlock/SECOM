@@ -4,10 +4,10 @@
 # the offline build CLIs -- pymc, numpyro, jax, pyHSICLasso, shap, dbt-duckdb -- is
 # intentionally excluded. To regenerate the caches, install the full environment
 # from pyproject.toml instead.
-streamlit>=1.47
-pandas
-numpy
-plotly
-scikit-learn
-feature-engine
-duckdb
+streamlit==1.57.0
+pandas==3.0.3
+numpy==2.4.5
+plotly==6.7.0
+scikit-learn==1.8.0
+feature-engine==1.9.4
+duckdb==1.5.2

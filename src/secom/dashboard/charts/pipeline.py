@@ -25,7 +25,7 @@ def fig_hsic_selected_rank(
 
     HSIC stores only the *order* it picked sensors (strongest nonlinear dependence
     first), not the kernel magnitudes, so the bar length is selection-rank strength
-    (``k - position``) and is labelled as such. Raw sensors and rz robust-z twins
+    (``k - position``) and is labelled as such. Raw sensors and rz rolling-z twins
     are two separate traces so the legend is clean (no phantom ``trace 0``) and the
     reader can see how often the drift-robust view wins. By default every selected
     feature is shown.
@@ -52,7 +52,7 @@ def fig_hsic_selected_rank(
 
     fig = go.Figure()
     fig.add_trace(_trace("raw sensor", C_YELLOW, want_rz=False))
-    fig.add_trace(_trace("rz robust-z twin", C_RED, want_rz=True))
+    fig.add_trace(_trace("rz rolling-z twin", C_RED, want_rz=True))
     shown = f"top {n} of {k}" if top_k and k > n else f"all {k}"
     fig.update_layout(
         title=dict(text=f"HSIC-Lasso selection order ({shown})"),
@@ -352,7 +352,7 @@ def fig_pipeline_stage_counts(
     """Horizontal bar of the absolute feature count at each pipeline stage.
 
     Reads top-to-bottom in flow order so the journey is obvious: staged sensors
-    -> dbt mart -> the one *increase* (the causal rolling-Z rz twins) -> cluster
+    -> dbt mart -> the one *increase* (the causal rolling-z rz twins) -> cluster
     -> front-end (top-k + T2/hubs, or PLS latent components) -> classifier input.
     The rz-doubling stage is highlighted green and the final classifier input is
     accented so the single increase and the endpoint read at a glance. Handles
@@ -378,7 +378,7 @@ def fig_pipeline_stage_counts(
     rows: list[tuple[str, int, str]] = [
         ("Staged sensors", stg, "neutral"),
         ("dbt mart (drop >10% missing / zero-var)", mart, "neutral"),
-        ("+ rz robust-z twins", after_impute, "increase"),
+        ("+ rz rolling-z twins", after_impute, "increase"),
     ]
     # Split the cluster step so the big cut is legible: VarianceThreshold first
     # (drops near-constant columns), then Spearman SmartCorrelatedSelection.

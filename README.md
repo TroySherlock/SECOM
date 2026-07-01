@@ -17,10 +17,10 @@
 
 ## Overview
 
-SECOM is an imbalanced, rare-event classification problem: **1,567 wafers × 590 sensors** at a **~6.7% fail rate**. This project treats it like a production fab-analytics workflow, framed around the **escape vs. overkill** cost trade-off:
+SECOM is an imbalanced, rare-event classification problem: **1,567 wafers × 590 sensors** at a **6.6% fail rate**. This project treats it like a production fab-analytics workflow, framed around the **escape vs. overkill** cost trade-off:
 
 - **Data engineering** — a tested `dbt` + `DuckDB` ELT pipeline (`seed → stg → int → mart`).
-- **Feature engineering** — robust-z sensor twins, Spearman correlation pruning, hub-pair interactions.
+- **Feature engineering** — causal rolling-z sensor twins, Spearman correlation pruning, hub-pair interactions.
 - **Modeling** — a unified 3×3 grid of feature front-ends × classifier heads, probability-calibrated.
 - **Drift-aware validation** — repeated stratified CV plus random *and* temporal forward holdouts with bootstrap CIs.
 - **Explainability** — per-wafer root-cause analysis (SHAP, SPC z-scores, Bayesian credible intervals) and MSPC abstention gates.
@@ -30,12 +30,12 @@ The [live dashboard](https://79kpwjksc9d23km8arddpn.streamlit.app/) runs **read-
 
 ## Key results
 
-| Track | Champion | ROC-AUC | PR-AUC | BER |
-|-------|----------|:-------:|:------:|:---:|
-| In-distribution (random holdout) | `hsic_rf` | 0.80 | 0.34 | 22.8% |
-| Temporal drift (forward holdout) | `pls_bayes` | 0.78 | 0.20 | 26.7%¹ |
+| Track | Champion | PR-AUC | ROC-AUC | BER |
+|-------|----------|:------:|:-------:|:---:|
+| In-distribution (random holdout) | `hsic_rf` | 0.34 [0.18–0.53] | 0.80 [0.70–0.89] | 22.8% [14.3–32.2] |
+| Temporal drift (forward holdout) | `pls_bayes` | 0.20 [0.12–0.39] | 0.78 [0.67–0.88] | 26.7%¹ |
 
-¹ At a 20:1 cost-optimal threshold, `pls_bayes` catches **88% (15/17)** of failing wafers on the temporal holdout.
+Intervals are 95% stratified-bootstrap CIs (`n=1000`) on the holdout split. ¹ At a 20:1 cost-optimal threshold, `pls_bayes` catches **88% (15/17)** of failing wafers on the temporal holdout; the temporal holdout contains only **17 fails**, so read direction more than decimal precision.
 
 ## Quickstart
 
@@ -53,10 +53,9 @@ streamlit run streamlit_app.py
 
 ### Data setup
 
-1. Download the sensor matrix from UCI and place it at `data/secom.data` (not in git; ~5 MB whitespace-separated).
-2. Label and metadata files are already in-repo: `data/secom_labels.data`, `data/secom.names`.
+The demo ships with the small SECOM data files and frozen DuckDB / JSON artifacts needed for the dashboard: `data/secom.data`, `data/secom.duckdb`, `seeds/raw_secom.csv`, `data/secom_labels.data`, and `data/secom.names` are already in-repo.
 
-Local-only paths (gitignored): `data/secom.data`, `data/secom.duckdb`, `seeds/raw_secom.csv`.
+The raw data come from the [UCI SECOM dataset](https://archive.ics.uci.edu/ml/datasets/SECOM). To refresh the seed from `data/secom.data`, run `python -m secom.cli.build_seed`; otherwise the dashboard can be launched directly from the shipped artifacts.
 
 ## Rebuilding artifacts
 

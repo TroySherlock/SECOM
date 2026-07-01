@@ -124,7 +124,9 @@ def _render_control_chart(payload: dict, *, stat_key: str, limit_key: str, limit
     render_caveat(
         "The limit is fixed from passing-train quantiles (α = density 0.03 / Q 0.005), so a ~3% "
         "density / ~0.5% Q in-control false-alarm rate is expected **by construction** - read the "
-        "trend and the excess over that baseline, not the raw out-of-control count."
+        "trend and the excess over that baseline, not the raw out-of-control count. These are "
+        "empirical quantiles rather than textbook parametric limits because the score distributions "
+        "are visibly non-Gaussian."
     )
 
 
@@ -309,8 +311,9 @@ def main() -> None:
     st.title("sBFA → BGM gate")
     st.caption(
         "Sparse Bayesian factor analysis (NumPyro, ADVI) → Bayesian Gaussian mixture density + "
-        "Q/SPE residual, in the raw post-cluster sensor space, fit on passing-train wafers. Low "
-        "BGM log-density or high Q trips the gate."
+        "Q/SPE residual, in the raw post-cluster sensor space. Feature pruning and scaling are fit "
+        "on the full training set; sBFA, BGM density and control limits are fit on passing-train "
+        "wafers. Low BGM log-density or high Q trips the gate."
     )
 
     try:
@@ -350,7 +353,7 @@ def main() -> None:
     _render_drift_scalar(payload)
 
     st.divider()
-    st.markdown("### Bayesian magic: the sBFA latent space")
+    st.markdown("### The sBFA latent space")
     sbfa = sbfa_diagnostics(payload, track="extrapolation", gate=_GATE)
     ranking = factor_drift_ranking(sbfa)
 
