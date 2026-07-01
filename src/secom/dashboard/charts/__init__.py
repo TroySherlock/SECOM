@@ -64,7 +64,6 @@ from secom.dashboard.charts.gates import (
 )
 from secom.dashboard.charts.pipeline import (
     fig_calibrate_example,
-    fig_hsic_dependence_intuition,
     fig_hsic_selected_rank,
     fig_impute_example,
     fig_pipeline_stage_counts,
@@ -104,7 +103,6 @@ __all__ = [
     "fig_wafer_drift_spikes",
     # pipeline
     "fig_calibrate_example",
-    "fig_hsic_dependence_intuition",
     "fig_hsic_selected_rank",
     "fig_impute_example",
     "fig_pipeline_stage_counts",
