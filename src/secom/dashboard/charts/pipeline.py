@@ -67,48 +67,6 @@ def fig_hsic_selected_rank(
     return _sized(fig, height=height, margin=dict(l=96, r=24, t=86, b=52))
 
 
-def fig_hsic_dependence_intuition() -> go.Figure:
-    """Why HSIC, not correlation: a nonlinear sensor-vs-fail link that a linear
-    correlation misses entirely (Pearson r ~ 0) but kernel dependence detects."""
-    rng = np.random.default_rng(7)
-    x = rng.uniform(-3.0, 3.0, 260)
-    # Fails concentrate at both extremes (U-shaped risk): linear corr ~ 0.
-    fail_prob = 1.0 / (1.0 + np.exp(-(x**2 - 3.2)))
-    fail = rng.uniform(size=x.size) < fail_prob
-    r = float(np.corrcoef(x, fail.astype(float))[0, 1])
-
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=x[~fail],
-            y=rng.normal(0, 0.04, (~fail).sum()),
-            mode="markers",
-            name="Pass",
-            marker=dict(color=C_BLUE, size=7, opacity=0.55),
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=x[fail],
-            y=rng.normal(1, 0.04, fail.sum()),
-            mode="markers",
-            name="Fail",
-            marker=dict(color=C_RED, size=8, opacity=0.85, symbol="diamond"),
-        )
-    )
-    fig.add_annotation(
-        x=0, y=0.5, showarrow=False,
-        text=f"Pearson r ≈ {r:+.2f} (linear: blind)<br>HSIC: dependence detected",
-        font=dict(size=13), bgcolor="rgba(0,0,0,0.04)", bordercolor=C_PURPLE, borderpad=6,
-    )
-    fig.update_layout(
-        title=dict(text="Why HSIC, not correlation: nonlinear sensor → fail dependence"),
-        xaxis_title="Sensor reading (standardized)",
-        yaxis=dict(tickmode="array", tickvals=[0, 1], ticktext=["Pass", "Fail"], title=""),
-    )
-    return _sized(fig, height=360, margin=dict(l=60, r=24, t=72, b=52))
-
-
 def fig_pls_score_scatter(
     t1: np.ndarray,
     t2: np.ndarray,
