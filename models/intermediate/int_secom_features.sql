@@ -4,7 +4,7 @@
 {% set sensor_cols = [] %}
 
 {% for col in cols %}
-    {% if col.name not in ['measurement_ts', 'target', 'year'] %}
+    {% if col.name not in ['raw_row_id', 'measurement_ts', 'target', 'year'] %}
         {% do sensor_cols.append(col.name) %}
     {% endif %}
 {% endfor %}
@@ -16,10 +16,12 @@ with base as (
 
 ),
 
--- Step 1: Select target, timestamp, and sensor columns (high-missing / zero-variance
--- sensors are dropped later in int_secom_column_metadata → mart_secom_features)
+-- Step 1: Select row id, target, timestamp, and sensor columns (high-missing /
+-- zero-variance sensors are dropped later in int_secom_column_metadata →
+-- mart_secom_features)
 selected as (
     select
+        raw_row_id,
         measurement_ts,
         target,
         {% for col in sensor_cols %}

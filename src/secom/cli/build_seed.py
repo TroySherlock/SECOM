@@ -33,7 +33,14 @@ def main() -> int:
     df_sensors.columns = [f"c_{i}" for i in range(df_sensors.shape[1])]
 
     print("Step 3: Merging data matrices...")
+    if len(df_labels) != len(df_sensors):
+        raise SystemExit(
+            f"Row mismatch: {len(df_labels)} labels vs {len(df_sensors)} sensor rows"
+        )
     df_complete = pd.concat([df_labels, df_sensors], axis=1)
+    # Stable source-file row order; used downstream as a deterministic
+    # tiebreaker for rows sharing the same measurement_ts.
+    df_complete.insert(0, "raw_row_id", range(len(df_complete)))
 
     out_path = REPO_ROOT / "seeds" / "raw_secom.csv"
     print(f"Step 4: Writing {out_path}...")

@@ -388,7 +388,7 @@ def fig_pipeline_stage_counts(
     if after_selection is not None:
         rows.append(("After top-k select", int(after_selection), "neutral"))
         if after_hub is not None and int(after_hub) != int(after_selection):
-            rows.append(("+ Hotelling T2 / hub interactions", int(after_hub), "neutral"))
+            rows.append(("+ Hotelling T² / hub interactions", int(after_hub), "neutral"))
     else:
         components = max(0, after_preprocess - auxiliary)
         rows.append(("PLS latent components", components, "neutral"))

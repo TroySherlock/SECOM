@@ -20,7 +20,6 @@ from secom.dashboard.charts import (
     fig_calibration,
     fig_catch_overkill_curve,
     fig_cv_vs_holdout_validation,
-    fig_delta_bar,
     fig_expected_cost_curve,
     fig_holdout_confusion,
     fig_pr_curve_clean,
@@ -31,9 +30,7 @@ from secom.dashboard.data import (
     benchmark_has_multi_profile_thresholds,
     cv_leaderboard_df,
     gate_conditional_df,
-    gate_config,
     gate_risk_coverage_df,
-    gate_vs_gate_df,
     holdout_auc_summary_df,
     holdout_confusion_by_profile,
     holdout_df,
@@ -205,7 +202,7 @@ def render_holdout_validation(payload: dict, *, track: str) -> None:
         st.caption(
             "Forward view: the same in-distribution-tuned hyperparameters, refit on the "
             "temporal train and scored unweighted on the later holdout. The purple-to-yellow "
-            "gap is the drift cost; recency weighting is explored in the Time-decay sweep tab."
+            "gap is the drift cost."
         )
 
     with st.expander("Holdout metrics table (PR-AUC / ROC-AUC / BER, with 95% CIs)", expanded=False):
@@ -354,9 +351,9 @@ def _render_deepdive_tab(
     )
     if is_extrap:
         st.caption(
-            "Yellow: the single temporal-forward holdout PR step-line (the only forward data; "
-            "jagged at ~17-20 fails by nature). Blue dashed: prevalence baseline. Green diamond: "
-            "BER-min operating point. Holdout AP with 95% bootstrap CI is annotated."
+            "Purple: the single temporal-forward holdout PR step-line (the only forward data; "
+            "jagged at 17 fails by nature). Blue dashed: prevalence baseline. Green diamond: "
+            "BER-min operating point. Holdout AP with 95% bootstrap CI is annotated in yellow."
         )
     else:
         st.caption(
@@ -546,43 +543,6 @@ def _render_thresholding_tab(
                 st.caption(f"{THRESHOLD_PROFILES[pid].display_name}: n/a")
 
 
-def render_gate_vs_gate(payload: dict, *, track: str, metric: str) -> None:
-    """Diverging delta bars for the PCA-vs-Bayes conditional gap (which abstention rule wins).
-
-    The old per-gate "lift vs no gate" bars were dropped: at ~17-20 holdout fails
-    they sat inside huge CIs and duplicated the risk-coverage curves. Whether a gate
-    actually fires under drift is read from the coverage-drift table instead.
-    """
-    metric_col = DELTA_METRIC_COLS[metric]
-    vs_df = gate_vs_gate_df(payload, track, metric_col)
-
-    if vs_df.empty:
-        st.info(
-            "No gate conditional metrics for this track in benchmark JSON. Re-run "
-            "`python -m secom.cli.benchmark`."
-        )
-        return
-
-    st.markdown("**Gate vs gate** — PCA (baseline) minus Bayes (custom) conditional metric")
-    st.plotly_chart(
-        fig_delta_bar(
-            vs_df,
-            title=f"PCA − Bayes conditional {metric}",
-            value_label=f"PCA − Bayes {metric}",
-            positive_is_good=True,
-        ),
-        width="stretch",
-        theme="streamlit",
-        key=f"gate_vs_gate_{track}",
-    )
-    st.caption(
-        "Green = the standard PCA (T²) baseline keeps a better-scoring set than the custom Bayes "
-        "(BGM) gate on that model; red favours the custom Bayes gate. This is which abstention rule "
-        "wins, not whether either helps — for that, read the risk-coverage curves and the "
-        "coverage-drift table."
-    )
-
-
 def render_risk_coverage(payload: dict, *, track: str, gate: str, metric: str) -> None:
     """Risk-coverage severity sweep for one gate on one track."""
     rc_df = gate_risk_coverage_df(payload, track, gate)
@@ -606,78 +566,3 @@ def render_risk_coverage(payload: dict, *, track: str, gate: str, metric: str) -
         theme="streamlit",
         key=f"risk_coverage_{track}_{gate}",
     )
-
-
-def render_gate_section(payload: dict, *, track: str, gate: str) -> None:
-    """Conditional-metrics table + config caption for one gate/track, inside an expander."""
-    cond_df = gate_conditional_df(payload, track, gate)
-    gate_meta = gate_config(payload, track, gate)
-    gate_title = GATE_LABELS.get(gate, gate)
-    flagged_label = GATE_FLAGGED.get(gate, "ooc")
-    if cond_df.empty or not gate_meta:
-        return
-
-    logic_txt = str(gate_meta.get("logic", "or")).upper()
-    with st.expander(f"{gate_title} — conditional metrics (CI detail)", expanded=False):
-        q_ucl = gate_meta.get("q_ucl")
-        q_txt = f"{float(q_ucl):.1f}" if q_ucl is not None else "?"
-        base_caption = (
-            f"Raw post-cluster sensors (smart_corr threshold "
-            f"{gate_meta.get('gate_corr_threshold', '?')}); "
-            f"fit on {gate_meta.get('n_reference_wafers', '?')} passing train wafers, "
-            f"{gate_meta.get('n_features', '?')} features → "
-            f"{gate_meta.get('n_factors', '?')} factors. "
-        )
-        if gate == "bayes":
-            d_lcl = gate_meta.get("density_lcl")
-            d_txt = f"{float(d_lcl):.2f}" if d_lcl is not None else "?"
-            st.caption(
-                base_caption
-                + f"{gate_meta.get('n_mixture_components', '?')}-component BGM "
-                f"(seed-ensemble n={gate_meta.get('n_seeds', '?')}). "
-                f"Abstain when BGM log-density < {d_txt} "
-                f"(α={gate_meta.get('density_alpha', '?')}) "
-                f"**{logic_txt}** Q/SPE > {q_txt} (α={gate_meta.get('q_alpha', '?')})."
-            )
-        else:
-            t2_ucl = gate_meta.get("t2_ucl")
-            t2_txt = f"{float(t2_ucl):.1f}" if t2_ucl is not None else "?"
-            st.caption(
-                base_caption
-                + f"Abstain when Hotelling T² > {t2_txt} "
-                f"(α={gate_meta.get('t2_alpha', '?')}) "
-                f"**{logic_txt}** Q/SPE > {q_txt} (α={gate_meta.get('q_alpha', '?')})."
-            )
-        gate_cols = [
-            c
-            for c in [
-                "pipeline",
-                "coverage",
-                "conditional_pr_auc",
-                "conditional_pr_auc_ci_low",
-                "conditional_pr_auc_ci_high",
-                "global_pr_auc",
-                "conditional_roc_auc",
-                "global_roc_auc",
-                "n_in_control",
-                f"n_flagged_{flagged_label}",
-                "n_flagged_q",
-                "n_flagged_both",
-                "n_fails_in_control",
-                "n_fails_flagged_ooc",
-                f"n_fails_flagged_{flagged_label}",
-                "n_fails_flagged_q",
-            ]
-            if c in cond_df.columns
-        ]
-        gate_display = cond_df[gate_cols].copy()
-        for col in gate_display.select_dtypes(include="float").columns:
-            gate_display[col] = gate_display[col].round(3)
-        st.dataframe(gate_display, width="stretch", hide_index=True)
-        st.caption(
-            "`coverage` = fraction of holdout wafers in control (scored by the model). "
-            f"{logic_txt} logic: flagged if either statistic trips per the rule. "
-            "`conditional_pr_auc` is on in-control wafers only (None when "
-            "fewer than 5 in-control fails). Read beside `n_flagged_*` and "
-            "`n_fails_flagged_*` — gains can come from dropping easy negatives."
-        )

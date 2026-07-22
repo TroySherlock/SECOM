@@ -35,6 +35,7 @@ with features as (
 selected as (
 
     select
+        raw_row_id,
         measurement_ts,
         target,
         is_weekend,
@@ -57,7 +58,8 @@ selected as (
 -- Causal rolling z-score (local mean / sample-SD standardization) for the
 -- extrapolation track. Strictly-past window (excludes the current row) so no
 -- future leakage; the raw absolutes are retained and rz columns are added
--- alongside them.
+-- alongside them. raw_row_id breaks ties between rows sharing a timestamp so
+-- the window (and observation_id below) is deterministic across runs.
 {% set rz_window_rows = 50 %}
 rolled as (
 
@@ -74,7 +76,7 @@ rolled as (
         {% endfor %}
         {% endif %}
     from selected
-    window rz_w as (order by measurement_ts rows between {{ rz_window_rows }} preceding and 1 preceding)
+    window rz_w as (order by measurement_ts, raw_row_id rows between {{ rz_window_rows }} preceding and 1 preceding)
 
 ),
 
@@ -105,11 +107,11 @@ enriched as (
 final as (
 
     select
-        row_number() over (order by measurement_ts) as observation_id,
+        row_number() over (order by measurement_ts, raw_row_id) as observation_id,
         *
     from enriched
 
 )
 
-select *
+select * exclude (raw_row_id)
 from final

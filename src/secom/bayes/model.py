@@ -175,6 +175,13 @@ class BayesianElasticNetLogistic(ClassifierMixin, BaseEstimator):
         return self.classes_[idx]
 
     def coef_summary(self) -> pd.DataFrame:
+        """Posterior coefficient summary.
+
+        The interval bounds are 95% *equal-tailed* credible intervals
+        (2.5% / 97.5% posterior quantiles), not highest-density intervals.
+        The ``hdi_low`` / ``hdi_high`` column names are kept for
+        compatibility with the frozen explanation caches.
+        """
         beta = self.posterior_["beta"]
         return pd.DataFrame(
             {

@@ -72,10 +72,36 @@ def _render_rz_explainer(linear_ref: dict | None) -> None:
 
 
 # --- step 2: shared spine ----------------------------------------------------
-def _render_shared_spine(linear_ref: dict | None, cluster_example: dict | None) -> None:
+def _cluster_survivor_range(models: dict) -> tuple[int, int]:
+    """Min/max post-cluster survivor count across the 3×3 grid.
+
+    The Spearman threshold is CV-tuned per cell, so the survivor count is a
+    per-cell quantity, not a single spine-wide number. Falls back to the
+    frozen-artifact values when artifacts are unavailable.
+    """
+    counts = sorted(
+        {
+            int(stages["after_cluster"])
+            for model in (models or {}).values()
+            if (stages := model.get("stages") or {}).get("after_cluster") is not None
+        }
+    )
+    if not counts:
+        return 377, 706  # illustrative: current frozen artifacts (rfsel vs hsic/pls cells)
+    return counts[0], counts[-1]
+
+
+def _render_shared_spine(
+    models: dict, linear_ref: dict | None, cluster_example: dict | None
+) -> None:
     stages = (linear_ref or {}).get("stages") or {}
     after_impute = int(stages.get("after_impute", 844))
-    after_cluster = int(stages.get("after_cluster", 529))
+    cluster_lo, cluster_hi = _cluster_survivor_range(models)
+    cluster_chip = (
+        f"{cluster_lo:,} kept"
+        if cluster_lo == cluster_hi
+        else f"{cluster_lo:,}–{cluster_hi:,} kept"
+    )
 
     st.subheader("🧱 Step 2 — the shared spine")
     st.caption(
@@ -83,7 +109,7 @@ def _render_shared_spine(linear_ref: dict | None, cluster_example: dict | None) 
         "head. All are fit on training folds only — read top to bottom, each with a worked example."
     )
     st.markdown(
-        f":gray-background[{after_impute:,} cols] → :gray-background[{after_cluster:,} kept] → "
+        f":gray-background[{after_impute:,} cols] → :gray-background[{cluster_chip}] → "
         ":gray-background[scaled] → :gray-background[calibrated P(fail)]"
     )
     render_blue_note(
@@ -121,11 +147,11 @@ def _render_shared_spine(linear_ref: dict | None, cluster_example: dict | None) 
         {
             "slug": "cluster",
             "title": "2 · Cluster",
-            "chip": f"→ {after_cluster:,} kept",
+            "chip": f"→ {cluster_chip}",
             "detail": "`VarianceThreshold` drops near-constant columns, then **Spearman** "
                       "`SmartCorrelatedSelection` collapses each correlated group to its single "
-                      "best member. The threshold is **CV-tuned**, so the survivor count differs "
-                      "per cell.",
+                      "best member. The threshold is **CV-tuned per cell**, so the survivor count "
+                      "is a range across the grid, not one number.",
             "fig": cluster_fig,
             "caption": cluster_caption,
         },
@@ -187,7 +213,7 @@ def main() -> None:
         "Front-ends & journeys page then shows how each front-end diverges."
     )
     _render_rz_explainer(ctx.linear_ref)
-    _render_shared_spine(ctx.linear_ref, ctx.cluster_example)
+    _render_shared_spine(ctx.models, ctx.linear_ref, ctx.cluster_example)
 
 
 main()

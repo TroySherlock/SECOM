@@ -78,7 +78,14 @@ class PCAMonitor:
 
 
 class PCAGate:
-    """Standard PCA -> Hotelling T2 + Q (SPE) abstention / risk-coverage gate."""
+    """Standard PCA -> Hotelling T2 + Q (SPE) abstention / risk-coverage gate.
+
+    Control limits are empirical ``1 - alpha`` quantiles of the SAME passing-
+    train reference the PCA is fit on (standard Phase-I MSPC practice). The
+    nominal alphas are therefore in-sample false-alarm rates and slightly
+    optimistic out of sample; the holdout coverage numbers in the benchmark
+    report the realized rates.
+    """
 
     def __init__(
         self,

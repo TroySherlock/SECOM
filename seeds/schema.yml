@@ -3,9 +3,16 @@ version: 2
 seeds:
   - name: raw_secom
     description: >
-      Merged UCI SECOM labels and 591 sensor columns, built by
+      Merged UCI SECOM labels and 590 sensor columns (c_0 … c_589), built by
       `python -m secom.cli.build_seed` from data/secom_labels.data and data/secom.data.
     columns:
+      - name: raw_row_id
+        description: >
+          Stable source-file row order; deterministic tiebreaker for rows that
+          share the same measurement timestamp.
+        tests:
+          - not_null
+          - unique
       - name: target
         description: "0 = pass, 1 = fail (mapped from UCI -1/1 labels)."
         tests:

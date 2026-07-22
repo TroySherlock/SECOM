@@ -55,8 +55,9 @@ STAT_DEFINITIONS: dict[str, str] = {
         "Fail (raise risk) versus Pass (lower risk) for this wafer."
     ),
     "attribution_robust": (
-        "Robust attribution: one whose 95% posterior HDI excludes zero, i.e. the "
-        "model is confident the effect is genuinely non-zero rather than noise."
+        "Robust attribution: one whose 95% posterior credible interval excludes "
+        "zero, i.e. the model is confident the effect is genuinely non-zero "
+        "rather than noise."
     ),
     "outcome_caught_fail": (
         "Caught fail: a failing wafer the model correctly predicted Fail (true "
@@ -81,7 +82,7 @@ STAT_DEFINITIONS: dict[str, str] = {
         "the yield model."
     ),
     "hotelling_t2": (
-        "Hotelling T2: the Mahalanobis distance of a wafer's PCA component scores "
+        "Hotelling T²: the Mahalanobis distance of a wafer's PCA component scores "
         "from the in-control mean; a high value flags an excursion along the "
         "learned component directions (the fab-standard PCA-MSPC gate)."
     ),

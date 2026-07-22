@@ -36,18 +36,19 @@ HYPERPARAM_NOTE = (
 
 
 def illustrative_reduction_profile() -> dict[str, int]:
+    """Fallback stage counts when artifacts are missing (mirrors frozen rfsel_enet)."""
     return {
         "stg_sensors": 590,
         "mart_sensors": 422,
         "dbt_dropped_sensors": 168,
         "after_impute": 844,
-        "after_cluster": 529,
-        "drop_correlated": 303,
+        "after_cluster": 377,
+        "drop_correlated": 455,
         "after_selection": 50,
-        "after_hub_interactions": 51,
+        "after_hub_interactions": 61,
         "auxiliary_features": 35,
-        "after_preprocess": 86,
-        "classifier_input": 86,
+        "after_preprocess": 96,
+        "classifier_input": 96,
     }
 
 

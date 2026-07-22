@@ -126,10 +126,10 @@ def _render_takeaways() -> None:
     with row2_right:
         with st.container(key="card_takeaway_llm"):
             st.markdown(
-                "🤖 **The LLM is grounded, not generative trivia.** The v8 prompt reports only "
-                "derived facts (BGM gate, drift in SD, direction-counts, four-outcome actions). "
-                "Across both tracks there are zero raw-token leaks and consistent, correct "
-                "dispositions."
+                "🤖 **The LLM is grounded, not generative trivia.** The narrative prompt reports "
+                "only derived facts (BGM gate, drift in SD, direction-counts, four-outcome "
+                "actions). Across both tracks there are zero raw-token leaks and consistent, "
+                "correct dispositions."
             )
 
 

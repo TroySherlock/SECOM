@@ -555,20 +555,6 @@ def holdout_delta_df(payload: dict[str, Any], metric: str) -> pd.DataFrame:
     return out
 
 
-def gate_vs_gate_df(payload: dict[str, Any], track: str, metric: str) -> pd.DataFrame:
-    """Per model PCA-minus-Bayes conditional metric on one track."""
-    pca = gate_conditional_df(payload, track, "pca")
-    bayes = gate_conditional_df(payload, track, "bayes")
-    col = f"conditional_{metric}"
-    if pca.empty or bayes.empty or col not in pca or col not in bayes:
-        return pd.DataFrame()
-    e = pca[["pipeline", col]].rename(columns={col: "pca"})
-    b = bayes[["pipeline", col]].rename(columns={col: "bayes"})
-    out = e.merge(b, on="pipeline", how="inner")
-    out["delta"] = out["pca"] - out["bayes"]
-    return out.dropna(subset=["delta"])
-
-
 HOLDOUT_AUC_DISPLAY_COLS = [
     "pipeline",
     "pr_auc",

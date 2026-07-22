@@ -454,7 +454,8 @@ def summarize_cv_search(
         )
         .sort_values(
             ["mean_pr_auc", "std_pr_auc"] + groupby_cols,
-            ascending=[False, False] + [True] * len(groupby_cols),
+            # Ties on mean PR-AUC prefer the LOWER CV std (stabler config).
+            ascending=[False, True] + [True] * len(groupby_cols),
             kind="mergesort",
         )
     )

@@ -3,9 +3,14 @@ version: 2
 models:
   - name: stg_secom
     description: >
-      Parsed measurement timestamps, pass/fail target, and 591 raw sensor columns (c_0 … c_590).
+      Parsed measurement timestamps, pass/fail target, and 590 raw sensor columns (c_0 … c_589).
       Feeds int_secom_features for calendar encoding and downstream sensor profiling.
     columns:
+      - name: raw_row_id
+        description: Stable source-file row order (timestamp tiebreaker).
+        tests:
+          - not_null
+          - unique
       - name: measurement_ts
         description: Parsed measurement time from raw timestamp string.
         tests:

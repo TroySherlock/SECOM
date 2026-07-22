@@ -125,9 +125,11 @@ def _render_control_chart(payload: dict, *, stat_key: str, limit_key: str, limit
     render_caveat(
         f"Limits are passing-train quantiles (α = T² {t2_a:g} / Q {q_a:g}), so a "
         f"~{t2_a:.1%} / ~{q_a:.1%} in-control false-alarm rate is expected **by construction** - "
-        "read the trend and the excess over that baseline, not the raw out-of-control count. These "
-        "are empirical quantiles rather than textbook F / χ² limits because the score distributions "
-        "are visibly non-Gaussian."
+        "read the trend and the excess over that baseline, not the raw out-of-control count. The "
+        "quantiles are in-sample (taken on the same reference the PCA is fit on), so the realized "
+        "out-of-sample false-alarm rate can run slightly higher. These are empirical quantiles "
+        "rather than textbook F / χ² limits because the score distributions are visibly "
+        "non-Gaussian."
     )
 
 

@@ -222,7 +222,7 @@ def _annotate_robust(local_df: pd.DataFrame, model_id: str, track: str) -> pd.Da
     return out
 
 
-_GATE_NAMES = {"bayes": "BGM density gate", "pca": "PCA Hotelling T2 gate"}
+_GATE_NAMES = {"bayes": "BGM density gate", "pca": "PCA Hotelling T² gate"}
 
 
 def _ooc_gate_labels(gate_facts: dict) -> list[str]:
@@ -287,7 +287,7 @@ def _render_key_findings(kf: dict, track: str, gate_facts: dict) -> None:
         if track == "extrapolation" and "n_robust" in kf:
             bullets.append(
                 f"**{kf['n_robust']} of {kf.get('n_contributors', 0)}** drivers have "
-                "posterior HDIs clear of zero (confident)."
+                "posterior credible intervals clear of zero (confident)."
             )
     if bullets:
         st.markdown("\n".join(f"- {b}" for b in bullets))
@@ -384,14 +384,14 @@ def _render_wafer_forest(model_id: str, track: str, wafer_id: object) -> None:
     st.markdown("**Per-sensor posterior — how confident is each driver?**")
     st.caption(
         "Posterior of each sensor's contribution to THIS wafer's logit "
-        "(mean ± 95% HDI), back-projected from PLS component draws. A bar that "
-        "clears the dashed zero line is a confident push; one straddling zero is "
-        "uncertain."
+        "(mean ± 95% credible interval), back-projected from PLS component draws. "
+        "A bar that clears the dashed zero line is a confident push; one straddling "
+        "zero is uncertain."
     )
     try:
         forest = wafer_sensor_posterior(model_id, wafer_id, track)
     except Exception as exc:  # noqa: BLE001 - surface live-fit failures inline
-        st.exception(exc)
+        st.error(f"Posterior forest unavailable: {exc}")
         return
     if forest is None or forest.empty:
         st.info("Posterior forest unavailable for this wafer.")
@@ -475,15 +475,16 @@ def _render_global(model_id: str, track: str) -> None:
 def _render_global_forest(model_id: str, track: str) -> None:
     render_blue_note(
         "Sensor-space **posterior** for the champion: each sensor's signed "
-        "coefficient (mean ± 95% HDI), back-projected from PLS component draws via "
-        "the fitted loadings. Color-coded bars that clear the dashed zero line are "
-        "**robust** (the model is confident in direction); dimmed bars straddle zero. "
-        "Non-sensor context features (calendar, missing-data flags) are excluded."
+        "coefficient (mean ± 95% credible interval), back-projected from PLS "
+        "component draws via the fitted loadings. Color-coded bars that clear the "
+        "dashed zero line are **robust** (the model is confident in direction); "
+        "dimmed bars straddle zero. Non-sensor context features (calendar, "
+        "missing-data flags) are excluded."
     )
     try:
         forest = cached_pls_sensor_posterior(model_id, track)
     except Exception as exc:  # noqa: BLE001
-        st.exception(exc)
+        st.error(f"Posterior unavailable: {exc}")
         return
     if forest is None or forest.empty:
         st.warning("Posterior unavailable for this model.")
@@ -499,8 +500,8 @@ def _render_global_forest(model_id: str, track: str) -> None:
         key="p6_global_forest",
     )
     st.caption(
-        f"{n_robust} of {len(forest)} leading sensors have HDIs clear of zero "
-        "(robustly nonzero vs posterior noise)."
+        f"{n_robust} of {len(forest)} leading sensors have credible intervals clear "
+        "of zero (robustly nonzero vs posterior noise)."
     )
 
 
@@ -516,7 +517,7 @@ def _render_global_bar(model_id: str, track: str) -> None:
         st.error(str(exc))
         return
     except Exception as exc:  # noqa: BLE001
-        st.exception(exc)
+        st.error(f"Global importance unavailable: {exc}")
         return
     if caption:
         st.caption(caption)
@@ -588,7 +589,7 @@ def main() -> None:
         st.error(str(exc))
         return
     except Exception as exc:  # noqa: BLE001
-        st.exception(exc)
+        st.error(f"Wafer explanation unavailable: {exc}")
         return
     if result is None:
         st.warning("Wafer not found in this holdout split.")

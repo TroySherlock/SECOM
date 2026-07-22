@@ -7,10 +7,12 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/TroySherlock/SECOM/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TroySherlock/SECOM/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white">
   <img alt="dbt" src="https://img.shields.io/badge/dbt-DuckDB-FF694B?logo=dbt&logoColor=white">
   <img alt="scikit-learn" src="https://img.shields.io/badge/scikit--learn-ML-F7931E?logo=scikitlearn&logoColor=white">
   <img alt="Streamlit" src="https://img.shields.io/badge/Streamlit-Dashboard-FF4B4B?logo=streamlit&logoColor=white">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
 </p>
 
 ---
@@ -33,7 +35,7 @@ The [live dashboard](https://79kpwjksc9d23km8arddpn.streamlit.app/) runs **read-
 | Track | Champion | PR-AUC | ROC-AUC | BER |
 |-------|----------|:------:|:-------:|:---:|
 | In-distribution (random holdout) | `hsic_rf` | 0.34 [0.18–0.53] | 0.80 [0.70–0.89] | 22.8% [14.3–32.2] |
-| Temporal drift (forward holdout) | `pls_bayes` | 0.20 [0.12–0.39] | 0.78 [0.67–0.88] | 26.7%¹ |
+| Temporal drift (forward holdout) | `pls_bayes` | 0.20 [0.12–0.39] | 0.78 [0.67–0.88] | 26.3%¹ |
 
 Intervals are 95% stratified-bootstrap CIs (`n=1000`) on the holdout split. ¹ At a 20:1 cost-optimal threshold, `pls_bayes` catches **88% (15/17)** of failing wafers on the temporal holdout; the temporal holdout contains only **17 fails**, so read direction more than decimal precision.
 
@@ -43,19 +45,20 @@ Intervals are 95% stratified-bootstrap CIs (`n=1000`) on the holdout split. ¹ A
 # 1. Environment (creates .venv, installs the secom package, sets DBT_PROFILES_DIR)
 direnv allow            # or: nix-shell
 
-# 2. Build the data pipeline
-python -m secom.cli.build_seed   # data/*.data → seeds/raw_secom.csv
-dbt seed && dbt run              # DuckDB: stg → int → mart
-
-# 3. Launch the dashboard
+# 2. Launch the dashboard (runs directly from the shipped DuckDB + JSON artifacts)
 streamlit run streamlit_app.py
 ```
 
 ### Data setup
 
-The demo ships with the small SECOM data files and frozen DuckDB / JSON artifacts needed for the dashboard: `data/secom.data`, `data/secom.duckdb`, `seeds/raw_secom.csv`, `data/secom_labels.data`, and `data/secom.names` are already in-repo.
+The repo ships everything the dashboard needs: the built `data/secom.duckdb`, the frozen JSON artifacts under `data/processed/`, plus the raw labels (`data/secom_labels.data`) and dataset description (`data/secom.names`).
 
-The raw data come from the [UCI SECOM dataset](https://archive.ics.uci.edu/ml/datasets/SECOM). To refresh the seed from `data/secom.data`, run `python -m secom.cli.build_seed`; otherwise the dashboard can be launched directly from the shipped artifacts.
+To rebuild the data pipeline from scratch, first download the raw sensor matrix `secom.data` from the [UCI SECOM dataset](https://archive.ics.uci.edu/ml/datasets/SECOM) into `data/`, then:
+
+```bash
+python -m secom.cli.build_seed   # data/secom.data + data/secom_labels.data → seeds/raw_secom.csv
+dbt seed && dbt run              # DuckDB: stg → int → mart
+```
 
 ## Rebuilding artifacts
 
@@ -90,3 +93,7 @@ Training and the dashboard read `public.mart_secom_features` via `secom.pipeline
 ## Tech stack
 
 **Python** · **pandas / NumPy / scikit-learn / SciPy** · **NumPyro** (Bayesian) · **SHAP** · **dbt** + **DuckDB** · **Streamlit** · **llama.cpp** (local LLM) · **pytest** / **ruff**
+
+## License
+
+[MIT](LICENSE)

@@ -2,8 +2,8 @@
 
 Uses ``streamlit.testing`` to execute every page against the existing frozen
 artifacts. Some pages fit models live, so the timeout is generous. Pages that
-cannot find their local data (e.g. the gitignored DuckDB) are skipped rather
-than failed, so the suite still passes in a clean checkout.
+cannot find their local data (e.g. a missing ``data/secom.duckdb``) are skipped
+rather than failed, so the suite still passes in a stripped-down checkout.
 """
 from __future__ import annotations
 

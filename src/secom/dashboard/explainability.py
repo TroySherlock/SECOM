@@ -682,7 +682,11 @@ _PLS_COMPONENT_NOTE = {
 
 
 def _bayes_posterior_summary(pipeline) -> tuple[np.ndarray, ...]:
-    """Posterior (mean, sd, hdi_low, hdi_high) arrays averaged over calibration copies."""
+    """Posterior (mean, sd, ci_low, ci_high) arrays averaged over calibration copies.
+
+    Interval bounds are 95% equal-tailed credible intervals; the ``hdi_*``
+    column names are historical (kept for frozen-cache compatibility).
+    """
     classifier = pipeline.named_steps["classifier"]
     if hasattr(classifier, "estimator_"):  # FixedThresholdClassifier
         classifier = classifier.estimator_
@@ -698,10 +702,11 @@ def _bayes_posterior_summary(pipeline) -> tuple[np.ndarray, ...]:
 
 
 def _live_bayes_hdis(model_id: str, track: str = DEFAULT_TRACK) -> pd.DataFrame | None:
-    """Build-time posterior coefficient HDIs (feature/component space) for Bayesian heads.
+    """Build-time posterior coefficient credible intervals for Bayesian heads.
 
     Returns None for non-Bayesian models. ``robust`` flags attributions whose 95%
-    HDI excludes zero (robustly nonzero vs posterior noise).
+    equal-tailed credible interval excludes zero (robustly nonzero vs posterior
+    noise). Column names ``hdi_low``/``hdi_high`` are historical.
     """
     if model_info(model_id).explainability != "bayesian":
         return None
@@ -725,7 +730,7 @@ def _live_bayes_hdis(model_id: str, track: str = DEFAULT_TRACK) -> pd.DataFrame 
 
 @st.cache_data(show_spinner=False)
 def cached_bayes_hdis(model_id: str, track: str = DEFAULT_TRACK) -> pd.DataFrame | None:
-    """Frozen posterior coefficient HDIs for Bayesian heads (None otherwise)."""
+    """Frozen posterior coefficient credible intervals for Bayesian heads (None otherwise)."""
     if model_info(model_id).explainability != "bayesian":
         return None
     records = (explanation_entry(track, model_id).get("global") or {}).get("bayes_hdis")
@@ -738,7 +743,7 @@ def _live_pls_sensor_robust_map(model_id: str, track: str = DEFAULT_TRACK) -> di
     """Build-time map each sensor -> robust(bool) for pls_bayes via its dominant component.
 
     A sensor is called robust when the component it loads onto most strongly
-    (weighted by posterior |mean|) has an HDI that excludes zero. Empty for
+    (weighted by posterior |mean|) has a credible interval that excludes zero. Empty for
     non-pls / non-Bayesian models.
     """
     if not (is_pls_model(model_id) and model_info(model_id).explainability == "bayesian"):
@@ -812,7 +817,7 @@ def _posterior_forest_frame(
     sensors: list[str],
     aux: list[tuple[str, np.ndarray]],
 ) -> pd.DataFrame:
-    """Per-feature posterior mean + 95% HDI from sensor-space draws."""
+    """Per-feature posterior mean + 95% equal-tailed credible interval from sensor-space draws."""
     blocks = [sensor_draws]
     feats = [str(s) for s in sensors]
     if aux:
@@ -839,7 +844,7 @@ def _live_pls_sensor_posterior(
 
     Back-projects each posterior draw's component coefficients through the PLS
     loadings (``sensor = comp @ loadings.T``) to get a *true* sensor-space
-    posterior, then reports mean + 95% HDI per sensor. ``robust`` = HDI clears 0.
+    posterior, then reports mean + 95% credible interval per sensor. ``robust`` = interval clears 0.
     None for non-pls / non-Bayesian models.
     """
     if not (is_pls_model(model_id) and model_info(model_id).explainability == "bayesian"):

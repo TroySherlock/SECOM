@@ -101,13 +101,14 @@ def fig_spc_distribution(
 def fig_posterior_forest(
     df: pd.DataFrame,
     *,
-    title: str = "Sensor posterior (mean ± 95% HDI)",
+    title: str = "Sensor posterior (mean ± 95% credible interval)",
     xaxis_title: str = "Posterior coefficient",
     height: int = 440,
 ) -> go.Figure:
-    """Forest plot: point = posterior mean, whiskers = 95% HDI, dashed zero line.
+    """Forest plot: point = posterior mean, whiskers = 95% equal-tailed credible
+    interval, dashed zero line.
 
-    ``robust`` rows (HDI excludes 0) are drawn solid and color-coded by sign;
+    ``robust`` rows (interval excludes 0) are drawn solid and color-coded by sign;
     the rest are dimmed, so a reviewer sees at a glance which sensors the model
     is confident about.
     """
@@ -145,7 +146,7 @@ def fig_posterior_forest(
                 ),
                 hovertemplate=(
                     f"{r['feature']}<br>mean=%{{x:.4g}}<br>"
-                    f"HDI=[{lo:.3g}, {hi:.3g}]"
+                    f"95% CrI=[{lo:.3g}, {hi:.3g}]"
                     f"{' · robust (clears 0)' if robust else ''}<extra></extra>"
                 ),
                 showlegend=False,

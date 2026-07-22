@@ -523,9 +523,9 @@ def fig_gate_disagreement_scatter(
     holdout_density: np.ndarray | None = None,
     title: str = "Where the gates disagree (passing wafers)",
 ) -> go.Figure:
-    """Per-wafer Hotelling T2 (x) vs BGM log-density (y), split by quadrant.
+    """Per-wafer Hotelling T² (x) vs BGM log-density (y), split by quadrant.
 
-    The control limits draw four quadrants. The money quadrant is high-T2 /
+    The control limits draw four quadrants. The money quadrant is high-T² /
     high-density: healthy wafers PCA flags out-of-control (above its single
     Hotelling ellipse) but the multimodal BGM keeps in-control; colour encodes
     which gate(s) would abstain.

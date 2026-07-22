@@ -18,6 +18,7 @@ from secom.dashboard.charts import (
 from secom.dashboard.components import PCA_VS_SBFA_ONE_LINER, load_payload
 from secom.dashboard.data import (
     factor_drift_ranking,
+    gate_config,
     gate_contrast,
     gate_diagnostics,
     gate_drift_stats,
@@ -121,12 +122,17 @@ def _render_control_chart(payload: dict, *, stat_key: str, limit_key: str, limit
         "the cumulative rate). A rolling rate climbing above its baseline into the latest era is "
         "the gate's drift / retraining trigger - exactly how a fab uses MSPC."
     )
+    cfg = gate_config(payload, "extrapolation", _GATE)
+    d_a = cfg.get("density_alpha", 0.03)
+    q_a = cfg.get("q_alpha", 0.005)
     render_caveat(
-        "The limit is fixed from passing-train quantiles (α = density 0.03 / Q 0.005), so a ~3% "
-        "density / ~0.5% Q in-control false-alarm rate is expected **by construction** - read the "
-        "trend and the excess over that baseline, not the raw out-of-control count. These are "
-        "empirical quantiles rather than textbook parametric limits because the score distributions "
-        "are visibly non-Gaussian."
+        f"The limit is fixed from passing-train quantiles (α = density {d_a:g} / Q {q_a:g}), so a "
+        f"~{d_a:.1%} density / ~{q_a:.1%} Q in-control false-alarm rate is expected **by "
+        "construction** - read the trend and the excess over that baseline, not the raw "
+        "out-of-control count. The quantiles are in-sample (taken on the same reference the model "
+        "is fit on), so the realized out-of-sample false-alarm rate can run slightly higher. These "
+        "are empirical quantiles rather than textbook parametric limits because the score "
+        "distributions are visibly non-Gaussian."
     )
 
 

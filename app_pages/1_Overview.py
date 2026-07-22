@@ -46,14 +46,6 @@ def _stg_data_dictionary_md(stats: dict) -> str:
 """
 
 
-def _mart_pipeline_md() -> str:
-    return """
-`stg_secom` → `int_secom_features` → `int_secom_column_metadata` → `mart_secom_features`
-
-Training and benchmarking read **`public.mart_secom_features`**.
-"""
-
-
 def main() -> None:
     st.title("SECOM defect detection — the problem")
     st.caption(

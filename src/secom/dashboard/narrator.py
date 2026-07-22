@@ -1,6 +1,7 @@
-"""Plain-English wafer summaries for hsic_bayes (facts + frozen Gemma narratives).
+"""Plain-English wafer summaries for the track champions (facts + frozen Gemma narratives).
 
-Narratives explain the HSIC -> Bayesian elastic-net head on the temporal holdout.
+Narratives are track-dependent: ``hsic_rf`` on the interpolation (random) holdout
+and ``pls_bayes`` on the extrapolation (temporal) holdout.
 
 Batch generation (requires local llama-server):
   python -m secom.cli.build_narratives
@@ -132,7 +133,7 @@ def _label_text(label: int) -> str:
 
 
 def _robust_map(model_id: str, track: str) -> dict[str, bool]:
-    """Attribution-robustness lookup (HDI excludes 0) for Bayesian heads."""
+    """Attribution-robustness lookup (95% credible interval excludes 0) for Bayesian heads."""
     if model_info(model_id).explainability != "bayesian":
         return {}
     if is_pls_model(model_id):
@@ -178,7 +179,7 @@ def build_wafer_facts(
     """Build JSON-serializable RCA facts for the track's narrative model.
 
     Facts are sensor-space (PLS back-projected where needed) and carry SPC
-    z-scores, drift flags, and attribution-robustness (HDI) so the Statistical
+    z-scores, drift flags, and attribution-robustness (credible interval) so the Statistical
     Interpreter can restate richer evidence without inventing causes.
     """
     expected = narrative_model_for_track(track)

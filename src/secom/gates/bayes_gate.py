@@ -137,6 +137,12 @@ class BayesGate:
     (scores below trip the gate), ``q_alpha`` the upper-tail quantile on passing
     SPE, and ``logic`` is ``"or"`` (abstain when either trips) or ``"and"`` (only
     when both agree).
+
+    As with ``PCAGate``, control limits are empirical quantiles of the SAME
+    passing-train reference the latent model is fit on (Phase-I practice), so
+    the nominal alphas are in-sample false-alarm rates and slightly optimistic
+    out of sample; the benchmark's holdout coverage numbers report the realized
+    rates.
     """
 
     def __init__(
